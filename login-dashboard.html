@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechFest 2026 — UI Prototype (Login & Dashboard)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #16233F;
+      --ink-soft: #25355B;
+      --paper: #F6F6F2;
+      --surface: #FFFFFF;
+      --line: #DBD7C9;
+      --line-strong: #C6C1B0;
+      --text: #1B2029;
+      --text-muted: #59626F;
+      --text-faint: #8B93A0;
+      --accent: #9C5B12;
+      --accent-bg: #F3E7D5;
+      --success: #1E7A46;
+      --success-bg: #E8F3EC;
+      --success-line: #BEDFCB;
+      --error: #AE2E22;
+      --error-bg: #FBEAE8;
+      --error-line: #EFC5BF;
+      --warn: #8A5A00;
+      --warn-bg: #FBF1DD;
+      --warn-line: #E9D6A3;
+      --locked: #7B8492;
+      --locked-bg: #EFEFEC;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--paper);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.45;
+    }
+
+    *:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: 2px;
+    }
+
+    /* TYPOGRAPHY */
+    .font-serif { font-family: 'Spectral', Georgia, serif; }
+    .font-sans { font-family: 'IBM Plex Sans', sans-serif; }
+    .font-mono { font-family: 'IBM Plex Mono', monospace; }
+
+    /* BUTTONS */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--ink);
+      color: #FFFFFF;
+      font-weight: 600;
+      font-size: 14px;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+      text-decoration: none;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background-color: var(--ink-soft);
+    }
+    .btn-primary:disabled {
+      background-color: #5C6579;
+      cursor: not-allowed;
+    }
+
+    .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid var(--line-strong);
+      color: var(--text);
+      font-weight: 500;
+      font-size: 13px;
+      border-radius: 3px;
+      padding: 6px 14px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-ghost:hover {
+      border-color: var(--ink);
+      color: var(--ink);
+    }
+
+    /* BADGES */
+    .badge-status {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+    .badge-completed {
+      background-color: var(--success-bg);
+      color: var(--success);
+      border: 1px solid var(--success-line);
+    }
+    .badge-available {
+      background-color: var(--accent-bg);
+      color: var(--accent);
+      border: 1px solid transparent;
+    }
+    .badge-in-progress {
+      background-color: var(--warn-bg);
+      color: var(--warn);
+      border: 1px solid var(--warn-line);
+    }
+    .badge-locked {
+      background-color: var(--locked-bg);
+      color: var(--locked);
+      border: 1px solid var(--line);
+    }
+    .badge-terminated {
+      background-color: var(--error-bg);
+      color: var(--error);
+      border: 1px solid var(--error-line);
+    }
+
+    /* FORMS */
+    .field-group {
+      margin-bottom: 16px;
+    }
+    .field-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .spec-input {
+      width: 100%;
+      height: 44px;
+      padding: 0 12px;
+      background-color: var(--surface);
+      border: 1px solid var(--line-strong);
+      border-radius: 3px;
+      font-size: 14px;
+      color: var(--text);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .spec-input:focus {
+      border-color: var(--ink);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(22, 35, 63, 0.12);
+    }
+    .spec-input.invalid {
+      border-color: var(--error);
+    }
+    .error-text {
+      color: var(--error);
+      font-size: 12.5px;
+      margin-top: 4px;
+    }
+
+    /* SCREEN 1: LOGIN */
+    .login-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 920px;
+      background-color: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+    }
+    .identity-panel {
+      width: 44%;
+      background-color: var(--ink);
+      color: #FFFFFF;
+      padding: 48px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .form-panel {
+      width: 56%;
+      background-color: var(--surface);
+      padding: 48px 48px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* SCREEN 2: DASHBOARD */
+    .dashboard-container {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 40px 24px 80px 24px;
+      display: none;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--line);
+    }
+    .credential-strip {
+      margin: 24px 0 32px 0;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .credential-cell {
+      padding: 18px 22px;
+    }
+    .credential-cell:not(:last-child) {
+      border-right: 1px solid var(--line);
+    }
+    .round-row {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .round-num-box {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--line-strong);
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-right: 14px;
+      flex-shrink: 0;
+    }
+    .status-panel-box {
+      margin-top: 20px;
+      border-radius: 6px;
+      padding: 18px 22px;
+      border: 1px solid var(--line);
+    }
+
+    /* DEV TOOLBAR */
+    .dev-toolbar {
+      position: fixed;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: var(--ink);
+      color: #FFFFFF;
+      padding: 8px 14px;
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      z-index: 9999;
+      flex-wrap: wrap;
+      justify-content: center;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .dev-toolbar button {
+      background: transparent;
+      color: rgba(255,255,255,0.8);
+      border: none;
+      padding: 4px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: inherit;
+    }
+    .dev-toolbar button.active {
+      background: #FFFFFF;
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    @media (max-width: 880px) {
+      .login-card {
+        flex-direction: column;
+      }
+      .identity-panel, .form-panel {
+        width: 100%;
+        padding: 32px 24px;
+      }
+      .credential-strip {
+        grid-template-columns: 1fr;
+      }
+      .credential-cell:not(:last-child) {
+        border-right: none;
+        border-bottom: 1px solid var(--line);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== SCREEN 1: LOGIN ==================== -->
+  <div id="screen-login" class="login-container">
+    <div class="login-card">
+      <!-- Identity Panel (44%) -->
+      <div class="identity-panel">
+        <div>
+          <div style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9);">
+            Department of AI &amp; Machine Learning
+          </div>
+          <div style="font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 2px;">
+            RGM College of Engineering &amp; Technology
+          </div>
+
+          <div style="margin-top: 32px;">
+            <div class="font-serif" style="font-size: 38px; font-weight: 600; line-height: 1.08; color: #FFFFFF;">
+              TechFest
+            </div>
+            <div class="font-serif" style="font-size: 38px; font-weight: 400; line-height: 1.08; color: rgba(255,255,255,0.7);">
+              2026
+            </div>
+          </div>
+
+          <!-- 44px rule -->
+          <div style="width: 44px; height: 1px; background: rgba(255,255,255,0.3); margin: 24px 0 28px 0;"></div>
+
+          <!-- Round List -->
+          <div>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px;">
+              <span class="font-mono" style="font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.45); width: 20px;">01</span>
+              <span style="font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.9);">MCQ Assessment</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px;">
+              <span class="font-mono" style="font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.45); width: 20px;">02</span>
+              <span style="font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.9);">Coding Assessment</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span class="font-mono" style="font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.45); width: 20px;">03</span>
+              <span style="font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.9);">Presentation</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer note -->
+        <div style="border-top: 1px solid rgba(255,255,255,0.15); padding-top: 20px; margin-top: 32px; font-size: 12px; line-height: 1.55; color: rgba(255,255,255,0.6);">
+          Access is restricted to registered participants. If you have not received your credentials, contact your event coordinator.
+        </div>
+      </div>
+
+      <!-- Form Panel (56%) -->
+      <div class="form-panel">
+        <div>
+          <h1 class="font-serif" style="font-size: 27px; font-weight: 600; color: var(--text);">
+            Participant sign in
+          </h1>
+          <p style="font-size: 13.5px; color: var(--text-muted); margin-top: 6px; margin-bottom: 28px;">
+            Enter your credentials to access the assessment environment.
+          </p>
+
+          <form id="login-form" onsubmit="handleLoginSubmit(event)">
+            <!-- Roll number -->
+            <div class="field-group">
+              <label class="field-label" for="inp-roll">Roll number</label>
+              <input id="inp-roll" class="spec-input font-mono" style="text-transform: uppercase;" placeholder="e.g. 21A91A6127" required />
+              <div id="err-roll" class="error-text" style="display: none;"></div>
+            </div>
+
+            <!-- Email -->
+            <div class="field-group">
+              <label class="field-label" for="inp-email">Registered email</label>
+              <input id="inp-email" type="email" class="spec-input" placeholder="student@rgmcet.edu.in" required />
+              <div id="err-email" class="error-text" style="display: none;"></div>
+            </div>
+
+            <!-- Access PIN -->
+            <div class="field-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label class="field-label" for="inp-pin" style="margin-bottom: 0;">Access PIN</label>
+                <span style="font-size: 12px; color: var(--text-faint);">6 digits</span>
+              </div>
+              <input id="inp-pin" type="password" maxlength="6" class="spec-input font-mono" style="letter-spacing: 0.15em;" placeholder="••••••" required />
+              <div id="err-pin" class="error-text" style="display: none;"></div>
+            </div>
+
+            <!-- Sign in button -->
+            <div style="margin-top: 24px;">
+              <button id="btn-signin" type="submit" class="btn-primary" style="width: 100%; height: 46px;">
+                Sign in
+              </button>
+            </div>
+          </form>
+
+          <!-- Banners -->
+          <div id="login-banner" style="display: none; margin-top: 16px; padding: 14px; border-radius: 3px; font-size: 12.5px; line-height: 1.5;"></div>
+        </div>
+
+        <!-- Footer -->
+        <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid rgba(219,215,201,0.6); text-align: center;">
+          <p style="font-size: 12.5px; color: var(--text-muted);">
+            Trouble signing in? <a href="#help" style="color: inherit; text-decoration: underline;">Contact your event coordinator.</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== SCREEN 2: DASHBOARD ==================== -->
+  <div id="screen-dashboard" class="dashboard-container">
+    <!-- Topbar -->
+    <div class="topbar">
+      <div>
+        <div style="font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted);">
+          AI &amp; ML DEPARTMENT
+        </div>
+        <div class="font-serif" style="font-size: 18px; font-weight: 600; color: var(--text);">
+          TechFest 2026
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <span style="font-size: 13.5px; color: var(--text-muted);">
+          Signed in as <strong id="dash-name" style="color: var(--text); font-weight: 600;">Anjali Rao</strong>
+        </span>
+        <button class="btn-ghost" onclick="handleLogout()">Log out</button>
+      </div>
+    </div>
+
+    <!-- Credential Strip -->
+    <div class="credential-strip">
+      <div class="credential-cell">
+        <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted);">
+          Name
+        </div>
+        <div id="dash-card-name" style="font-size: 15px; font-weight: 600; color: var(--text); margin-top: 2px;">
+          Anjali Rao
+        </div>
+      </div>
+
+      <div class="credential-cell">
+        <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted);">
+          Roll number
+        </div>
+        <div id="dash-card-roll" class="font-mono" style="font-size: 14.5px; font-weight: 500; color: var(--text); margin-top: 2px;">
+          21A91A6127
+        </div>
+      </div>
+
+      <div class="credential-cell">
+        <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted);">
+          Academic year
+        </div>
+        <div id="dash-card-year" style="font-size: 15px; font-weight: 600; color: var(--text); margin-top: 2px;">
+          III Year
+        </div>
+      </div>
+    </div>
+
+    <!-- Competition Progress -->
+    <div>
+      <h2 class="font-serif" style="font-size: 19px; font-weight: 600; color: var(--text); margin-bottom: 14px;">
+        Competition progress
+      </h2>
+
+      <!-- Round 1 -->
+      <div class="round-row">
+        <div style="display: flex; align-items: center;">
+          <div class="round-num-box font-mono">01</div>
+          <div>
+            <div style="font-size: 15px; font-weight: 600; color: var(--text);">MCQ Assessment</div>
+            <div id="r1-sub" style="font-size: 12.5px; color: var(--text-muted); margin-top: 2px;">25 questions · 30 minutes</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span id="r1-badge" class="badge-status badge-available">Available</span>
+          <button id="r1-btn" class="btn-primary" style="height: 36px; padding: 0 16px; font-size: 13px;">Enter Assessment</button>
+        </div>
+      </div>
+
+      <!-- Round 2 -->
+      <div class="round-row">
+        <div style="display: flex; align-items: center;">
+          <div class="round-num-box font-mono">02</div>
+          <div>
+            <div style="font-size: 15px; font-weight: 600; color: var(--text);">Coding Assessment</div>
+            <div id="r2-sub" style="font-size: 12.5px; color: var(--text-muted); margin-top: 2px;">Opens after Level 1 results</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span id="r2-badge" class="badge-status badge-locked">Locked</span>
+          <button id="r2-btn" class="btn-primary" style="display: none; height: 36px; padding: 0 16px; font-size: 13px;">Enter Assessment</button>
+        </div>
+      </div>
+
+      <!-- Round 3 -->
+      <div class="round-row">
+        <div style="display: flex; align-items: center;">
+          <div class="round-num-box font-mono">03</div>
+          <div>
+            <div style="font-size: 15px; font-weight: 600; color: var(--text);">Presentation</div>
+            <div id="r3-sub" style="font-size: 12.5px; color: var(--text-muted); margin-top: 2px;">Evaluated manually</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span id="r3-badge" class="badge-status badge-locked">Locked</span>
+        </div>
+      </div>
+
+      <!-- Status Panel -->
+      <div id="status-panel" class="status-panel-box" style="background: var(--surface);">
+        <div id="status-panel-title" style="font-size: 14px; font-weight: 700;">Level 1 is open</div>
+        <div id="status-panel-msg" style="font-size: 13px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;">
+          The MCQ assessment is available. You may begin any time before the round closes — once started, the timer cannot be paused.
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== DEV PREVIEW TOOLBAR ==================== -->
+  <div class="dev-toolbar">
+    <span style="font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.5); text-transform: uppercase;">View:</span>
+    <button id="dev-btn-login" onclick="showScreen('login')">Login Screen</button>
+    <button id="dev-btn-dash" class="active" onclick="showScreen('dashboard')">Dashboard</button>
+    <span style="color: rgba(255,255,255,0.3);">|</span>
+    <span style="font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.5); text-transform: uppercase;">States:</span>
+    <button onclick="setDashboardState('l1-avail')">1. L1 Avail</button>
+    <button onclick="setDashboardState('l1-prog')">2. L1 Prog</button>
+    <button onclick="setDashboardState('not-qual')">3. Not Qual</button>
+    <button onclick="setDashboardState('wait-l2')">4. Wait L2</button>
+    <button onclick="setDashboardState('l2-avail')">5. L2 Avail</button>
+    <button onclick="setDashboardState('l2-prog')">6. L2 Prog</button>
+    <button onclick="setDashboardState('completed')">7. Completed</button>
+    <button onclick="setDashboardState('terminated')">8. Terminated</button>
+  </div>
+
+  <script>
+    // State Matrix Database per spec
+    const STATES = {
+      'l1-avail': {
+        r1: { status: 'Available', badge: 'badge-available', sub: '25 questions · 30 minutes', action: 'Enter Assessment' },
+        r2: { status: 'Locked', badge: 'badge-locked', sub: 'Opens after Level 1 results' },
+        r3: { status: 'Locked', badge: 'badge-locked', sub: 'Evaluated manually' },
+        panel: { type: 'default', title: 'Level 1 is open', msg: 'The MCQ assessment is available. You may begin any time before the round closes — once started, the timer cannot be paused.' }
+      },
+      'l1-prog': {
+        r1: { status: 'In Progress', badge: 'badge-in-progress', sub: '12 of 25 answered', action: 'Resume' },
+        r2: { status: 'Locked', badge: 'badge-locked', sub: 'Opens after Level 1 results' },
+        r3: { status: 'Locked', badge: 'badge-locked', sub: 'Evaluated manually' },
+        panel: { type: 'warn', title: 'Assessment in progress', msg: 'Your Level 1 attempt is currently active. Return to the assessment to continue — closing this tab does not pause your timer.' }
+      },
+      'not-qual': {
+        r1: { status: 'Completed', badge: 'badge-completed', sub: 'Score: 14 / 25' },
+        r2: { status: 'Locked', badge: 'badge-locked', sub: 'Not qualified' },
+        r3: { status: 'Locked', badge: 'badge-locked', sub: 'Not qualified' },
+        panel: { type: 'error', title: 'Not qualified', msg: 'You scored 14 / 25 on Level 1. The qualifying score for Level 2 was 18 / 25. Thank you for participating in TechFest 2026.' }
+      },
+      'wait-l2': {
+        r1: { status: 'Completed', badge: 'badge-completed', sub: 'Score: 20 / 25 · Qualified' },
+        r2: { status: 'Locked', badge: 'badge-locked', sub: 'Not yet opened' },
+        r3: { status: 'Locked', badge: 'badge-locked', sub: 'Evaluated manually' },
+        panel: { type: 'default', title: 'Qualified — waiting for Level 2', msg: 'You qualified for Level 2 with a score of 20 / 25. The coding round has not been opened yet. This page will update automatically once your organizer starts it.' }
+      },
+      'l2-avail': {
+        r1: { status: 'Completed', badge: 'badge-completed', sub: 'Score: 20 / 25 · Qualified' },
+        r2: { status: 'Available', badge: 'badge-available', sub: '2 problems · 50 minutes total', action: 'Enter Assessment' },
+        r3: { status: 'Locked', badge: 'badge-locked', sub: 'Evaluated manually' },
+        panel: { type: 'default', title: 'Level 2 is open', msg: 'The coding assessment is available. You may begin any time before the round closes — once started, the timer cannot be paused.' }
+      },
+      'l2-prog': {
+        r1: { status: 'Completed', badge: 'badge-completed', sub: 'Score: 20 / 25 · Qualified' },
+        r2: { status: 'In Progress', badge: 'badge-in-progress', sub: 'Problem 1 of 2', action: 'Resume' },
+        r3: { status: 'Locked', badge: 'badge-locked', sub: 'Evaluated manually' },
+        panel: { type: 'warn', title: 'Assessment in progress', msg: 'Your Level 2 attempt is currently active. Return to the assessment to continue.' }
+      },
+      'completed': {
+        r1: { status: 'Completed', badge: 'badge-completed', sub: 'Score: 20 / 25 · Qualified' },
+        r2: { status: 'Completed', badge: 'badge-completed', sub: 'Submitted · 32 / 40' },
+        r3: { status: 'Locked', badge: 'badge-locked', sub: 'Manually evaluated' },
+        panel: { type: 'success', title: 'Both rounds completed', msg: 'You have completed Level 1 and Level 2. Level 3 (Presentation) is evaluated manually — your coordinator will share scheduling details separately.' }
+      },
+      'terminated': {
+        r1: { status: 'Completed', badge: 'badge-completed', sub: 'Score: 20 / 25 · Qualified' },
+        r2: { status: 'Terminated', badge: 'badge-terminated', sub: 'Violations exceeded' },
+        r3: { status: 'Locked', badge: 'badge-locked', sub: 'Not applicable' },
+        panel: { type: 'error', title: 'Attempt terminated', msg: 'Your Level 2 attempt was terminated due to repeated tab-switch violations. Contact your event coordinator if you believe this is an error.' }
+      }
+    };
+
+    function showScreen(screen) {
+      document.getElementById('screen-login').style.display = screen === 'login' ? 'flex' : 'none';
+      document.getElementById('screen-dashboard').style.display = screen === 'dashboard' ? 'block' : 'none';
+      document.getElementById('dev-btn-login').className = screen === 'login' ? 'active' : '';
+      document.getElementById('dev-btn-dash').className = screen === 'dashboard' ? 'active' : '';
+    }
+
+    function setDashboardState(stateKey) {
+      showScreen('dashboard');
+      const st = STATES[stateKey];
+      if (!st) return;
+
+      // R1
+      document.getElementById('r1-sub').textContent = st.r1.sub;
+      document.getElementById('r1-badge').className = 'badge-status ' + st.r1.badge;
+      document.getElementById('r1-badge').textContent = st.r1.status;
+      const r1Btn = document.getElementById('r1-btn');
+      if (st.r1.action) {
+        r1Btn.style.display = 'inline-flex';
+        r1Btn.textContent = st.r1.action;
+      } else {
+        r1Btn.style.display = 'none';
+      }
+
+      // R2
+      document.getElementById('r2-sub').textContent = st.r2.sub;
+      document.getElementById('r2-badge').className = 'badge-status ' + st.r2.badge;
+      document.getElementById('r2-badge').textContent = st.r2.status;
+      const r2Btn = document.getElementById('r2-btn');
+      if (st.r2.action) {
+        r2Btn.style.display = 'inline-flex';
+        r2Btn.textContent = st.r2.action;
+      } else {
+        r2Btn.style.display = 'none';
+      }
+
+      // R3
+      document.getElementById('r3-sub').textContent = st.r3.sub;
+      document.getElementById('r3-badge').className = 'badge-status ' + st.r3.badge;
+      document.getElementById('r3-badge').textContent = st.r3.status;
+
+      // Panel
+      const panel = document.getElementById('status-panel');
+      const title = document.getElementById('status-panel-title');
+      const msg = document.getElementById('status-panel-msg');
+      title.textContent = st.panel.title;
+      msg.textContent = st.panel.msg;
+
+      if (st.panel.type === 'warn') {
+        panel.style.background = 'var(--warn-bg)';
+        panel.style.borderColor = 'var(--warn-line)';
+        panel.style.color = 'var(--warn)';
+        msg.style.color = 'inherit';
+      } else if (st.panel.type === 'error') {
+        panel.style.background = 'var(--error-bg)';
+        panel.style.borderColor = 'var(--error-line)';
+        panel.style.color = 'var(--error)';
+        msg.style.color = 'inherit';
+      } else if (st.panel.type === 'success') {
+        panel.style.background = 'var(--success-bg)';
+        panel.style.borderColor = 'var(--success-line)';
+        panel.style.color = 'var(--success)';
+        msg.style.color = 'inherit';
+      } else {
+        panel.style.background = 'var(--surface)';
+        panel.style.borderColor = 'var(--line)';
+        panel.style.color = 'var(--text)';
+        msg.style.color = 'var(--text-muted)';
+      }
+    }
+
+    let failCount = 0;
+    function handleLoginSubmit(e) {
+      e.preventDefault();
+      const roll = document.getElementById('inp-roll').value.trim();
+      const email = document.getElementById('inp-email').value.trim();
+      const pin = document.getElementById('inp-pin').value.trim();
+      const banner = document.getElementById('login-banner');
+      const btn = document.getElementById('btn-signin');
+
+      // Reset
+      banner.style.display = 'none';
+
+      btn.disabled = true;
+      btn.innerHTML = 'Signing in…';
+
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = 'Sign in';
+
+        if (pin === '654321' || pin === '123456' || pin === '567890') {
+          banner.style.display = 'block';
+          banner.style.background = 'var(--success-bg)';
+          banner.style.borderColor = 'var(--success-line)';
+          banner.style.color = 'var(--success)';
+          banner.textContent = 'Signed in — redirecting to your dashboard…';
+          setTimeout(() => {
+            showScreen('dashboard');
+            banner.style.display = 'none';
+          }, 800);
+        } else {
+          failCount++;
+          if (failCount >= 3) {
+            banner.style.display = 'block';
+            banner.style.background = 'var(--warn-bg)';
+            banner.style.borderColor = 'var(--warn-line)';
+            banner.style.color = 'var(--warn)';
+            banner.textContent = 'Too many failed attempts. Access is temporarily locked — try again shortly or contact your event coordinator.';
+            document.getElementById('inp-roll').disabled = true;
+            document.getElementById('inp-email').disabled = true;
+            document.getElementById('inp-pin').disabled = true;
+            btn.disabled = true;
+          } else {
+            banner.style.display = 'block';
+            banner.style.background = 'var(--error-bg)';
+            banner.style.borderColor = 'var(--error-line)';
+            banner.style.color = 'var(--error)';
+            banner.textContent = 'The roll number, email, or PIN you entered is incorrect.';
+          }
+        }
+      }, 1000);
+    }
+
+    function handleLogout() {
+      showScreen('login');
+      document.getElementById('inp-roll').value = '';
+      document.getElementById('inp-email').value = '';
+      document.getElementById('inp-pin').value = '';
+    }
+
+    // Default: Show login screen on load
+    showScreen('login');
+  </script>
+</body>
+</html>

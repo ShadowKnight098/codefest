@@ -1,0 +1,301 @@
+@import url('https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #16233F;
+  --ink-soft: #25355B;
+  --paper: #F6F6F2;
+  --surface: #FFFFFF;
+  --line: #DBD7C9;
+  --line-strong: #C6C1B0;
+  --text: #1B2029;
+  --text-muted: #59626F;
+  --text-faint: #8B93A0;
+  --accent: #9C5B12;
+  --accent-bg: #F3E7D5;
+  --success: #1E7A46;
+  --success-bg: #E8F3EC;
+  --success-line: #BEDFCB;
+  --error: #AE2E22;
+  --error-bg: #FBEAE8;
+  --error-line: #EFC5BF;
+  --warn: #8A5A00;
+  --warn-bg: #FBF1DD;
+  --warn-line: #E9D6A3;
+  --locked: #7B8492;
+  --locked-bg: #EFEFEC;
+
+  /* New Tokens from UI_SPEC_ASSESSMENT.md */
+  --option-default-bg: #FFFFFF;
+  --option-default-border: #C6C1B0;
+  --option-hover-border: rgba(22, 35, 63, 0.4);
+  --option-selected-bg: #EEF1F6;
+  --option-selected-border: #16233F;
+  --nav-attempted-bg: #E8F3EC;
+  --nav-attempted-text: #1E7A46;
+  --nav-unattempted-bg: #FFFFFF;
+  --nav-unattempted-border: #C6C1B0;
+  --nav-current-border: #16233F;
+  --editor-bg: #FCFCFA;
+  --editor-line: #EDEBE3;
+  --editor-keyword: #16233F;
+  --editor-string: #5B7A4F;
+  --editor-comment: #8B93A0;
+  --timer-normal: #1B2029;
+  --timer-critical: #AE2E22;
+}
+
+@layer base {
+  body {
+    background-color: var(--paper);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Accessible focus indicators per spec */
+  *:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+}
+
+/* Spec Form Inputs */
+.spec-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  background-color: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  font-size: 14px;
+  color: var(--text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.spec-input::placeholder {
+  color: var(--text-faint);
+}
+
+.spec-input:focus {
+  border-color: var(--ink);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(22, 35, 63, 0.12);
+}
+
+.spec-input.invalid {
+  border-color: var(--error);
+}
+
+.spec-input:disabled {
+  background-color: #F5F5F2;
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+/* Primary Button */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--ink);
+  color: #FFFFFF;
+  font-weight: 600;
+  border-radius: 3px;
+  transition: background-color 0.15s ease;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--ink-soft);
+}
+
+.btn-primary:disabled {
+  background-color: #5C6579;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+/* Ghost Button */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  font-weight: 500;
+  font-size: 13px;
+  border-radius: 3px;
+  padding: 6px 14px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-ghost:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+/* Secondary Outline Button per spec */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: 3px;
+  padding: 6px 14px;
+  transition: background-color 0.15s ease;
+}
+
+.btn-secondary:hover {
+  background-color: rgba(22, 35, 63, 0.05);
+}
+
+.btn-secondary:disabled {
+  border-color: var(--line-strong);
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+/* MCQ Option Cards */
+.option-card {
+  width: 100%;
+  min-height: 56px;
+  padding: 16px 20px;
+  background-color: var(--option-default-bg);
+  border: 1px solid var(--option-default-border);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease;
+}
+
+.option-card:hover:not(:disabled) {
+  border-color: var(--option-hover-border);
+}
+
+.option-card.selected {
+  background-color: var(--option-selected-bg);
+  border: 2px solid var(--option-selected-border);
+}
+
+.option-card:disabled {
+  background-color: #F5F5F2;
+  border-color: var(--line);
+  cursor: not-allowed;
+}
+
+/* Navigator Grid Cells */
+.nav-cell {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nav-cell.unattempted {
+  background-color: var(--nav-unattempted-bg);
+  border: 1px solid var(--nav-unattempted-border);
+  color: var(--text-muted);
+}
+
+.nav-cell.attempted {
+  background-color: var(--nav-attempted-bg);
+  color: var(--nav-attempted-text);
+  border: 1px solid var(--success-line);
+  font-weight: 600;
+}
+
+.nav-cell.current {
+  border: 2px solid #16233F !important;
+  background-color: #16233F !important;
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+}
+
+.nav-cell.current.attempted {
+  border: 2px solid #16233F !important;
+  background-color: #16233F !important;
+  color: #3FB950 !important;
+  font-weight: 700 !important;
+}
+
+/* Meta Chips */
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+
+/* Badges */
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.badge-completed {
+  background-color: var(--success-bg);
+  color: var(--success);
+  border: 1px solid var(--success-line);
+}
+
+.badge-available {
+  background-color: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid transparent;
+}
+
+.badge-in-progress {
+  background-color: var(--warn-bg);
+  color: var(--warn);
+  border: 1px solid var(--warn-line);
+}
+
+.badge-locked {
+  background-color: var(--locked-bg);
+  color: var(--locked);
+  border: 1px solid var(--line);
+}
+
+.badge-terminated {
+  background-color: var(--error-bg);
+  color: var(--error);
+  border: 1px solid var(--error-line);
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

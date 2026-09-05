@@ -1,0 +1,93 @@
+import logging
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.core.config import settings
+from app.db.session import engine, Base
+from app.api.auth import router as auth_router
+from app.api.dashboard import router as dashboard_router
+from app.api.mcq import router as mcq_router
+from app.api.admin_auth import router as admin_auth_router
+from app.api.admin_competitions import router as admin_competitions_router
+from app.api.admin_participants import router as admin_participants_router
+from app.api.admin_questions import router as admin_questions_router
+from app.api.admin_coding import router as admin_coding_router
+from app.api.admin_monitor import router as admin_monitor_router
+from app.api.admin_settings import router as admin_settings_router
+from app.api.coding import router as coding_router
+from app.api.security import router as security_router
+
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"time": "%(asctime)s", "level": "%(levelname)s", "name": "%(name)s", "message": "%(message)s"}'
+)
+logger = logging.getLogger("fest-platform")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: ensure database tables exist (skip if already created or fast timeout)
+    logger.info("Application starting up...")
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database schema verified.")
+    except Exception as e:
+        logger.warning(f"Schema check skipped or already present: {e}")
+    yield
+    # Shutdown
+    logger.info("Shutting down application...")
+    await engine.dispose()
+
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    description="Official AI/ML Department Technical Competition Platform API",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Global error handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception on {request.method} {request.url.path}: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred. Please contact the competition administrator."}
+    )
+
+# Include Routers
+app.include_router(auth_router, prefix="/api")
+app.include_router(dashboard_router, prefix="/api")
+app.include_router(mcq_router, prefix="/api")
+
+# Admin Routers
+app.include_router(admin_auth_router, prefix="/api")
+app.include_router(admin_competitions_router, prefix="/api")
+app.include_router(admin_participants_router, prefix="/api")
+app.include_router(admin_questions_router, prefix="/api")
+app.include_router(admin_coding_router, prefix="/api")
+app.include_router(admin_monitor_router, prefix="/api")
+app.include_router(admin_settings_router, prefix="/api")
+
+# Assessment Execution & Security
+app.include_router(coding_router, prefix="/api")
+app.include_router(security_router, prefix="/api")
+
+@app.get("/api/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "system": settings.PROJECT_NAME,
+        "environment": settings.ENVIRONMENT
+    }

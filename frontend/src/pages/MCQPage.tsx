@@ -1,0 +1,663 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { AssessmentHeader } from '../components/AssessmentHeader';
+import { apiFetch, ApiError } from '../api/client';
+
+interface Question {
+  index: number;
+  question_id: string;
+  topic: string;
+  difficulty: string;
+  question_text: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  selected_option?: string | null;
+}
+
+interface MCQPageProps {
+  onComplete: () => void;
+  onTerminated?: () => void;
+}
+
+export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) => {
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const [attemptId, setAttemptId] = useState<string>('');
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(1800);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [showReviewModal, setShowReviewModal] = useState<boolean>(false);
+  const [confirmSubmitStep, setConfirmSubmitStep] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+  const [submitResult, setSubmitResult] = useState<{
+    score: number;
+    total_marks: number;
+    correct_count: number;
+    incorrect_count: number;
+    unanswered_count: number;
+    is_qualified: boolean;
+  } | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const saveTimeoutRef = useRef<number | null>(null);
+
+  // 1. Fetch or initialize attempt from backend
+  useEffect(() => {
+    let timerInterval: number;
+
+    const loadAttempt = async () => {
+      try {
+        const data = await apiFetch<any>('/api/mcq/attempt');
+        setAttemptId(data.attempt_id);
+        setQuestions(data.questions);
+        setRemainingSeconds(data.remaining_seconds);
+        if (data.status === 'SUBMITTED' || data.status === 'TERMINATED') {
+          setIsSubmitted(true);
+        }
+        setLoading(false);
+
+        // Server-synchronized countdown
+        timerInterval = window.setInterval(() => {
+          setRemainingSeconds((prev) => {
+            if (prev <= 1) {
+              // Force submit on expiry
+              handleFinalSubmit();
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } catch (err) {
+        console.error('Failed to load MCQ attempt:', err);
+        if (err instanceof ApiError) {
+          setErrorMessage(err.message);
+        } else {
+          setErrorMessage('Unable to load the assessment. Please check your connection and try again.');
+        }
+        setLoading(false);
+      }
+    };
+
+    loadAttempt();
+
+    // Visibility change / tab switch proctoring listener
+    const handleVisibility = async () => {
+      if (document.hidden && attemptId) {
+        try {
+          const res = await apiFetch<any>('/security/violation', {
+            method: 'POST',
+            body: JSON.stringify({
+              attempt_type: 'MCQ',
+              attempt_id: attemptId,
+              idempotency_key: `${attemptId}-${Date.now()}`,
+              event_type: 'TAB_HIDDEN',
+            }),
+          });
+          if (res.terminated) {
+            alert(res.message);
+            onTerminated?.();
+          } else {
+            alert(res.message);
+          }
+        } catch (e) {
+          console.error('Violation report failed', e);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    // Strict Anti-Cheat: Disable Copy, Cut, Paste, and Right-Click Context Menu
+    const preventCopy = (e: Event) => {
+      e.preventDefault();
+      alert('Action blocked: Copying and pasting are strictly prohibited during the assessment.');
+      return false;
+    };
+    const preventContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    document.addEventListener('copy', preventCopy);
+    document.addEventListener('cut', preventCopy);
+    document.addEventListener('paste', preventCopy);
+    document.addEventListener('contextmenu', preventContextMenu);
+
+    return () => {
+      if (timerInterval) clearInterval(timerInterval);
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      document.removeEventListener('copy', preventCopy);
+      document.removeEventListener('cut', preventCopy);
+      document.removeEventListener('paste', preventCopy);
+      document.removeEventListener('contextmenu', preventContextMenu);
+    };
+  }, [attemptId]);
+
+  const currentQ = questions[currentIndex];
+
+  // 2. Autosave answer selection
+  const handleSelectOption = async (option: 'A' | 'B' | 'C' | 'D') => {
+    if (!currentQ || isSubmitted) return;
+
+    // Optimistic update
+    const updated = [...questions];
+    updated[currentIndex] = { ...currentQ, selected_option: option };
+    setQuestions(updated);
+
+    setAutosaveState('saving');
+    try {
+      await apiFetch('/api/mcq/answer', {
+        method: 'POST',
+        body: JSON.stringify({
+          attempt_id: attemptId,
+          question_id: currentQ.question_id,
+          selected_option: option,
+        }),
+      });
+
+      setAutosaveState('saved');
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = window.setTimeout(() => {
+        setAutosaveState('idle');
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to save answer:', err);
+      setAutosaveState('error');
+    }
+  };
+
+  // 3. Navigation
+  const handleNext = () => {
+    if (currentIndex < questions.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setAutosaveState('idle');
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+      setAutosaveState('idle');
+    }
+  };
+
+  const handleJumpToQuestion = (idx: number) => {
+    setCurrentIndex(idx);
+    setShowReviewModal(false);
+    setDrawerOpen(false);
+    setAutosaveState('idle');
+  };
+
+  // 4. Submission
+  const handleFinalSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await apiFetch<any>('/api/mcq/submit', {
+        method: 'POST',
+        body: JSON.stringify({ attempt_id: attemptId }),
+      });
+      setIsSubmitted(true);
+      setShowReviewModal(false);
+      setSubmitResult({
+        score: res.score,
+        total_marks: res.total_marks || 25,
+        correct_count: res.correct_count ?? res.score,
+        incorrect_count: res.incorrect_count ?? (25 - res.score),
+        unanswered_count: res.unanswered_count ?? 0,
+        is_qualified: res.is_qualified,
+      });
+    } catch (err) {
+      console.error('Failed to submit assessment:', err);
+      setIsSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F6F6F2] flex items-center justify-center text-[#59626F] text-[14px]">
+        Initializing assessment environment…
+      </div>
+    );
+  }
+
+  if (errorMessage) {
+    return (
+      <div className="min-h-screen bg-[#F6F6F2] flex items-center justify-center p-6">
+        <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-8 max-w-md text-center">
+          <div className="inline-block px-2.5 py-0.5 bg-[#EEF1F6] text-[#16233F] text-[11px] font-mono tracking-wider uppercase rounded-[2px] mb-3">
+            Assessment Notice
+          </div>
+          <h3 className="font-serif text-[20px] font-bold text-[#1B2029] mb-2">
+            Assessment Unavailable
+          </h3>
+          <p className="text-[13px] text-[#59626F] leading-relaxed mb-6">
+            {errorMessage}
+          </p>
+          <button
+            onClick={onComplete}
+            className="btn-primary h-[42px] px-6 text-[14px] font-semibold"
+            type="button"
+          >
+            Return to Dashboard →
+          </button>
+        </div>
+      </div>
+    );
+  }
+  // Small viewport handling per spec (§2 & §6)
+  // Shown below 880px via CSS breakpoint
+  const smallViewportNotice = (
+    <div className="md:hidden fixed inset-0 z-50 bg-[#F6F6F2] flex items-center justify-center p-6 text-center">
+      <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-8 max-w-sm">
+        <div className="font-serif text-[18px] font-bold text-[#1B2029] mb-2">
+          Larger screen required
+        </div>
+        <p className="text-[13px] text-[#59626F] leading-relaxed">
+          This assessment requires a larger screen. Please continue on a laptop or desktop computer.
+        </p>
+      </div>
+    </div>
+  );
+
+  const answeredCount = questions.filter((q) => q.selected_option).length;
+  const remainingCount = questions.length - answeredCount;
+
+  return (
+    <div className="min-h-screen bg-[#F6F6F2] flex flex-col select-none">
+      {smallViewportNotice}
+
+      {/* SHARED HEADER (§1) */}
+      <AssessmentHeader
+        roundCode="LEVEL 01"
+        roundName="MCQ ASSESSMENT"
+        remainingSeconds={remainingSeconds}
+        showDrawerButton={true}
+        onToggleDrawer={() => setDrawerOpen(!drawerOpen)}
+      />
+
+      {/* MAIN THREE-PANEL GRID (22% / 53% / 25%) */}
+      <div className="flex-1 flex overflow-hidden">
+        
+        {/* LEFT PANEL (22%) - Quiet Supporting */}
+        <div className="hidden lg:flex w-[22%] bg-[#F6F6F2] border-r border-[#DBD7C9] p-8 flex-col justify-between">
+          <div>
+            <div className="text-[11.5px] font-bold tracking-[0.08em] text-[#59626F] uppercase">
+              AI &amp; ML DEPARTMENT
+            </div>
+            <div className="font-serif text-[17px] font-bold text-[#1B2029]">
+              TechFest 2026
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-[#DBD7C9]">
+              <div className="text-[13px] font-semibold text-[#1B2029]">
+                Level 1 · MCQ Assessment
+              </div>
+              <div className="text-[12px] text-[#8B93A0] mt-1 font-mono">
+                25 Questions · 30 Mins
+              </div>
+            </div>
+
+            <div className="mt-6 p-3.5 bg-white border border-[#DBD7C9] rounded-[3px] text-[12px] text-[#59626F] leading-relaxed">
+              Answers save automatically as you go. You can revisit any question before submitting.
+            </div>
+          </div>
+
+          <div className="text-[11.5px] text-[#8B93A0]">
+            Proctored session · ID: {attemptId.slice(0, 8)}
+          </div>
+        </div>
+
+        {/* CENTER PANEL (53%) - Primary Focal Area */}
+        <div className="w-full lg:w-[53%] bg-white p-8 sm:p-12 lg:p-14 overflow-y-auto flex flex-col justify-between">
+          {currentQ ? (
+            <div>
+              {/* Question metadata & Autosave status bar */}
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <div className="font-mono text-[13px] text-[#8B93A0]">
+                    QUESTION {String(currentQ.index).padStart(2, '0')}
+                  </div>
+                  <div className="font-mono text-[13px] text-[#8B93A0] mt-0.5">
+                    {String(currentQ.index).padStart(2, '0')} / {String(questions.length).padStart(2, '0')}
+                  </div>
+                </div>
+
+                {/* Inline Autosave Indicator */}
+                <div className="h-6 flex items-center text-[13px]">
+                  {autosaveState === 'saving' && (
+                    <span className="text-[#8B93A0] flex items-center space-x-1.5 font-mono">
+                      <svg className="animate-spin h-3.5 w-3.5 text-[#59626F]" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Saving…</span>
+                    </span>
+                  )}
+                  {autosaveState === 'saved' && (
+                    <span className="text-[#1E7A46] font-medium transition-opacity">
+                      ✓ Answer saved
+                    </span>
+                  )}
+                  {autosaveState === 'error' && (
+                    <span className="text-[#AE2E22] font-medium">
+                      Unable to save answer. Retrying…
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Question Text */}
+              <div className="text-[18px] text-[#1B2029] leading-[1.6] max-w-[640px] mb-8 font-sans font-medium">
+                {currentQ.question_text}
+              </div>
+
+              {/* Options A, B, C, D */}
+              <div className="space-y-3 max-w-[640px]">
+                {(['A', 'B', 'C', 'D'] as const).map((opt) => {
+                  const optText =
+                    opt === 'A' ? currentQ.option_a :
+                    opt === 'B' ? currentQ.option_b :
+                    opt === 'C' ? currentQ.option_c : currentQ.option_d;
+
+                  const isSelected = currentQ.selected_option === opt;
+
+                  return (
+                    <button
+                      key={opt}
+                      onClick={() => handleSelectOption(opt)}
+                      disabled={isSubmitted}
+                      className={`option-card group ${isSelected ? 'selected' : ''}`}
+                      type="button"
+                    >
+                      {/* Left edge indicator */}
+                      <div
+                        className={`w-[18px] h-[18px] rounded-full border flex items-center justify-center mr-3.5 shrink-0 transition-colors ${
+                          isSelected
+                            ? 'border-[#16233F] bg-[#16233F] text-white'
+                            : 'border-[#C6C1B0] bg-white group-hover:border-[#16233F]/40'
+                        }`}
+                      >
+                        {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                      </div>
+
+                      <div className="text-[14.5px] text-[#1B2029] leading-snug">
+                        <span className="font-mono font-medium text-[#59626F] mr-2">{opt}.</span>
+                        {optText}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          <div />
+        </div>
+
+        {/* RIGHT PANEL (25%) - Navigator */}
+        <div
+          className={`fixed inset-y-0 right-0 z-30 lg:static w-[300px] lg:w-[25%] bg-[#F6F6F2] border-l border-[#DBD7C9] p-6 transition-transform duration-200 lg:translate-x-0 ${
+            drawerOpen ? 'translate-x-0 shadow-xl' : 'translate-x-full lg:translate-x-0'
+          }`}
+        >
+          <div className="flex items-center justify-between lg:hidden mb-4 pb-2 border-b border-[#DBD7C9]">
+            <span className="text-sm font-semibold text-[#1B2029]">Question Navigator</span>
+            <button
+              onClick={() => setDrawerOpen(false)}
+              className="text-xs text-[#59626F] px-2 py-1"
+            >
+              Close ✕
+            </button>
+          </div>
+
+          <div className="text-[12px] font-semibold text-[#59626F] uppercase tracking-[0.04em] mb-4">
+            Question Navigator
+          </div>
+
+          {/* 5x5 Grid */}
+          <div className="grid grid-cols-5 gap-2 w-fit">
+            {questions.map((q, idx) => {
+              const isAttempted = Boolean(q.selected_option);
+              const isCurrent = idx === currentIndex;
+
+              return (
+                <button
+                  key={q.question_id || idx}
+                  onClick={() => handleJumpToQuestion(idx)}
+                  className={`nav-cell ${
+                    isAttempted ? 'attempted' : 'unattempted'
+                  } ${isCurrent ? 'current' : ''}`}
+                  type="button"
+                >
+                  {String(idx + 1).padStart(2, '0')}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Progress line */}
+          <div className="mt-6 pt-5 border-t border-[#DBD7C9]">
+            <div className="text-[14px] font-semibold text-[#1B2029]">
+              {answeredCount} / {questions.length} answered
+            </div>
+            <div className="text-[13px] text-[#8B93A0] mt-0.5 font-mono">
+              {remainingCount} remaining
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* BOTTOM ACTION BAR */}
+      <div className="h-[68px] bg-white border-t border-[#DBD7C9] px-6 sm:px-14 flex items-center justify-between sticky bottom-0 z-20">
+        <div>
+          <button
+            onClick={handlePrev}
+            disabled={currentIndex === 0 || isSubmitted}
+            className="btn-ghost"
+            type="button"
+          >
+            ← Previous
+          </button>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => {
+              setShowReviewModal(true);
+              setConfirmSubmitStep(false);
+            }}
+            disabled={isSubmitted}
+            className="btn-secondary"
+            type="button"
+          >
+            Review &amp; Submit
+          </button>
+
+          {currentIndex < questions.length - 1 ? (
+            <button
+              onClick={handleNext}
+              disabled={isSubmitted}
+              className="btn-primary h-[38px] px-5 text-[13px]"
+              type="button"
+            >
+              Save &amp; Next →
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setShowReviewModal(true);
+                setConfirmSubmitStep(false);
+              }}
+              disabled={isSubmitted}
+              className="btn-primary h-[38px] px-5 text-[13px]"
+              type="button"
+            >
+              Complete &amp; Review
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* REVIEW & CONFIRM SUBMISSION MODAL */}
+      {showReviewModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white border border-[#DBD7C9] rounded-[6px] max-w-[480px] w-full p-6 sm:p-7 shadow-lg">
+            <h3 className="font-serif text-[20px] font-bold text-[#1B2029]">
+              Review your answers
+            </h3>
+
+            <div className="flex items-center space-x-6 my-4 text-[14px]">
+              <span className="font-semibold text-[#1E7A46]">
+                {answeredCount} Answered
+              </span>
+              <span className={`font-semibold ${remainingCount > 0 ? 'text-[#8A5A00]' : 'text-[#8B93A0]'}`}>
+                {remainingCount} Not Answered
+              </span>
+            </div>
+
+            {/* Quick jump question numbers */}
+            <div className="my-5 p-3 bg-[#F6F6F2] border border-[#DBD7C9] rounded-[3px]">
+              <div className="text-[11.5px] text-[#59626F] mb-2 font-medium">
+                Click any number to review:
+              </div>
+              <div className="grid grid-cols-5 gap-1.5">
+                {questions.map((q, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleJumpToQuestion(idx)}
+                    className={`h-7 rounded-[3px] text-xs font-mono font-medium border ${
+                      q.selected_option
+                        ? 'bg-[#E8F3EC] border-[#BEDFCB] text-[#1E7A46]'
+                        : 'bg-white border-[#C6C1B0] text-[#59626F]'
+                    }`}
+                  >
+                    {String(idx + 1).padStart(2, '0')}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Confirmation step */}
+            {confirmSubmitStep ? (
+              <div className="p-3 bg-[#FBEAE8] border border-[#EFC5BF] rounded-[3px] mb-5 text-[12.5px] text-[#AE2E22] leading-relaxed">
+                This cannot be undone. Once submitted, your answers will be locked and scored against the qualifying cutoff.
+              </div>
+            ) : null}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end space-x-3 pt-2 border-t border-[#DBD7C9]">
+              <button
+                onClick={() => {
+                  setShowReviewModal(false);
+                  setConfirmSubmitStep(false);
+                }}
+                disabled={isSubmitting}
+                className="btn-ghost"
+                type="button"
+              >
+                Cancel
+              </button>
+
+              {!confirmSubmitStep ? (
+                <button
+                  onClick={() => setConfirmSubmitStep(true)}
+                  className="btn-primary h-[38px] px-4 text-[13px]"
+                  type="button"
+                >
+                  Submit Assessment
+                </button>
+              ) : (
+                <button
+                  onClick={handleFinalSubmit}
+                  disabled={isSubmitting}
+                  className="btn-primary h-[38px] px-4 text-[13px] bg-[#AE2E22] hover:bg-[#8A241A]"
+                  type="button"
+                >
+                  {isSubmitting ? 'Submitting…' : 'Confirm Submission'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POST-SUBMISSION SCORE & ACCURACY SUMMARY MODAL */}
+      {submitResult && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white border border-[#DBD7C9] rounded-[6px] max-w-[460px] w-full p-6 sm:p-8 shadow-2xl text-center">
+            <div className="inline-block px-2.5 py-0.5 bg-[#EEF1F6] text-[#16233F] text-[11px] font-mono tracking-wider uppercase rounded-[2px] mb-3">
+              Assessment Results
+            </div>
+
+            <h3 className="font-serif text-[24px] font-bold text-[#1B2029]">
+              {submitResult.is_qualified ? 'Congratulations! You Qualified' : 'Assessment Submitted'}
+            </h3>
+
+            <p className="text-[13px] text-[#59626F] mt-1 mb-6">
+              Your Level 1 assessment has been evaluated server-side against the official answer key.
+            </p>
+
+            {/* Score Highlight Box */}
+            <div className={`p-5 rounded-[4px] border mb-6 ${
+              submitResult.is_qualified ? 'bg-[#E8F3EC] border-[#BEDFCB]' : 'bg-[#F6F6F2] border-[#DBD7C9]'
+            }`}>
+              <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#59626F] uppercase font-mono">
+                Total Score Awarded
+              </div>
+              <div className="font-serif text-[38px] font-bold leading-tight mt-1 text-[#16233F]">
+                {submitResult.score} <span className="text-[20px] font-normal text-[#59626F]">/ {submitResult.total_marks}</span>
+              </div>
+              <div className={`text-[12.5px] font-semibold mt-1 ${
+                submitResult.is_qualified ? 'text-[#1E7A46]' : 'text-[#8A5A00]'
+              }`}>
+                {submitResult.is_qualified ? '● Qualified for Level 2 (Coding)' : '○ Cutoff: 18 / 25 Marks'}
+              </div>
+            </div>
+
+            {/* Breakdown Grid: Correct / Incorrect / Unanswered */}
+            <div className="grid grid-cols-3 gap-2 text-left mb-6">
+              <div className="p-3 bg-[#F6F6F2] border border-[#DBD7C9] rounded-[4px]">
+                <div className="text-[10.5px] font-bold uppercase tracking-wider text-[#1E7A46] font-mono">
+                  Correct
+                </div>
+                <div className="text-[20px] font-mono font-bold text-[#1E7A46] mt-0.5">
+                  {submitResult.correct_count}
+                </div>
+              </div>
+
+              <div className="p-3 bg-[#F6F6F2] border border-[#DBD7C9] rounded-[4px]">
+                <div className="text-[10.5px] font-bold uppercase tracking-wider text-[#AE2E22] font-mono">
+                  Incorrect
+                </div>
+                <div className="text-[20px] font-mono font-bold text-[#AE2E22] mt-0.5">
+                  {submitResult.incorrect_count}
+                </div>
+              </div>
+
+              <div className="p-3 bg-[#F6F6F2] border border-[#DBD7C9] rounded-[4px]">
+                <div className="text-[10.5px] font-bold uppercase tracking-wider text-[#8B93A0] font-mono">
+                  Skipped
+                </div>
+                <div className="text-[20px] font-mono font-bold text-[#8B93A0] mt-0.5">
+                  {submitResult.unanswered_count}
+                </div>
+              </div>
+            </div>
+
+            {/* Action Button */}
+            <button
+              onClick={onComplete}
+              className="w-full btn-primary h-[42px] text-[14px] font-semibold flex items-center justify-center space-x-2"
+              type="button"
+            >
+              <span>{submitResult.is_qualified ? 'Proceed to Waiting Room →' : 'Return to Dashboard →'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

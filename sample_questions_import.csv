@@ -1,0 +1,5 @@
+academic_year,topic,difficulty,question_text,option_a,option_b,option_c,option_d,correct_option
+3,Deep Learning,MEDIUM,Which activation function helps mitigate the vanishing gradient problem in deep feedforward networks?,Sigmoid,ReLU,Tanh,Softmax,B
+2,Data Structures,HARD,What is the amortized time complexity of inserting into a dynamic array that doubles in capacity?,O(N),O(1),O(log N),O(N^2),B
+4,Reinforcement Learning,MEDIUM,In Q-learning what does the discount factor gamma control?,Learning rate,Importance of future rewards,Exploration probability,Batch size,B
+1,Python Programming,EASY,Which of the following data structures in Python is immutable?,List,Dictionary,Tuple,Set,C
