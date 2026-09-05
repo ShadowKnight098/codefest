@@ -46,6 +46,7 @@ class RunCodeRequest(BaseModel):
     problem_id: str
     language: str = Field(..., pattern=r"^(python|c|cpp|java)$")
     code: str = Field(..., min_length=1)
+    custom_input: Optional[str] = None
 
 class TestCaseResult(BaseModel):
     test_case_id: str
@@ -63,6 +64,7 @@ class RunCodeResponse(BaseModel):
     passed_cases: int
     results: List[TestCaseResult]
     judge_endpoint: Optional[str] = None
+    terminal_output: str
 
 class SubmitCodeRequest(BaseModel):
     attempt_id: str
@@ -78,6 +80,8 @@ class SubmitCodeResponse(BaseModel):
     total_test_cases: int
     score: int
     execution_time_ms: Optional[int]
+    terminal_output: str
+    verdict: str
 
 # ─── Endpoints ───
 
@@ -192,8 +196,8 @@ async def run_code(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Executes code against sample/public test cases only.
-    Dispatched to Judge0 load balancer across 4 laptops.
+    Executes code against sample/public test cases or custom input.
+    Returns structured results and an authentic terminal output stream.
     """
     prob_res = await db.execute(
         select(CodingProblem)
@@ -204,6 +208,51 @@ async def run_code(
     if not problem:
         raise HTTPException(status_code=404, detail="Problem not found.")
 
+    # 1. Custom input branch
+    if payload.custom_input is not None:
+        res = await judge0_service.execute_code(
+            source_code=payload.code,
+            language=payload.language,
+            stdin=payload.custom_input,
+            cpu_time_limit_sec=problem.time_limit_ms / 1000.0,
+            memory_limit_mb=problem.memory_limit_mb
+        )
+        out = res.get("stdout", "") or res.get("compile_output", "") or res.get("stderr", "")
+        passed = (res.get("status_id") == 3)
+        tc_res = TestCaseResult(
+            test_case_id="custom",
+            input_data=payload.custom_input,
+            expected_output="(Custom Input)",
+            actual_output=out,
+            passed=passed,
+            status=res.get("status", "Unknown"),
+            execution_time_ms=int(res["execution_time_sec"] * 1000) if res.get("execution_time_sec") else None,
+            error_message=res.get("stderr") or res.get("compile_output") or None
+        )
+        t_lines = [
+            f"fest@sandbox:~$ run --custom-input solution.{payload.language}",
+            f"Input: {payload.custom_input.strip()}",
+            "─" * 45,
+            "[Program Output]:"
+        ]
+        if res.get("compile_output"):
+            t_lines.append(f"Compile Error:\n{res['compile_output']}")
+        if out:
+            t_lines.append(out)
+        if res.get("stderr"):
+            t_lines.append(f"Stderr:\n{res['stderr']}")
+        t_lines.append("─" * 45)
+        t_lines.append(f"Status: {res.get('status')} | Time: {tc_res.execution_time_ms or 0}ms | Engine: {res.get('endpoint_used', 'local')}")
+        return RunCodeResponse(
+            all_passed=passed,
+            total_cases=1,
+            passed_cases=1 if passed else 0,
+            results=[tc_res],
+            judge_endpoint=res.get("endpoint_used"),
+            terminal_output="\n".join(t_lines)
+        )
+
+    # 2. Public sample test cases branch
     public_cases = [tc for tc in problem.test_cases if not tc.is_hidden]
     results: List[TestCaseResult] = []
     all_passed = True
@@ -218,17 +267,15 @@ async def run_code(
             cpu_time_limit_sec=problem.time_limit_ms / 1000.0,
             memory_limit_mb=problem.memory_limit_mb
         )
-        print(f"[CODING RUN] res for tc {tc.id}: {res}")
 
         if not res.get("success"):
-            # If all judge0 nodes offline, simulate basic execution or report status
             results.append(TestCaseResult(
                 test_case_id=tc.id,
                 input_data=tc.input_data,
                 expected_output=tc.expected_output,
                 actual_output="",
                 passed=False,
-                status="JUDGE_UNAVAILABLE",
+                status="ERROR",
                 error_message=res.get("error")
             ))
             all_passed = False
@@ -251,12 +298,36 @@ async def run_code(
         ))
 
     passed_count = sum(1 for r in results if r.passed)
+
+    term_lines = [
+        f"fest@sandbox:~$ run solution.{payload.language}",
+        f"Compiling and executing against {len(public_cases)} sample test case(s)...",
+        ""
+    ]
+    for idx, r in enumerate(results, start=1):
+        icon = "✓" if r.passed else "✗"
+        term_lines.append(f"── Test Case #{idx} [{icon} {r.status}] ──")
+        term_lines.append(f"Input:    {r.input_data.replace(chr(10), ' ')}")
+        term_lines.append(f"Expected: {r.expected_output.replace(chr(10), ' ')}")
+        term_lines.append(f"Output:   {r.actual_output.replace(chr(10), ' ')}")
+        if r.error_message:
+            term_lines.append(f"Details:  {r.error_message}")
+        term_lines.append(f"Time:     {r.execution_time_ms or 0}ms")
+        term_lines.append("")
+
+    summary_str = "SUCCESS: ALL SAMPLE CASES PASSED" if all_passed else "FAIL: SAMPLE CASES FAILED"
+    term_lines.append("=" * 55)
+    term_lines.append(f"Verdict: {summary_str} ({passed_count}/{len(public_cases)} Passed)")
+    term_lines.append(f"Engine:  {endpoint_used or 'local_builtin_sandbox'}")
+    term_lines.append(f"Status:  Exit code {0 if all_passed else 1}")
+
     return RunCodeResponse(
         all_passed=all_passed,
         total_cases=len(public_cases),
         passed_cases=passed_count,
         results=results,
-        judge_endpoint=endpoint_used
+        judge_endpoint=endpoint_used,
+        terminal_output="\n".join(term_lines)
     )
 
 @router.post("/submit", response_model=SubmitCodeResponse)
@@ -267,7 +338,7 @@ async def submit_code(
 ):
     """
     Evaluates code against ALL test cases (public + hidden) via Judge0.
-    Server calculates authoritative score (0, 5, 10, 15, 20).
+    Server calculates authoritative score and returns full terminal evaluation stream.
     """
     attempt_res = await db.execute(
         select(CodingAttempt).where(
@@ -293,6 +364,7 @@ async def submit_code(
     total_cases = len(all_cases) or 1
     total_time_ms = 0
     failure_reason = None
+    case_logs = []
 
     for tc in all_cases:
         res = await judge0_service.execute_code(
@@ -303,16 +375,19 @@ async def submit_code(
             cpu_time_limit_sec=problem.time_limit_ms / 1000.0,
             memory_limit_mb=problem.memory_limit_mb
         )
-        if res.get("success") and res.get("passed"):
+        is_pass = res.get("success") and res.get("passed")
+        t_ms = int(res["execution_time_sec"] * 1000) if res.get("execution_time_sec") else 0
+        status_txt = res.get("status", "Error")
+        if is_pass:
             passed_count += 1
-            if res.get("execution_time_sec"):
-                total_time_ms += int(res["execution_time_sec"] * 1000)
-        elif not failure_reason and res.get("success"):
-            failure_reason = res.get("status")
+            total_time_ms += t_ms
+        elif not failure_reason:
+            failure_reason = status_txt
+        case_logs.append((tc, is_pass, t_ms, status_txt))
 
-    # Score calculation proportional to marks
     fraction = passed_count / total_cases
     earned_score = int(round(fraction * problem.marks))
+    verdict = "ACCEPTED" if passed_count == total_cases else ("PARTIALLY ACCEPTED" if passed_count > 0 else (failure_reason or "WRONG ANSWER").upper())
 
     submission = CodingSubmission(
         attempt_id=attempt.id,
@@ -330,6 +405,23 @@ async def submit_code(
     await db.commit()
     await db.refresh(submission)
 
+    term_lines = [
+        f"fest@sandbox:~$ submit --problem P{problem.order_num} solution.{payload.language}",
+        f"Evaluating submission against {total_cases} test cases (Public & Hidden)...",
+        ""
+    ]
+    for idx, (tc, p_flag, t_ms, stat) in enumerate(case_logs, start=1):
+        type_str = "Sample" if not tc.is_hidden else "Hidden"
+        icon = "✓ PASSED" if p_flag else f"✗ {stat}"
+        term_lines.append(f"  Test Case #{idx} ({type_str}): {icon} ({t_ms}ms)")
+
+    term_lines.append("")
+    term_lines.append("=" * 55)
+    term_lines.append(f"VERDICT:       {verdict}")
+    term_lines.append(f"Score:         {earned_score} / {problem.marks} Marks ({passed_count}/{total_cases} test cases passed)")
+    term_lines.append(f"Total Time:    {total_time_ms}ms")
+    term_lines.append(f"Submission ID: {submission.id[:8]}")
+
     return SubmitCodeResponse(
         submission_id=submission.id,
         problem_id=problem.id,
@@ -337,5 +429,7 @@ async def submit_code(
         test_cases_passed=passed_count,
         total_test_cases=total_cases,
         score=earned_score,
-        execution_time_ms=total_time_ms
+        execution_time_ms=total_time_ms,
+        terminal_output="\n".join(term_lines),
+        verdict=verdict
     )
