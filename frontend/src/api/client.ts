@@ -12,7 +12,8 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
   if (!cleanPath.startsWith('/api/')) {
     cleanPath = `/api${cleanPath}`;
   }
-  const url = cleanPath;
+  const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  const url = `${baseUrl}${cleanPath}`;
   
   const headers = new Headers(options.headers || {});
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
