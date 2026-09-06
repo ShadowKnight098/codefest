@@ -23,10 +23,20 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [loading, setLoading] = useState<boolean>(true);
 
   const refresh = async () => {
+    // Only check admin session if on admin URL or token exists
+    const hasAdminToken = !!localStorage.getItem('fest_admin_token');
+    const isAdminUrl = window.location.pathname.startsWith('/admin') || window.location.hash.includes('admin');
+    if (!hasAdminToken && !isAdminUrl) {
+      setAdmin(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       const data = await apiFetch<AdminUser>('/admin/auth/me');
       setAdmin(data);
     } catch {
+      localStorage.removeItem('fest_admin_token');
       setAdmin(null);
     } finally {
       setLoading(false);
@@ -38,10 +48,13 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, []);
 
   const login = async (username: string, password: string) => {
-    const data = await apiFetch<AdminUser>('/admin/auth/login', {
+    const data = await apiFetch<AdminUser & { token?: string }>('/admin/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     });
+    if (data.token) {
+      localStorage.setItem('fest_admin_token', data.token);
+    }
     setAdmin(data);
   };
 
@@ -49,6 +62,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       await apiFetch('/admin/auth/logout', { method: 'POST' });
     } finally {
+      localStorage.removeItem('fest_admin_token');
       setAdmin(null);
     }
   };

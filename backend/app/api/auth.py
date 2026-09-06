@@ -75,12 +75,18 @@ async def login(
             detail="Account has been disabled by the competition administrator."
         )
 
-    # 5. Verify PIN
-    if not verify_pin(payload.pin, participant.hashed_pin):
+    # 5. Verify Password / PIN (allows roll number or hashed PIN)
+    pin_clean = payload.pin.strip()
+    is_valid_pin = (
+        verify_pin(pin_clean, participant.hashed_pin) or
+        verify_pin(pin_clean.upper(), participant.hashed_pin) or
+        (pin_clean.upper() == roll_clean)
+    )
+    if not is_valid_pin:
         fails = record_login_failure(roll_clean)
         record_login_failure(client_ip)
         remaining_attempts = max(0, settings.MAX_LOGIN_ATTEMPTS - fails)
-        detail = "Invalid Access PIN."
+        detail = "Invalid Password. Please enter your Roll Number as password."
         if remaining_attempts > 0:
             detail += f" ({remaining_attempts} attempt(s) remaining before temporary lockout)."
         else:
@@ -98,7 +104,11 @@ async def login(
     session_token = create_session_token(participant.id, participant.roll_number)
 
     # Cookie security attributes: SameSite=None + Secure for cross-origin (Vercel -> Render), Lax for local dev
-    is_secure = settings.ENVIRONMENT != "development"
+    is_secure = (
+        settings.ENVIRONMENT != "development" or
+        request.headers.get("x-forwarded-proto") == "https" or
+        request.url.scheme == "https"
+    )
     samesite_val = "none" if is_secure else "lax"
     response.set_cookie(
         key=settings.SESSION_COOKIE_NAME,
@@ -110,14 +120,26 @@ async def login(
         path="/"
     )
 
-    return participant
+    return ParticipantResponse(
+        id=participant.id,
+        roll_number=participant.roll_number,
+        name=participant.name,
+        email=participant.email,
+        academic_year=participant.academic_year,
+        is_enabled=participant.is_enabled,
+        token=session_token
+    )
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(request: Request, response: Response):
     """
     Invalidate participant session by deleting cookie.
     """
-    is_secure = settings.ENVIRONMENT != "development"
+    is_secure = (
+        settings.ENVIRONMENT != "development" or
+        request.headers.get("x-forwarded-proto") == "https" or
+        request.url.scheme == "https"
+    )
     samesite_val = "none" if is_secure else "lax"
     response.delete_cookie(
         key=settings.SESSION_COOKIE_NAME,

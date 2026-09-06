@@ -64,32 +64,28 @@ const AppContent: React.FC = () => {
     return <AdminDashboardPage onLogout={() => setCurrentView('admin_login')} />;
   }
 
+  // Secret hotkey: Ctrl + Shift + A (or Cmd + Shift + A) to open Admin portal
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+        e.preventDefault();
+        window.location.hash = 'admin';
+        setCurrentView('admin_login');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Participant routing branch
   if (!participant) {
     return (
-      <div>
-        <LoginPage />
-        {/* Discrete bottom link to Admin Login */}
-        <div className="fixed bottom-3 right-3 z-50">
-          <button
-            onClick={() => setCurrentView('admin_login')}
-            className="text-[11px] text-[#8B93A0] hover:text-[#16233F] underline font-mono"
-          >
-            Organizer Login →
-          </button>
-        </div>
-
-        {/* Floating Dev Tools Switcher on Login */}
-        <div className="fixed top-2 right-2 z-50 bg-[#16233F] text-white px-3 py-1.5 rounded-[4px] shadow-lg border border-white/20 flex items-center space-x-2 text-[11px] opacity-90 hover:opacity-100 transition-opacity">
-          <span className="text-white/60 font-mono text-[10px] font-bold">DEV:</span>
-          <button
-            onClick={() => { window.location.hash = 'admin'; setCurrentView('admin_login'); }}
-            className="px-2 py-0.5 rounded-[2px] bg-[#3FB950] text-black font-bold hover:bg-[#34a444]"
-          >
-            Admin
-          </button>
-        </div>
-      </div>
+      <LoginPage
+        onOpenAdmin={() => {
+          window.location.hash = 'admin';
+          setCurrentView('admin_login');
+        }}
+      />
     );
   }
 
@@ -129,41 +125,6 @@ const AppContent: React.FC = () => {
           onReturnToDashboard={() => setCurrentView('dashboard')}
         />
       )}
-
-      {/* Floating Dev Tools Switcher */}
-      <div className="fixed top-2 right-2 z-50 bg-[#16233F] text-white px-3 py-1.5 rounded-[4px] shadow-lg border border-white/20 flex items-center space-x-2 text-[11px] opacity-90 hover:opacity-100 transition-opacity">
-        <span className="text-white/60 font-mono text-[10px] font-bold">DEV:</span>
-        <button
-          onClick={() => setCurrentView('dashboard')}
-          className={`px-2 py-0.5 rounded-[2px] font-medium transition-colors ${currentView === 'dashboard' ? 'bg-white text-[#16233F] font-bold' : 'hover:bg-white/10 text-white/80'}`}
-        >
-          Dash
-        </button>
-        <button
-          onClick={() => setCurrentView('mcq')}
-          className={`px-2 py-0.5 rounded-[2px] font-medium transition-colors ${currentView === 'mcq' ? 'bg-white text-[#16233F] font-bold' : 'hover:bg-white/10 text-white/80'}`}
-        >
-          MCQ
-        </button>
-        <button
-          onClick={() => setCurrentView('waiting')}
-          className={`px-2 py-0.5 rounded-[2px] font-medium transition-colors ${currentView === 'waiting' ? 'bg-white text-[#16233F] font-bold' : 'hover:bg-white/10 text-white/80'}`}
-        >
-          Wait
-        </button>
-        <button
-          onClick={() => setCurrentView('coding')}
-          className={`px-2 py-0.5 rounded-[2px] font-medium transition-colors ${currentView === 'coding' ? 'bg-white text-[#16233F] font-bold' : 'hover:bg-white/10 text-white/80'}`}
-        >
-          Code
-        </button>
-        <button
-          onClick={() => { window.location.hash = 'admin'; setCurrentView('admin_login'); }}
-          className="px-2 py-0.5 rounded-[2px] bg-[#3FB950] text-black font-bold hover:bg-[#34a444]"
-        >
-          Admin
-        </button>
-      </div>
     </div>
   );
 };

@@ -17,10 +17,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
 
   const refresh = async () => {
+    // Only attempt refresh if a token or active session marker exists in storage
+    const hasToken = !!localStorage.getItem('fest_token');
+    const hasSession = localStorage.getItem('fest_has_session') === 'true';
+
+    if (!hasToken && !hasSession) {
+      setParticipant(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       const data = await apiFetch<Participant>('/api/auth/me');
       setParticipant(data);
     } catch {
+      localStorage.removeItem('fest_token');
+      localStorage.removeItem('fest_has_session');
       setParticipant(null);
     } finally {
       setLoading(false);
@@ -36,6 +48,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       method: 'POST',
       body: JSON.stringify({ roll_number, email, pin }),
     });
+    if (data.token) {
+      localStorage.setItem('fest_token', data.token);
+    }
+    localStorage.setItem('fest_has_session', 'true');
     setParticipant(data);
   };
 
@@ -43,6 +59,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await apiFetch('/api/auth/logout', { method: 'POST' });
     } finally {
+      localStorage.removeItem('fest_token');
+      localStorage.removeItem('fest_has_session');
       setParticipant(null);
     }
   };

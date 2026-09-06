@@ -5,7 +5,7 @@ from datetime import datetime
 class LoginRequest(BaseModel):
     roll_number: str = Field(..., description="Student Roll Number (e.g. 23AIML042)")
     email: EmailStr = Field(..., description="Registered institutional email")
-    pin: str = Field(..., min_length=4, max_length=8, description="Access PIN provided for the fest")
+    pin: str = Field(..., min_length=2, max_length=64, description="Password (Student Roll Number)")
 
 class ParticipantResponse(BaseModel):
     id: str
@@ -14,6 +14,7 @@ class ParticipantResponse(BaseModel):
     email: str
     academic_year: int
     is_enabled: bool
+    token: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

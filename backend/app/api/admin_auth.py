@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.session import get_db
@@ -12,6 +12,7 @@ router = APIRouter(prefix="/admin/auth", tags=["Admin Auth"])
 
 @router.post("/login", response_model=AdminResponse)
 async def admin_login(
+    request: Request,
     payload: AdminLoginRequest,
     response: Response,
     db: AsyncSession = Depends(get_db)
@@ -29,7 +30,11 @@ async def admin_login(
         )
 
     token = create_admin_session_token(admin.id, admin.username, admin.role)
-    is_secure = settings.ENVIRONMENT != "development"
+    is_secure = (
+        settings.ENVIRONMENT != "development" or
+        request.headers.get("x-forwarded-proto") == "https" or
+        request.url.scheme == "https"
+    )
     samesite_val = "none" if is_secure else "lax"
 
     response.set_cookie(
@@ -41,11 +46,21 @@ async def admin_login(
         samesite=samesite_val,
         path="/"
     )
-    return admin
+    return AdminResponse(
+        id=admin.id,
+        username=admin.username,
+        email=admin.email,
+        role=admin.role,
+        token=token
+    )
 
 @router.post("/logout")
-async def admin_logout(response: Response):
-    is_secure = settings.ENVIRONMENT != "development"
+async def admin_logout(request: Request, response: Response):
+    is_secure = (
+        settings.ENVIRONMENT != "development" or
+        request.headers.get("x-forwarded-proto") == "https" or
+        request.url.scheme == "https"
+    )
     samesite_val = "none" if is_secure else "lax"
     response.delete_cookie(
         key=settings.ADMIN_COOKIE_NAME,

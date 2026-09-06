@@ -20,6 +20,17 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
     headers.set('Content-Type', 'application/json');
   }
 
+  // Include Bearer Authorization header if token is stored in localStorage
+  if (!headers.has('Authorization')) {
+    const isAdminEndpoint = cleanPath.includes('/admin');
+    const token = isAdminEndpoint
+      ? (localStorage.getItem('fest_admin_token') || localStorage.getItem('fest_token'))
+      : (localStorage.getItem('fest_token') || localStorage.getItem('fest_admin_token'));
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+  }
+
   const response = await fetch(url, {
     ...options,
     headers,

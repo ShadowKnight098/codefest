@@ -5,6 +5,7 @@ export interface Participant {
   email: string;
   academic_year: number;
   is_enabled: boolean;
+  token?: string;
 }
 
 export type ParticipantState =

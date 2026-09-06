@@ -14,6 +14,7 @@ class AdminResponse(BaseModel):
     username: str
     email: str
     role: str  # SUPERADMIN, ADMIN, PROCTOR
+    token: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

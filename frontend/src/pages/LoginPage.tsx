@@ -2,17 +2,30 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
 
-export const LoginPage: React.FC = () => {
+export const LoginPage: React.FC<{ onOpenAdmin?: () => void }> = ({ onOpenAdmin }) => {
   const { login } = useAuth();
 
   const [rollNumber, setRollNumber] = useState('');
   const [email, setEmail] = useState('');
   const [pin, setPin] = useState('');
+  const [clickCount, setClickCount] = useState(0);
 
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
   const [banner, setBanner] = useState<{ type: 'error' | 'warn' | 'success'; message: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
+
+  const handleSecretClick = () => {
+    const next = clickCount + 1;
+    if (next >= 3) {
+      setClickCount(0);
+      if (onOpenAdmin) onOpenAdmin();
+      else window.location.hash = 'admin';
+    } else {
+      setClickCount(next);
+      setTimeout(() => setClickCount(0), 1200);
+    }
+  };
 
   const validate = (): boolean => {
     const errors: { [key: string]: string } = {};
@@ -28,9 +41,7 @@ export const LoginPage: React.FC = () => {
     }
 
     if (!pin.trim()) {
-      errors.pin = 'Access PIN is required.';
-    } else if (!/^\d{4,6}$/.test(pin.trim())) {
-      errors.pin = 'PIN must be a valid 4–6 digit access code.';
+      errors.pin = 'Password is required (Use your Roll Number).';
     }
 
     setFieldErrors(errors);
@@ -79,23 +90,19 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const autofill = (roll: string, em: string, p: string) => {
-    setRollNumber(roll);
-    setEmail(em);
-    setPin(p);
-    setFieldErrors({});
-    setBanner(null);
-  };
-
   return (
     <div className="min-h-screen bg-[#F6F6F2] flex items-center justify-center p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-[920px] bg-white border border-[#DBD7C9] rounded-[6px] overflow-hidden shadow-none flex flex-col md:flex-row">
         
         {/* IDENTITY PANEL (44%) */}
-        <div className="w-full md:w-[44%] bg-[#16233F] text-white p-8 sm:p-10 lg:p-12 flex flex-col justify-between">
+        <div className="w-full md:w-[44%] bg-[#16233F] text-white p-8 sm:p-10 lg:p-12 flex flex-col justify-between select-none">
           <div>
-            {/* Header / Department info */}
-            <div>
+            {/* Header / Department info (Triple click to open Organizer Login) */}
+            <div
+              onClick={handleSecretClick}
+              className="cursor-default"
+              title="Official Evaluation Environment"
+            >
               <div className="text-[13px] font-semibold text-white/90 tracking-normal">
                 Department of AI & Machine Learning
               </div>
@@ -105,7 +112,7 @@ export const LoginPage: React.FC = () => {
             </div>
 
             {/* Fest Name (large serif) */}
-            <div className="mt-8">
+            <div onClick={handleSecretClick} className="mt-8 cursor-default">
               <div className="font-serif text-[38px] leading-[1.08] font-semibold text-white">
                 TechFest
               </div>
@@ -195,25 +202,24 @@ export const LoginPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Access PIN */}
+              {/* Password */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-[13px] font-semibold text-[#59626F]">
-                    Access PIN
+                    Password
                   </label>
-                  <span className="text-[12px] text-[#8B93A0]">6 digits</span>
+                  <span className="text-[12px] text-[#8B93A0]">Use your Roll Number</span>
                 </div>
                 <input
                   type="password"
-                  maxLength={6}
                   value={pin}
                   onChange={(e) => {
                     setPin(e.target.value);
                     if (fieldErrors.pin) setFieldErrors({ ...fieldErrors, pin: '' });
                   }}
                   disabled={isSubmitting || isLocked}
-                  placeholder="••••••"
-                  className={`spec-input font-mono tracking-[0.2em] ${fieldErrors.pin ? 'invalid' : ''}`}
+                  placeholder="Enter your Roll Number"
+                  className={`spec-input font-mono tracking-wider ${fieldErrors.pin ? 'invalid' : ''}`}
                   autoComplete="current-password"
                 />
                 {fieldErrors.pin && (
@@ -259,7 +265,7 @@ export const LoginPage: React.FC = () => {
             )}
           </div>
 
-          {/* Footer & Quick Credentials */}
+          {/* Footer */}
           <div className="mt-8 pt-4 border-t border-[#DBD7C9]/60 text-center">
             <p className="text-[12.5px] text-[#59626F]">
               Trouble signing in?{' '}
@@ -267,35 +273,6 @@ export const LoginPage: React.FC = () => {
                 Contact your event coordinator.
               </a>
             </p>
-
-            {/* Dev helper pill selector */}
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 text-[11.5px]">
-              <span className="text-[#8B93A0] mr-1">Quick fill:</span>
-              <button
-                type="button"
-                onClick={() => autofill('21A91A6127', 'anjali.rao@rgmcet.edu.in', '654321')}
-                className="px-2 py-0.5 bg-[#F6F6F2] hover:bg-[#DBD7C9] border border-[#DBD7C9] rounded-[3px] text-[#1B2029] font-mono"
-                title="Anjali Rao (Year 3)"
-              >
-                21A91A6127 (Anjali)
-              </button>
-              <button
-                type="button"
-                onClick={() => autofill('23AIML001', 'aarav.sharma@aiml.edu', '123456')}
-                className="px-2 py-0.5 bg-[#F6F6F2] hover:bg-[#DBD7C9] border border-[#DBD7C9] rounded-[3px] text-[#1B2029] font-mono"
-                title="Aarav Sharma (Year 2)"
-              >
-                23AIML001 (Aarav)
-              </button>
-              <button
-                type="button"
-                onClick={() => autofill('23AIML042', 'diya.patel@aiml.edu', '567890')}
-                className="px-2 py-0.5 bg-[#F6F6F2] hover:bg-[#DBD7C9] border border-[#DBD7C9] rounded-[3px] text-[#1B2029] font-mono"
-                title="Diya Patel (Year 2)"
-              >
-                23AIML042 (Diya)
-              </button>
-            </div>
           </div>
         </div>
       </div>
