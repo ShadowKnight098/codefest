@@ -1,0 +1,16 @@
+﻿services:
+  - type: web
+    name: techfest-competition-platform
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: singapore
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JUDGE0_ENDPOINTS
+        value: '[]'
