@@ -30,6 +30,7 @@ async def admin_login(
 
     token = create_admin_session_token(admin.id, admin.username, admin.role)
     is_secure = settings.ENVIRONMENT != "development"
+    samesite_val = "none" if is_secure else "lax"
 
     response.set_cookie(
         key=settings.ADMIN_COOKIE_NAME,
@@ -37,18 +38,21 @@ async def admin_login(
         max_age=settings.SESSION_EXPIRE_HOURS * 3600,
         httponly=True,
         secure=is_secure,
-        samesite="lax",
+        samesite=samesite_val,
         path="/"
     )
     return admin
 
 @router.post("/logout")
 async def admin_logout(response: Response):
+    is_secure = settings.ENVIRONMENT != "development"
+    samesite_val = "none" if is_secure else "lax"
     response.delete_cookie(
         key=settings.ADMIN_COOKIE_NAME,
         path="/",
         httponly=True,
-        samesite="lax"
+        secure=is_secure,
+        samesite=samesite_val
     )
     return {"message": "Admin logged out successfully."}
 

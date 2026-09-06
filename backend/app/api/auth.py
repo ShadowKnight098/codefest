@@ -97,16 +97,16 @@ async def login(
 
     session_token = create_session_token(participant.id, participant.roll_number)
 
-    # Cookie security attributes per architecture.md §3
-    # SameSite=Lax (or None with Secure for cross-origin if needed in dev, Lax for production)
+    # Cookie security attributes: SameSite=None + Secure for cross-origin (Vercel -> Render), Lax for local dev
     is_secure = settings.ENVIRONMENT != "development"
+    samesite_val = "none" if is_secure else "lax"
     response.set_cookie(
         key=settings.SESSION_COOKIE_NAME,
         value=session_token,
         max_age=settings.SESSION_EXPIRE_HOURS * 3600,
         httponly=True,
         secure=is_secure,
-        samesite="lax",
+        samesite=samesite_val,
         path="/"
     )
 
@@ -117,11 +117,14 @@ async def logout(response: Response):
     """
     Invalidate participant session by deleting cookie.
     """
+    is_secure = settings.ENVIRONMENT != "development"
+    samesite_val = "none" if is_secure else "lax"
     response.delete_cookie(
         key=settings.SESSION_COOKIE_NAME,
         path="/",
         httponly=True,
-        samesite="lax"
+        secure=is_secure,
+        samesite=samesite_val
     )
     return {"message": "Successfully logged out."}
 
