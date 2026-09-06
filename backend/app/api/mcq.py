@@ -36,6 +36,7 @@ class AttemptStateResponse(BaseModel):
     questions: List[QuestionOut]
     answered_count: int
     unanswered_count: int
+    violations_count: int = 0
 
 class SaveAnswerRequest(BaseModel):
     attempt_id: str
@@ -172,6 +173,13 @@ async def get_or_start_mcq_attempt(
     answered = sum(1 for q in questions_out if q.selected_option is not None)
     unanswered = len(questions_out) - answered
 
+    v_res = await db.execute(
+        select(func.count(SecurityEvent.id)).where(
+            SecurityEvent.attempt_id == attempt.id
+        )
+    )
+    violations_count = v_res.scalar() or 0
+
     return AttemptStateResponse(
         attempt_id=attempt.id,
         status=attempt.status,
@@ -180,7 +188,8 @@ async def get_or_start_mcq_attempt(
         remaining_seconds=remaining,
         questions=questions_out,
         answered_count=answered,
-        unanswered_count=unanswered
+        unanswered_count=unanswered,
+        violations_count=violations_count
     )
 
 @router.post("/answer")

@@ -58,6 +58,9 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = () => {
   const [runResults, setRunResults] = useState<any>(null);
   const [submitResult, setSubmitResult] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
+  const [maxViolations, setMaxViolations] = useState<number>(5);
+  const attemptIdRef = useRef<string>('');
 
   // Terminal Console state
   const [terminalTab, setTerminalTab] = useState<'console' | 'testcases' | 'custom' | 'submission'>('console');
@@ -70,6 +73,58 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = () => {
 
   useEffect(() => {
     fetchAttempt();
+
+    const handleVisibility = async () => {
+      const currentId = attemptIdRef.current;
+      if (document.hidden && currentId) {
+        try {
+          const res = await apiFetch<any>('/security/violation', {
+            method: 'POST',
+            body: JSON.stringify({
+              attempt_type: 'CODING',
+              attempt_id: currentId,
+              idempotency_key: `${currentId}-${Date.now()}`,
+              event_type: 'TAB_HIDDEN',
+            }),
+          });
+          if (res.violation_count !== undefined) {
+            setTabSwitchCount(res.violation_count);
+          }
+          if (res.max_violations) {
+            setMaxViolations(res.max_violations);
+          }
+          if (res.terminated) {
+            alert(res.message);
+            window.location.reload();
+          } else {
+            alert(`SECURITY WARNING: Tab switch detected in Coding Assessment! (${res.violation_count} of ${res.max_violations} strikes recorded).\nFurther tab switching will permanently terminate your assessment.`);
+          }
+        } catch (e) {
+          console.error('Coding violation report failed', e);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    const preventCopy = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        return;
+      }
+      e.preventDefault();
+      alert('Action blocked: Copying and pasting are restricted during the assessment.');
+    };
+
+    document.addEventListener('copy', preventCopy);
+    document.addEventListener('cut', preventCopy);
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      document.removeEventListener('copy', preventCopy);
+      document.removeEventListener('cut', preventCopy);
+    };
   }, []);
 
   const currentProblem = attempt?.problems?.[selectedProblemIndex];
@@ -86,6 +141,10 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = () => {
     try {
       const data = await apiFetch<any>('/coding/attempt');
       setAttempt(data);
+      attemptIdRef.current = data.attempt_id;
+      if (data.violations_count !== undefined) {
+        setTabSwitchCount(data.violations_count);
+      }
       if (data.problems?.[0]?.sample_test_cases?.[0]?.input_data) {
         setCustomInput(data.problems[0].sample_test_cases[0].input_data);
       }
@@ -267,8 +326,17 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = () => {
               })}
             </div>
 
-            <div className="text-[11px] font-mono text-[#8B93A0] font-semibold">
-              {attempt?.problems?.length || 2} Problems Total
+            <div className="flex items-center space-x-3 font-mono text-xs">
+              <div className="flex items-center space-x-1.5">
+                <span className={`w-2 h-2 rounded-full ${tabSwitchCount === 0 ? 'bg-[#1E7A46]' : 'bg-[#C0392B]'} animate-pulse`} />
+                <span className="text-[#59626F] text-[11px] font-semibold">Tab Strikes:</span>
+                <span className={`px-1.5 py-0.5 rounded font-bold text-[11px] ${
+                  tabSwitchCount === 0 ? 'bg-[#E8F3EC] text-[#1E7A46]' :
+                  tabSwitchCount < 4 ? 'bg-[#FFF3CD] text-[#856404]' : 'bg-[#F8D7DA] text-[#721C24]'
+                }`}>
+                  {tabSwitchCount} / {maxViolations}
+                </span>
+              </div>
             </div>
           </div>
 

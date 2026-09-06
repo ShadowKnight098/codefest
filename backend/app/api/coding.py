@@ -3,13 +3,13 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.db.models import (
     Participant, Round, CodingProblem, CodingTestCase,
-    CodingAttempt, CodingSubmission, RoundResult, CompetitionSetting
+    CodingAttempt, CodingSubmission, RoundResult, CompetitionSetting, SecurityEvent
 )
 from app.api.deps import get_current_participant
 from app.services.judge0 import judge0_service
@@ -41,6 +41,7 @@ class CodingAttemptResponse(BaseModel):
     remaining_seconds: int
     duration_seconds: int
     problems: List[CodingProblemOut]
+    violations_count: int = 0
 
 class RunCodeRequest(BaseModel):
     problem_id: str
@@ -181,12 +182,20 @@ async def get_or_start_coding_attempt(
             sample_test_cases=samples
         ))
 
+    v_res = await db.execute(
+        select(func.count(SecurityEvent.id)).where(
+            SecurityEvent.attempt_id == attempt.id
+        )
+    )
+    violations_count = v_res.scalar() or 0
+
     return CodingAttemptResponse(
         attempt_id=attempt.id,
         status=attempt.status,
         remaining_seconds=remaining,
         duration_seconds=attempt.duration_seconds,
-        problems=problem_list
+        problems=problem_list,
+        violations_count=violations_count
     )
 
 @router.post("/run", response_model=RunCodeResponse)

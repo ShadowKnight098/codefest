@@ -41,6 +41,9 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
   } | null>(null);
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
+  const [maxViolations, setMaxViolations] = useState<number>(5);
+  const attemptIdRef = useRef<string>('');
   const saveTimeoutRef = useRef<number | null>(null);
 
   // 1. Fetch or initialize attempt from backend
@@ -51,8 +54,12 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
       try {
         const data = await apiFetch<any>('/api/mcq/attempt');
         setAttemptId(data.attempt_id);
+        attemptIdRef.current = data.attempt_id;
         setQuestions(data.questions);
         setRemainingSeconds(data.remaining_seconds);
+        if (data.violations_count !== undefined) {
+          setTabSwitchCount(data.violations_count);
+        }
         if (data.status === 'SUBMITTED' || data.status === 'TERMINATED') {
           setIsSubmitted(true);
         }
@@ -84,22 +91,29 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
 
     // Visibility change / tab switch proctoring listener
     const handleVisibility = async () => {
-      if (document.hidden && attemptId) {
+      const currentId = attemptIdRef.current;
+      if (document.hidden && currentId) {
         try {
           const res = await apiFetch<any>('/security/violation', {
             method: 'POST',
             body: JSON.stringify({
               attempt_type: 'MCQ',
-              attempt_id: attemptId,
-              idempotency_key: `${attemptId}-${Date.now()}`,
+              attempt_id: currentId,
+              idempotency_key: `${currentId}-${Date.now()}`,
               event_type: 'TAB_HIDDEN',
             }),
           });
+          if (res.violation_count !== undefined) {
+            setTabSwitchCount(res.violation_count);
+          }
+          if (res.max_violations) {
+            setMaxViolations(res.max_violations);
+          }
           if (res.terminated) {
             alert(res.message);
             onTerminated?.();
           } else {
-            alert(res.message);
+            alert(`SECURITY WARNING: Tab switch detected! (${res.violation_count} of ${res.max_violations} strikes recorded).\nFurther tab switching will permanently terminate your assessment.`);
           }
         } catch (e) {
           console.error('Violation report failed', e);
@@ -391,6 +405,31 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
                   );
                 })}
               </div>
+
+              {/* Live Proctoring & Tab Switch Status Box below MCQ */}
+              <div className="mt-8 max-w-[640px] p-4 bg-[#F6F6F2] border border-[#DBD7C9] rounded-[4px] flex items-center justify-between font-mono">
+                <div className="flex items-center space-x-3">
+                  <span className={`w-3 h-3 rounded-full shrink-0 ${tabSwitchCount === 0 ? 'bg-[#1E7A46]' : 'bg-[#C0392B]'} animate-pulse`} />
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-[#16233F] flex items-center space-x-2">
+                      <span>Proctoring Security Active</span>
+                      <span className="text-[10px] px-1.5 py-0.2 bg-[#EEF1F6] text-[#59626F] rounded">Round 1</span>
+                    </div>
+                    <div className="text-[11.5px] text-[#59626F] mt-0.5">
+                      Switching browser tabs or minimizing this window is strictly recorded.
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right pl-4 border-l border-[#DBD7C9] shrink-0">
+                  <div className="text-[10px] uppercase font-bold text-[#8B93A0]">Tab Switches</div>
+                  <div className={`text-[14px] font-bold ${
+                    tabSwitchCount === 0 ? 'text-[#1E7A46]' :
+                    tabSwitchCount < 4 ? 'text-[#D97706]' : 'text-[#DC2626]'
+                  }`}>
+                    {tabSwitchCount} / {maxViolations} Strikes
+                  </div>
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -445,6 +484,18 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
             </div>
             <div className="text-[13px] text-[#8B93A0] mt-0.5 font-mono">
               {remainingCount} remaining
+            </div>
+          </div>
+
+          {/* Security Strikes Status in Sidebar */}
+          <div className="mt-4 pt-4 border-t border-[#DBD7C9]">
+            <div className="flex items-center justify-between font-mono text-xs">
+              <span className="text-[#59626F]">Tab Violations:</span>
+              <span className={`font-bold px-2 py-0.5 rounded text-[11px] ${
+                tabSwitchCount === 0 ? 'bg-[#E8F3EC] text-[#1E7A46]' : 'bg-[#FDEDEC] text-[#C0392B]'
+              }`}>
+                {tabSwitchCount} / {maxViolations} Strikes
+              </span>
             </div>
           </div>
         </div>
