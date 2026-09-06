@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { apiFetch } from '../api/client';
 
-type Tab = 'overview' | 'participants' | 'mcq' | 'coding' | 'settings' | 'export' | 'organizers';
+type Tab = 'overview' | 'participants' | 'mcq' | 'coding' | 'settings' | 'export' | 'organizers' | 'winners1' | 'winners2';
 
 export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const { admin, logout } = useAdminAuth();
@@ -81,6 +81,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
 
   // Leaderboard tab state
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  // Winners state
+  const [winners1, setWinners1] = useState<any[]>([]);
+  const [winners2, setWinners2] = useState<any[]>([]);
 
   const fetchOverview = async () => {
     try {
@@ -151,6 +154,51 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     }
   };
 
+  const fetchWinners1 = async () => {
+    try {
+      const data = await apiFetch<any[]>('/admin/monitor/leaderboard');
+      // Round 1 winners = those who have an mcq_score (participated in MCQ)
+      const r1 = (Array.isArray(data) ? data : [])
+        .filter((e: any) => e.mcq_score !== null)
+        .sort((a: any, b: any) => b.mcq_score - a.mcq_score || a.violations - b.violations)
+        .map((e: any, i: number) => ({ ...e, r1_rank: i + 1 }));
+      setWinners1(r1);
+    } catch (e) {
+      console.error(e);
+      setWinners1([]);
+    }
+  };
+
+  const fetchWinners2 = async () => {
+    try {
+      const data = await apiFetch<any[]>('/admin/monitor/leaderboard');
+      // Round 2 winners = those who have a coding_score
+      const r2 = (Array.isArray(data) ? data : [])
+        .filter((e: any) => e.coding_score !== null)
+        .sort((a: any, b: any) => b.total_score - a.total_score || a.violations - b.violations)
+        .map((e: any, i: number) => ({ ...e, r2_rank: i + 1 }));
+      setWinners2(r2);
+    } catch (e) {
+      console.error(e);
+      setWinners2([]);
+    }
+  };
+
+  // Helper: download data as CSV in the browser (no server auth needed)
+  const downloadCSV = (rows: any[], filename: string, headers: string[], keys: string[]) => {
+    const lines = [headers.join(',')];
+    for (const row of rows) {
+      lines.push(keys.map(k => JSON.stringify(row[k] ?? '')).join(','));
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const fetchOrganizers = async () => {
     try {
       const data = await apiFetch<any[]>('/admin/organizers');
@@ -185,6 +233,10 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
       fetchLeaderboard();
       const interval = setInterval(fetchLeaderboard, 5000);
       return () => clearInterval(interval);
+    } else if (activeTab === 'winners1') {
+      fetchWinners1();
+    } else if (activeTab === 'winners2') {
+      fetchWinners2();
     }
   }, [activeTab, yearFilter, search, qYearFilter, isSuperAdmin]);
 
@@ -407,8 +459,10 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
 
   const tabs = isSuperAdmin
     ? [
-        { id: 'overview' as Tab, label: 'Live Operations' },
-        { id: 'export' as Tab, label: 'Live Leaderboard' },
+        { id: 'overview' as Tab, label: '🟢 Live Operations' },
+        { id: 'export' as Tab, label: '📊 Live Leaderboard' },
+        { id: 'winners1' as Tab, label: '🥇 Round 1 Results' },
+        { id: 'winners2' as Tab, label: '🏆 Round 2 Results' },
         { id: 'participants' as Tab, label: 'Participants' },
         { id: 'mcq' as Tab, label: 'MCQ Bank Manager' },
         { id: 'coding' as Tab, label: 'Coding Problems' },
@@ -416,7 +470,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         { id: 'settings' as Tab, label: 'Competition Settings' },
       ]
     : [
-        { id: 'export' as Tab, label: 'Live Leaderboard & Monitor' },
+        { id: 'export' as Tab, label: '📊 Live Leaderboard' },
       ];
 
   return (
@@ -1300,19 +1354,22 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-[#16233F]">Leaderboard & Export</h2>
-                  <p className="text-xs text-[#59626F]">Live verified rankings and official departmental CSV export</p>
+                  <h2 className="text-lg font-bold text-[#16233F]">📊 Live Leaderboard</h2>
+                  <p className="text-xs text-[#59626F]">Live verified rankings — auto-refreshes every 5 seconds</p>
                 </div>
-                <a
-                  href="/api/admin/monitor/export/csv"
-                  download="competition_results.csv"
+                <button
+                  onClick={() => downloadCSV(
+                    leaderboard,
+                    'competition_full_results.csv',
+                    ['Rank','Roll Number','Name','Year','MCQ Score','Qualified','Coding Score','Total Score','Violations'],
+                    ['rank','roll_number','name','academic_year','mcq_score','mcq_qualified','coding_score','total_score','violations']
+                  )}
                   className="px-4 py-2 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] transition-colors"
                 >
-                  Download Official CSV
-                </a>
+                  ⬇ Download Full Results CSV
+                </button>
               </div>
 
-              {/* Table */}
               <div className="bg-white border border-[#DBD7C9] rounded-[4px] overflow-hidden">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
@@ -1329,8 +1386,10 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   </thead>
                   <tbody className="divide-y divide-[#DBD7C9]">
                     {leaderboard.map((e) => (
-                      <tr key={e.participant_id} className="hover:bg-[#F6F6F2]/50">
-                        <td className="py-2.5 px-3 text-center font-mono font-bold text-[#16233F]">#{e.rank}</td>
+                      <tr key={e.participant_id} className={`hover:bg-[#F6F6F2]/50 ${e.rank <= 3 ? 'bg-[#FFFBEB]' : ''}`}>
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-[#16233F]">
+                          {e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : `#${e.rank}`}
+                        </td>
                         <td className="py-2.5 px-3 font-mono text-[#16233F]">{e.roll_number}</td>
                         <td className="py-2.5 px-3 font-medium">{e.name}</td>
                         <td className="py-2.5 px-3 text-center">{e.academic_year}</td>
@@ -1338,7 +1397,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                           {e.mcq_score !== null ? `${e.mcq_score} / 25` : '—'}
                         </td>
                         <td className="py-2.5 px-3 text-center font-mono">
-                          {e.coding_score !== null ? `${e.coding_score} / 20` : '—'}
+                          {e.coding_score !== null ? `${e.coding_score}` : '—'}
                         </td>
                         <td className="py-2.5 px-3 text-center font-mono font-bold text-[#1E7E34]">
                           {e.total_score}
@@ -1352,6 +1411,187 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     ))}
                   </tbody>
                 </table>
+                {leaderboard.length === 0 && (
+                  <p className="text-xs text-[#8B93A0] text-center py-8">No results yet. Leaderboard will populate as participants complete rounds.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 7: ROUND 1 WINNERS */}
+          {activeTab === 'winners1' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-[#16233F]">🥇 Round 1 — MCQ Results</h2>
+                  <p className="text-xs text-[#59626F]">All participants ranked by MCQ score. Green = qualified for Round 2.</p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => fetchWinners1()}
+                    className="px-3 py-1.5 border border-[#DBD7C9] text-[#16233F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2]"
+                  >
+                    ↺ Refresh
+                  </button>
+                  <button
+                    onClick={() => downloadCSV(
+                      winners1,
+                      'round1_mcq_results.csv',
+                      ['Rank','Roll Number','Name','Year','MCQ Score (/ 25)','Qualified for Round 2','Violations'],
+                      ['r1_rank','roll_number','name','academic_year','mcq_score','mcq_qualified','violations']
+                    )}
+                    className="px-4 py-2 bg-[#1E7E34] text-white text-xs font-bold rounded-[3px] hover:bg-[#166027] transition-colors"
+                  >
+                    ⬇ Download Round 1 CSV
+                  </button>
+                </div>
+              </div>
+
+              {winners1.length >= 3 && (
+                <div className="grid grid-cols-3 gap-3">
+                  {[winners1[1], winners1[0], winners1[2]].map((w, i) => (
+                    <div key={w?.participant_id} className={`rounded-[6px] p-4 border-2 text-center ${
+                      i === 1 ? 'border-[#E3B341] bg-[#FFFBEB]' : i === 0 ? 'border-[#8B93A0] bg-[#F6F6F2]' : 'border-[#CD7F32] bg-[#FFF5EE]'
+                    }`}>
+                      <div className="text-3xl mb-1">{i === 1 ? '🥇' : i === 0 ? '🥈' : '🥉'}</div>
+                      <div className="font-bold text-[#16233F] text-sm">{w?.name}</div>
+                      <div className="text-[11px] text-[#59626F] font-mono">{w?.roll_number}</div>
+                      <div className="text-xl font-bold font-mono text-[#16233F] mt-2">
+                        {w?.mcq_score}<span className="text-sm text-[#8B93A0]">/25</span>
+                      </div>
+                      <div className={`text-[10px] mt-1 font-bold ${w?.mcq_qualified ? 'text-[#1E7E34]' : 'text-[#A82A2A]'}`}>
+                        {w?.mcq_qualified ? '✓ QUALIFIED' : '✗ NOT QUALIFIED'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="bg-white border border-[#DBD7C9] rounded-[4px] overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[#F6F6F2] border-b border-[#DBD7C9] font-semibold text-[#16233F]">
+                      <th className="py-2.5 px-3 text-center font-mono">Rank</th>
+                      <th className="py-2.5 px-3 font-mono">Roll Number</th>
+                      <th className="py-2.5 px-3">Name</th>
+                      <th className="py-2.5 px-3 text-center">Year</th>
+                      <th className="py-2.5 px-3 text-center">MCQ Score</th>
+                      <th className="py-2.5 px-3 text-center">Qualified</th>
+                      <th className="py-2.5 px-3 text-center">Violations</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#DBD7C9]">
+                    {winners1.map((e) => (
+                      <tr key={e.participant_id} className={`${e.mcq_qualified ? 'bg-[#F0FBF4]' : ''} hover:bg-[#F6F6F2]/70`}>
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-[#16233F]">
+                          {e.r1_rank === 1 ? '🥇' : e.r1_rank === 2 ? '🥈' : e.r1_rank === 3 ? '🥉' : `#${e.r1_rank}`}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-[#16233F]">{e.roll_number}</td>
+                        <td className="py-2.5 px-3 font-semibold">{e.name}</td>
+                        <td className="py-2.5 px-3 text-center">{e.academic_year}</td>
+                        <td className="py-2.5 px-3 text-center font-mono font-bold">{e.mcq_score} / 25</td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-[2px] text-[10px] font-bold ${e.mcq_qualified ? 'bg-[#E8F3EC] text-[#1E7E34]' : 'bg-[#FDEDEC] text-[#A82A2A]'}`}>
+                            {e.mcq_qualified ? 'QUALIFIED' : 'NOT QUALIFIED'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-mono">
+                          <span className={e.violations > 0 ? 'text-[#A82A2A] font-bold' : 'text-[#8B93A0]'}>{e.violations}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {winners1.length === 0 && (
+                  <p className="text-xs text-[#8B93A0] text-center py-8">No MCQ attempts submitted yet.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 8: ROUND 2 WINNERS */}
+          {activeTab === 'winners2' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-[#16233F]">🏆 Round 2 — Coding Results</h2>
+                  <p className="text-xs text-[#59626F]">Ranked by Total Score (MCQ + Coding). Gold = top 3 finalists.</p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => fetchWinners2()}
+                    className="px-3 py-1.5 border border-[#DBD7C9] text-[#16233F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2]"
+                  >
+                    ↺ Refresh
+                  </button>
+                  <button
+                    onClick={() => downloadCSV(
+                      winners2,
+                      'round2_coding_results.csv',
+                      ['Rank','Roll Number','Name','Year','MCQ Score','Coding Score','Total Score','Violations'],
+                      ['r2_rank','roll_number','name','academic_year','mcq_score','coding_score','total_score','violations']
+                    )}
+                    className="px-4 py-2 bg-[#C0392B] text-white text-xs font-bold rounded-[3px] hover:bg-[#A82A2A] transition-colors"
+                  >
+                    ⬇ Download Round 2 CSV
+                  </button>
+                </div>
+              </div>
+
+              {winners2.length >= 3 && (
+                <div className="grid grid-cols-3 gap-3">
+                  {[winners2[1], winners2[0], winners2[2]].map((w, i) => (
+                    <div key={w?.participant_id} className={`rounded-[6px] p-4 border-2 text-center ${
+                      i === 1 ? 'border-[#E3B341] bg-[#FFFBEB]' : i === 0 ? 'border-[#8B93A0] bg-[#F6F6F2]' : 'border-[#CD7F32] bg-[#FFF5EE]'
+                    }`}>
+                      <div className="text-3xl mb-1">{i === 1 ? '🥇' : i === 0 ? '🥈' : '🥉'}</div>
+                      <div className="font-bold text-[#16233F] text-sm">{w?.name}</div>
+                      <div className="text-[11px] text-[#59626F] font-mono">{w?.roll_number}</div>
+                      <div className="text-xl font-bold font-mono text-[#16233F] mt-2">
+                        {w?.total_score}<span className="text-sm text-[#8B93A0]"> pts</span>
+                      </div>
+                      <div className="text-[10px] text-[#59626F] mt-0.5">MCQ: {w?.mcq_score}/25 · Code: {w?.coding_score}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="bg-white border border-[#DBD7C9] rounded-[4px] overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[#F6F6F2] border-b border-[#DBD7C9] font-semibold text-[#16233F]">
+                      <th className="py-2.5 px-3 text-center font-mono">Rank</th>
+                      <th className="py-2.5 px-3 font-mono">Roll Number</th>
+                      <th className="py-2.5 px-3">Name</th>
+                      <th className="py-2.5 px-3 text-center">Year</th>
+                      <th className="py-2.5 px-3 text-center">MCQ</th>
+                      <th className="py-2.5 px-3 text-center">Coding</th>
+                      <th className="py-2.5 px-3 text-center font-bold">Total</th>
+                      <th className="py-2.5 px-3 text-center">Violations</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#DBD7C9]">
+                    {winners2.map((e) => (
+                      <tr key={e.participant_id} className={`${e.r2_rank <= 3 ? 'bg-[#FFFBEB]' : ''} hover:bg-[#F6F6F2]/70`}>
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-[#16233F]">
+                          {e.r2_rank === 1 ? '🥇' : e.r2_rank === 2 ? '🥈' : e.r2_rank === 3 ? '🥉' : `#${e.r2_rank}`}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-[#16233F]">{e.roll_number}</td>
+                        <td className="py-2.5 px-3 font-semibold">{e.name}</td>
+                        <td className="py-2.5 px-3 text-center">{e.academic_year}</td>
+                        <td className="py-2.5 px-3 text-center font-mono">{e.mcq_score ?? '—'} / 25</td>
+                        <td className="py-2.5 px-3 text-center font-mono">{e.coding_score ?? '—'}</td>
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-[#1E7E34] text-sm">{e.total_score}</td>
+                        <td className="py-2.5 px-3 text-center font-mono">
+                          <span className={e.violations > 0 ? 'text-[#A82A2A] font-bold' : 'text-[#8B93A0]'}>{e.violations}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {winners2.length === 0 && (
+                  <p className="text-xs text-[#8B93A0] text-center py-8">No coding submissions yet.</p>
+                )}
               </div>
             </div>
           )}
