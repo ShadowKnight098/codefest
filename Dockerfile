@@ -1,4 +1,4 @@
-﻿# Stage 1: Build React Frontend
+# Stage 1: Build React Frontend
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
@@ -31,4 +31,4 @@ ENV PYTHONUNBUFFERED=1
 ENV ENVIRONMENT=production
 EXPOSE 8000
 
-CMD [" uvicorn\, \app.main:app\, \--host\, \0.0.0.0\, \--port\, \8000\, \--app-dir\, \backend\]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "backend"]
