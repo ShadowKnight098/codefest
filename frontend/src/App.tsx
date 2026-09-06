@@ -35,6 +35,19 @@ const AppContent: React.FC = () => {
     };
   }, [currentView]);
 
+  // Secret hotkey: Ctrl + Shift + A (or Cmd + Shift + A) to open Admin portal
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+        e.preventDefault();
+        window.location.hash = 'admin';
+        setCurrentView('admin_login');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   if (participantLoading || adminLoading) {
     return (
       <div className="min-h-screen bg-[#F6F6F2] flex items-center justify-center text-[#59626F] text-[14px]">
@@ -63,19 +76,6 @@ const AppContent: React.FC = () => {
     }
     return <AdminDashboardPage onLogout={() => setCurrentView('admin_login')} />;
   }
-
-  // Secret hotkey: Ctrl + Shift + A (or Cmd + Shift + A) to open Admin portal
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
-        e.preventDefault();
-        window.location.hash = 'admin';
-        setCurrentView('admin_login');
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   // Participant routing branch
   if (!participant) {
