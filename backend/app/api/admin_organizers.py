@@ -17,7 +17,7 @@ class OrganizerCreateRequest(BaseModel):
     username: str = Field(..., min_length=2, max_length=50)
     email: EmailStr
     password: str = Field(..., min_length=4, max_length=64)
-    role: str = Field(default="ORGANIZER", pattern=r"^(ORGANIZER|PROCTOR)$")
+    role: str = Field(default="ORGANIZER", pattern=r"^(ORGANIZER|PROCTOR|SUPERADMIN)$")
 
 def hash_password(password: str) -> str:
     salt = bcrypt.gensalt(rounds=12)
