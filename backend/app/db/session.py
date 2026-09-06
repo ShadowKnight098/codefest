@@ -3,7 +3,6 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import declarative_base
 from app.core.config import settings
 
-# Build engine kwargs based on database type
 engine_kwargs = {
     "echo": False,
     "future": True,
@@ -11,23 +10,27 @@ engine_kwargs = {
 }
 
 if settings.is_postgres:
-    # PostgreSQL (Supabase Direct) — SSL + connection pooling for 400-500 users
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
     engine_kwargs.update({
         "connect_args": {"ssl": ssl_context},
-        "pool_size": 15,           # Base connections (Supabase Nano allows 60 direct)
-        "max_overflow": 25,        # Burst capacity (total max = 40, well within 60 limit)
-        "pool_timeout": 30,        # Wait up to 30s for a connection
-        "pool_recycle": 300,       # Recycle connections every 5 min
+        "pool_size": 15,
+        "max_overflow": 25,
+        "pool_timeout": 30,
+        "pool_recycle": 300,
     })
-else:
-    # SQLite — minimal pooling
-    pass
 
-engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
+    # asyncpg needs the +asyncpg scheme, and doesn't understand
+    # libpq-style query params (sslmode, channel_binding) — SSL is
+    # already handled above via connect_args.
+    db_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+    db_url = db_url.split("?")[0]
+else:
+    db_url = settings.DATABASE_URL
+
+engine = create_async_engine(db_url, **engine_kwargs)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
@@ -39,7 +42,6 @@ AsyncSessionLocal = async_sessionmaker(
 Base = declarative_base()
 
 async def get_db():
-    """Async session dependency for FastAPI endpoints."""
     async with AsyncSessionLocal() as session:
         try:
             yield session
