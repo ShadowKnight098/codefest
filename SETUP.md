@@ -35,7 +35,7 @@ pip install -r backend/requirements.txt
 Create a file at backend\.env with:
 
 ```
-DATABASE_URL=postgresql+asyncpg://neondb_owner:npg_Gdi4rHnj6qEb@ep-twilight-forest-b35ndvrv-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?ssl=require
+DATABASE_URL=postgresql+asyncpg://<username>:<password>@<host>/<dbname>
 SECRET_KEY=your-secret-key-here
 JUDGE0_URL=https://judge0-ce.p.rapidapi.com
 JUDGE0_API_KEY=your-rapidapi-key
@@ -123,3 +123,4 @@ Production URLs:
 - Frontend: https://codefest2.vercel.app
 - Backend: https://codefest-jqh3.onrender.com
 - GitHub: https://github.com/ShadowKnight098/codefest
+
