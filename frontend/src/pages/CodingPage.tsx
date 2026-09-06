@@ -413,7 +413,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = () => {
         {/* Right Panel: Editor + Interactive Terminal Console */}
         <div className="flex-1 flex flex-col bg-white overflow-hidden">
           {/* Editor Header Bar */}
-          <div className="px-4 py-2 bg-[#F6F6F2] border-b border-[#DBD7C9] flex items-center justify-between">
+          <div className="px-4 py-2 bg-[#F6F6F2] border-b border-[#DBD7C9] flex items-center justify-between relative z-10">
             <div className="flex items-center space-x-2">
               <span className="text-xs text-[#59626F] font-mono font-bold">Language:</span>
               <select
@@ -440,7 +440,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = () => {
               <button
                 disabled={executing}
                 onClick={handleSubmit}
-                className="px-4 py-1.5 bg-[#16233F] text-white text-xs font-semibold rounded-[3px] hover:bg-[#25355B] disabled:opacity-50 transition-colors flex items-center space-x-1.5 shadow-sm"
+                className="px-4 py-1.5 bg-[#16233F] text-white text-xs font-semibold rounded-[3px] hover:bg-[#25355B] disabled:opacity-50 transition-colors flex items-center space-x-1.5 shadow-sm relative z-50"
               >
                 <span>Submit Solution</span>
                 <span>→</span>
