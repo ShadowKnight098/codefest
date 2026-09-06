@@ -11,9 +11,9 @@ from app.db.models import Participant
 from app.core.security import hash_pin
 from app.schemas.admin import (
     ParticipantCreate, ParticipantUpdate, ParticipantAdminResponse,
-    ImportResult, ImportValidationRow, PinResetResponse
+    ImportResult, ImportValidationRow, PinResetResponse, BulkTextImportRequest
 )
-from app.api.deps import get_current_admin
+from app.api.deps import get_current_admin, require_superadmin
 
 router = APIRouter(prefix="/admin/participants", tags=["Admin Participants"])
 
@@ -47,7 +47,7 @@ async def list_participants(
 async def create_participant(
     payload: ParticipantCreate,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_admin)
+    _: dict = Depends(require_superadmin)
 ):
     roll = payload.roll_number.strip().upper()
     email = payload.email.strip().lower()
@@ -64,7 +64,7 @@ async def create_participant(
             detail="Participant with this Roll Number or Email already exists."
         )
 
-    pin = payload.pin or generate_pin(6)
+    pin = (payload.pin or roll).strip().upper()
     participant = Participant(
         roll_number=roll,
         email=email,
@@ -137,7 +137,7 @@ async def reset_participant_pin(
 async def import_participants_csv(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_admin)
+    _: dict = Depends(require_superadmin)
 ):
     """
     Bulk import participants from CSV.
@@ -161,7 +161,7 @@ async def import_participants_csv(
         email = (row.get("email") or "").strip().lower()
         name = (row.get("name") or "").strip()
         year_raw = (row.get("academic_year") or row.get("year") or "").strip()
-        pin = (row.get("pin") or "").strip() or generate_pin(6)
+        pin = (row.get("pin") or roll).strip().upper()
 
         if not roll or not email or not name or not year_raw:
             skipped += 1
@@ -226,6 +226,105 @@ async def import_participants_csv(
     await db.commit()
     return ImportResult(
         total_rows=row_num - 1,
+        imported=imported,
+        skipped=skipped,
+        errors=errors
+    )
+
+
+@router.post("/import-text", response_model=ImportResult)
+async def import_participants_text(
+    payload: BulkTextImportRequest,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_superadmin)
+):
+    """
+    Bulk import participants by directly pasting text/CSV/TSV lines:
+    Format: roll_number, name, email, academic_year
+    """
+    lines = [line.strip() for line in payload.raw_text.strip().splitlines() if line.strip()]
+    imported = 0
+    skipped = 0
+    errors: List[ImportValidationRow] = []
+
+    row_num = 0
+    for line in lines:
+        row_num += 1
+        if line.startswith("#"):
+            continue
+
+        parts = [p.strip() for p in (line.split("\t") if "\t" in line else line.split(","))]
+        if len(parts) < 4:
+            skipped += 1
+            errors.append(ImportValidationRow(
+                row_number=row_num,
+                roll_number=parts[0] if len(parts) > 0 else "",
+                email=parts[2] if len(parts) > 2 else "",
+                name=parts[1] if len(parts) > 1 else "",
+                academic_year=0,
+                status="error",
+                error="Line must have at least 4 items: roll_number, name, email, academic_year"
+            ))
+            continue
+
+        roll = parts[0].strip().upper()
+        name = parts[1].strip()
+        email = parts[2].strip().lower()
+        year_raw = parts[3].strip()
+
+        if roll in ("ROLL", "ROLL_NUMBER", "ROLL NUMBER", "ROLLNO"):
+            continue
+
+        try:
+            year = int(year_raw)
+            if year < 1 or year > 4:
+                raise ValueError()
+        except ValueError:
+            skipped += 1
+            errors.append(ImportValidationRow(
+                row_number=row_num,
+                roll_number=roll,
+                email=email,
+                name=name,
+                academic_year=0,
+                status="error",
+                error=f"Invalid academic_year: '{year_raw}' (must be 1, 2, 3, or 4)"
+            ))
+            continue
+
+        existing = await db.execute(
+            select(Participant.id).where(
+                (Participant.roll_number == roll) | (Participant.email == email)
+            )
+        )
+        if existing.scalar_one_or_none():
+            skipped += 1
+            errors.append(ImportValidationRow(
+                row_number=row_num,
+                roll_number=roll,
+                email=email,
+                name=name,
+                academic_year=year,
+                status="error",
+                error="Roll number or Email already exists in database."
+            ))
+            continue
+
+        pin = (parts[4] if len(parts) > 4 and parts[4].strip() else roll).strip().upper()
+        new_participant = Participant(
+            roll_number=roll,
+            email=email,
+            name=name,
+            academic_year=year,
+            hashed_pin=hash_pin(pin),
+            is_enabled=True
+        )
+        db.add(new_participant)
+        imported += 1
+
+    await db.commit()
+    return ImportResult(
+        total_rows=row_num,
         imported=imported,
         skipped=skipped,
         errors=errors

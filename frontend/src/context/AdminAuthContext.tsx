@@ -5,7 +5,7 @@ export interface AdminUser {
   id: string;
   username: string;
   email: string;
-  role: 'SUPERADMIN' | 'ADMIN' | 'PROCTOR';
+  role: 'SUPERADMIN' | 'ADMIN' | 'ORGANIZER' | 'PROCTOR';
 }
 
 interface AdminAuthContextType {

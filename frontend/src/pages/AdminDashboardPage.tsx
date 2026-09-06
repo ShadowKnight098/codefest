@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { apiFetch } from '../api/client';
 
-type Tab = 'overview' | 'participants' | 'mcq' | 'coding' | 'settings' | 'export';
+type Tab = 'overview' | 'participants' | 'mcq' | 'coding' | 'settings' | 'export' | 'organizers';
 
 export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const { admin, logout } = useAdminAuth();
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const isSuperAdmin = admin?.role === 'SUPERADMIN';
+  const [activeTab, setActiveTab] = useState<Tab>(isSuperAdmin ? 'overview' : 'export');
   const [stats, setStats] = useState<any>(null);
   const [rounds, setRounds] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -17,6 +18,29 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   const [search, setSearch] = useState('');
   const [yearFilter, setYearFilter] = useState<number | ''>('');
   const [importFile, setImportFile] = useState<File | null>(null);
+
+  // Single Participant Modal
+  const [showAddPartModal, setShowAddPartModal] = useState(false);
+  const [newPart, setNewPart] = useState({
+    roll_number: '',
+    name: '',
+    email: '',
+    academic_year: 2,
+  });
+
+  // Bulk Text Import Modal
+  const [showBulkTextModal, setShowBulkTextModal] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+
+  // Organizers tab state
+  const [organizers, setOrganizers] = useState<any[]>([]);
+  const [showAddOrgModal, setShowAddOrgModal] = useState(false);
+  const [newOrg, setNewOrg] = useState({
+    username: '',
+    email: '',
+    password: '',
+    role: 'ORGANIZER',
+  });
 
   // MCQ Questions tab state
   const [questions, setQuestions] = useState<any[]>([]);
@@ -127,23 +151,42 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     }
   };
 
+  const fetchOrganizers = async () => {
+    try {
+      const data = await apiFetch<any[]>('/admin/organizers');
+      setOrganizers(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error(e);
+      setOrganizers([]);
+    }
+  };
+
   useEffect(() => {
-    if (activeTab === 'overview') {
+    if (!isSuperAdmin && activeTab !== 'export') {
+      setActiveTab('export');
+      return;
+    }
+
+    if (activeTab === 'overview' && isSuperAdmin) {
       fetchOverview();
       const interval = setInterval(fetchOverview, 5000);
       return () => clearInterval(interval);
-    } else if (activeTab === 'participants') {
+    } else if (activeTab === 'participants' && isSuperAdmin) {
       fetchParticipants();
-    } else if (activeTab === 'mcq') {
+    } else if (activeTab === 'mcq' && isSuperAdmin) {
       fetchQuestions();
-    } else if (activeTab === 'coding') {
+    } else if (activeTab === 'coding' && isSuperAdmin) {
       fetchProblems();
-    } else if (activeTab === 'settings') {
+    } else if (activeTab === 'organizers' && isSuperAdmin) {
+      fetchOrganizers();
+    } else if (activeTab === 'settings' && isSuperAdmin) {
       fetchSettings();
     } else if (activeTab === 'export') {
       fetchLeaderboard();
+      const interval = setInterval(fetchLeaderboard, 5000);
+      return () => clearInterval(interval);
     }
-  }, [activeTab, yearFilter, search, qYearFilter]);
+  }, [activeTab, yearFilter, search, qYearFilter, isSuperAdmin]);
 
   const toggleRound = async (roundId: string, currentStatus: boolean) => {
     setLoading(true);
@@ -279,6 +322,103 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     }
   };
 
+  const handleAddSingleParticipant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await apiFetch('/admin/participants', {
+        method: 'POST',
+        body: JSON.stringify(newPart),
+      });
+      setMessage(`Participant ${newPart.roll_number} added with roll number as password.`);
+      setShowAddPartModal(false);
+      setNewPart({ roll_number: '', name: '', email: '', academic_year: 2 });
+      fetchParticipants();
+    } catch (e: any) {
+      alert(`Failed to add participant: ${e?.detail || e.message}`);
+    }
+  };
+
+  const handleImportBulkText = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkText.trim()) return;
+    try {
+      const res = await apiFetch<any>('/admin/participants/import-text', {
+        method: 'POST',
+        body: JSON.stringify({ raw_text: bulkText }),
+      });
+      setMessage(`Imported ${res.imported} participants (${res.skipped} skipped).`);
+      setShowBulkTextModal(false);
+      setBulkText('');
+      fetchParticipants();
+    } catch (e: any) {
+      alert(`Failed to import text: ${e?.detail || e.message}`);
+    }
+  };
+
+  const handleDeleteParticipant = async (id: string, roll: string) => {
+    if (!confirm(`Are you sure you want to delete participant ${roll}?`)) return;
+    try {
+      await apiFetch(`/admin/participants/${id}`, { method: 'DELETE' });
+      setMessage(`Participant ${roll} deleted.`);
+      fetchParticipants();
+    } catch (e: any) {
+      alert(`Failed to delete participant: ${e?.detail || e.message}`);
+    }
+  };
+
+  const handleToggleParticipant = async (id: string, currentStatus: boolean) => {
+    try {
+      await apiFetch(`/admin/participants/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_enabled: !currentStatus }),
+      });
+      fetchParticipants();
+    } catch (e: any) {
+      alert(`Failed to update status: ${e?.detail || e.message}`);
+    }
+  };
+
+  const handleAddOrganizer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await apiFetch('/admin/organizers', {
+        method: 'POST',
+        body: JSON.stringify(newOrg),
+      });
+      setMessage(`Organizer ${newOrg.username} created successfully.`);
+      setShowAddOrgModal(false);
+      setNewOrg({ username: '', email: '', password: '', role: 'ORGANIZER' });
+      fetchOrganizers();
+    } catch (e: any) {
+      alert(`Failed to create organizer: ${e?.detail || e.message}`);
+    }
+  };
+
+  const handleDeleteOrganizer = async (id: string, username: string) => {
+    if (!confirm(`Are you sure you want to revoke access for ${username}?`)) return;
+    try {
+      await apiFetch(`/admin/organizers/${id}`, { method: 'DELETE' });
+      setMessage(`Organizer ${username} access revoked.`);
+      fetchOrganizers();
+    } catch (e: any) {
+      alert(`Failed to delete organizer: ${e?.detail || e.message}`);
+    }
+  };
+
+  const tabs = isSuperAdmin
+    ? [
+        { id: 'overview' as Tab, label: 'Live Operations' },
+        { id: 'export' as Tab, label: 'Live Leaderboard' },
+        { id: 'participants' as Tab, label: 'Participants' },
+        { id: 'mcq' as Tab, label: 'MCQ Bank Manager' },
+        { id: 'coding' as Tab, label: 'Coding Problems' },
+        { id: 'organizers' as Tab, label: 'Organizer Team' },
+        { id: 'settings' as Tab, label: 'Competition Settings' },
+      ]
+    : [
+        { id: 'export' as Tab, label: 'Live Leaderboard & Monitor' },
+      ];
+
   return (
     <div className="min-h-screen bg-[#F6F6F2] font-sans text-[#1B2029] flex flex-col">
       {/* Top Navigation */}
@@ -286,8 +426,15 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         <div className="flex items-center space-x-3">
           <div className="w-2.5 h-2.5 rounded-full bg-[#3FB950]" />
           <div>
-            <span className="font-bold tracking-tight text-sm">TechFest 2026 Admin</span>
-            <span className="text-white/50 text-xs ml-2 font-mono">[{admin?.role}]</span>
+            <span className="font-bold tracking-tight text-sm">TechFest 2026</span>
+            <span className="text-white/80 text-xs ml-2">
+              {isSuperAdmin ? 'Faculty Command Center' : 'Organizer Portal'}
+            </span>
+            <span className={`text-[10px] ml-2 font-mono px-1.5 py-0.5 rounded ${
+              isSuperAdmin ? 'bg-[#3FB950]/20 text-[#3FB950] border border-[#3FB950]/40' : 'bg-[#E3B341]/20 text-[#E3B341] border border-[#E3B341]/40'
+            }`}>
+              {isSuperAdmin ? 'SUPERADMIN (Full Access)' : 'ORGANIZER (Leaderboard Access Only)'}
+            </span>
           </div>
         </div>
         <div className="flex items-center space-x-3 text-xs">
@@ -305,17 +452,10 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
       <div className="flex-1 flex">
         {/* Sidebar */}
         <aside className="w-56 bg-white border-r border-[#DBD7C9] p-3 space-y-1">
-          {[
-            { id: 'overview', label: 'Live Operations' },
-            { id: 'participants', label: 'Participants (CSV)' },
-            { id: 'mcq', label: 'MCQ Bank Manager' },
-            { id: 'coding', label: 'Coding Problems' },
-            { id: 'settings', label: 'Competition Settings' },
-            { id: 'export', label: 'Leaderboard & Export' },
-          ].map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as Tab)}
+              onClick={() => setActiveTab(tab.id)}
               className={`w-full text-left px-3 py-2 text-xs font-medium rounded-[3px] transition-colors ${
                 activeTab === tab.id
                   ? 'bg-[#16233F] text-white font-bold'
@@ -337,7 +477,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
           )}
 
           {/* TAB 1: OVERVIEW & ROUND TOGGLE */}
-          {activeTab === 'overview' && (
+          {activeTab === 'overview' && isSuperAdmin && (
             <div className="space-y-6">
               <div>
                 <h2 className="text-lg font-bold text-[#16233F]">Live Competition State</h2>
@@ -403,37 +543,28 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
             </div>
           )}
 
-          {/* TAB 2: PARTICIPANTS & CSV IMPORT */}
+          {/* TAB 2: PARTICIPANTS & BULK/SINGLE IMPORT */}
           {activeTab === 'participants' && (
             <div className="space-y-6">
-              <div>
-                <h2 className="text-lg font-bold text-[#16233F]">Participant Management</h2>
-                <p className="text-xs text-[#59626F]">Import bulk student list from Excel/CSV or manage accounts</p>
-              </div>
-
-              {/* CSV Import Card */}
-              <div className="bg-white border border-[#DBD7C9] p-5 rounded-[4px]">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#16233F] mb-2">
-                  Bulk CSV Import (Excel)
-                </h3>
-                <p className="text-xs text-[#59626F] mb-3">
-                  Format: <code className="bg-[#EEF1F6] px-1 py-0.5 rounded text-[11px]">roll_number, email, name, academic_year, [pin]</code>
-                </p>
-                <form onSubmit={handleImportCSV} className="flex items-center space-x-3">
-                  <input
-                    type="file"
-                    accept=".csv"
-                    onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-                    className="text-xs text-[#59626F] file:mr-3 file:py-1.5 file:px-3 file:rounded-[2px] file:border-0 file:text-xs file:font-semibold file:bg-[#16233F] file:text-white hover:file:bg-[#25355B]"
-                  />
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-[#16233F]">Participant Management</h2>
+                  <p className="text-xs text-[#59626F]">Add individual students, paste bulk lists from Excel, or upload CSV</p>
+                </div>
+                <div className="flex items-center space-x-2">
                   <button
-                    type="submit"
-                    disabled={!importFile || loading}
-                    className="px-4 py-1.5 bg-[#16233F] text-white text-xs font-semibold rounded-[3px] disabled:opacity-50"
+                    onClick={() => setShowAddPartModal(true)}
+                    className="px-3 py-1.5 bg-[#16233F] text-white text-xs font-semibold rounded-[3px] hover:bg-[#25355B]"
                   >
-                    Upload & Import
+                    + Add Single Participant
                   </button>
-                </form>
+                  <button
+                    onClick={() => setShowBulkTextModal(true)}
+                    className="px-3 py-1.5 bg-white border border-[#16233F] text-[#16233F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2]"
+                  >
+                    📋 Paste / Bulk Import
+                  </button>
+                </div>
               </div>
 
               {/* Filter / Search Strip */}
@@ -480,18 +611,29 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         <td className="py-2.5 px-3 text-[#59626F]">{p.email}</td>
                         <td className="py-2.5 px-3 text-center">{p.academic_year}</td>
                         <td className="py-2.5 px-3 text-center">
-                          <span className={`px-1.5 py-0.5 rounded-[2px] text-[10px] font-bold ${
-                            p.is_enabled ? 'bg-[#E8F3EC] text-[#1E7E34]' : 'bg-[#FCEDEC] text-[#A82A2A]'
-                          }`}>
+                          <button
+                            onClick={() => handleToggleParticipant(p.id, p.is_enabled)}
+                            className={`px-1.5 py-0.5 rounded-[2px] text-[10px] font-bold cursor-pointer transition-opacity hover:opacity-80 ${
+                              p.is_enabled ? 'bg-[#E8F3EC] text-[#1E7E34]' : 'bg-[#FCEDEC] text-[#A82A2A]'
+                            }`}
+                            title="Click to toggle account status"
+                          >
                             {p.is_enabled ? 'Active' : 'Disabled'}
-                          </span>
+                          </button>
                         </td>
-                        <td className="py-2.5 px-3 text-right">
+                        <td className="py-2.5 px-3 text-right space-x-3">
                           <button
                             onClick={() => handleResetPin(p.id, p.roll_number)}
                             className="text-[#16233F] hover:underline font-mono text-[11px]"
+                            title="Reset password to roll number"
                           >
-                            Reset PIN
+                            Reset Password
+                          </button>
+                          <button
+                            onClick={() => handleDeleteParticipant(p.id, p.roll_number)}
+                            className="text-[#A82A2A] hover:underline font-mono text-[11px]"
+                          >
+                            Delete
                           </button>
                         </td>
                       </tr>
@@ -499,11 +641,158 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   </tbody>
                 </table>
               </div>
+
+              {/* Single Participant Modal */}
+              {showAddPartModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-[6px] max-w-md w-full p-6 shadow-xl border border-[#DBD7C9]">
+                    <h3 className="font-serif text-lg font-bold text-[#16233F] mb-1">Add Single Participant</h3>
+                    <p className="text-xs text-[#59626F] mb-4">
+                      The password will automatically be set to the student's <strong>Roll Number</strong>.
+                    </p>
+                    <form onSubmit={handleAddSingleParticipant} className="space-y-3 text-xs">
+                      <div>
+                        <label className="block text-[#59626F] font-semibold mb-1">Roll Number</label>
+                        <input
+                          type="text"
+                          required
+                          value={newPart.roll_number}
+                          onChange={(e) => setNewPart({ ...newPart, roll_number: e.target.value.toUpperCase() })}
+                          placeholder="e.g. 24AIML042"
+                          className="w-full border border-[#C6C1B0] p-2 rounded font-mono uppercase"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#59626F] font-semibold mb-1">Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={newPart.name}
+                          onChange={(e) => setNewPart({ ...newPart, name: e.target.value })}
+                          placeholder="e.g. Kiran Kumar"
+                          className="w-full border border-[#C6C1B0] p-2 rounded"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#59626F] font-semibold mb-1">Institutional Email</label>
+                        <input
+                          type="email"
+                          required
+                          value={newPart.email}
+                          onChange={(e) => setNewPart({ ...newPart, email: e.target.value })}
+                          placeholder="e.g. kiran@rgmcet.edu.in"
+                          className="w-full border border-[#C6C1B0] p-2 rounded"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#59626F] font-semibold mb-1">Academic Year</label>
+                        <select
+                          value={newPart.academic_year}
+                          onChange={(e) => setNewPart({ ...newPart, academic_year: Number(e.target.value) })}
+                          className="w-full border border-[#C6C1B0] p-2 rounded bg-white"
+                        >
+                          <option value={1}>Year 1</option>
+                          <option value={2}>Year 2</option>
+                          <option value={3}>Year 3</option>
+                          <option value={4}>Year 4</option>
+                        </select>
+                      </div>
+
+                      <div className="p-2.5 bg-[#F6F6F2] rounded border border-[#DBD7C9] text-[11px] text-[#59626F]">
+                        🔑 <strong>Login Credentials:</strong> Student will log in using their Roll Number, Email, and Roll Number as password.
+                      </div>
+
+                      <div className="flex justify-end space-x-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowAddPartModal(false)}
+                          className="px-3 py-1.5 border border-[#C6C1B0] rounded text-xs"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-1.5 bg-[#16233F] text-white rounded text-xs font-semibold hover:bg-[#25355B]"
+                        >
+                          Add Participant
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Bulk Import / Paste Modal */}
+              {showBulkTextModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-[6px] max-w-xl w-full p-6 shadow-xl border border-[#DBD7C9]">
+                    <h3 className="font-serif text-lg font-bold text-[#16233F] mb-1">Bulk Participant Import</h3>
+                    <p className="text-xs text-[#59626F] mb-3">
+                      Paste rows directly from Excel or Google Sheets. Each student's password defaults to their Roll Number.
+                    </p>
+
+                    {/* Method 1: Paste Text */}
+                    <form onSubmit={handleImportBulkText} className="space-y-3 text-xs mb-4">
+                      <div>
+                        <label className="block text-[#59626F] font-semibold mb-1">
+                          Paste Data (Format: <code>RollNumber, Name, Email, Year</code>)
+                        </label>
+                        <textarea
+                          rows={6}
+                          required
+                          value={bulkText}
+                          onChange={(e) => setBulkText(e.target.value)}
+                          placeholder={"24AIML001, Aarav Sharma, aarav@aiml.edu, 2\n24AIML002, Sneha Reddy, sneha@aiml.edu, 2\n24AIML003, Rohan Verma, rohan@aiml.edu, 3"}
+                          className="w-full border border-[#C6C1B0] p-2.5 rounded font-mono text-xs"
+                        />
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[11px] text-[#8B93A0]">Tab or comma separated rows supported</span>
+                        <button
+                          type="submit"
+                          className="px-4 py-1.5 bg-[#16233F] text-white rounded text-xs font-semibold hover:bg-[#25355B]"
+                        >
+                          Import All Pasted
+                        </button>
+                      </div>
+                    </form>
+
+                    <div className="border-t border-[#DBD7C9] pt-3">
+                      <div className="text-xs font-semibold text-[#59626F] mb-2">Or Upload a CSV File:</div>
+                      <form onSubmit={handleImportCSV} className="flex items-center space-x-2">
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                          className="text-xs text-[#59626F] file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:bg-[#EEF1F6] file:text-[#16233F]"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!importFile || loading}
+                          className="px-3 py-1 bg-[#16233F] text-white text-xs font-semibold rounded disabled:opacity-50"
+                        >
+                          Upload CSV
+                        </button>
+                      </form>
+                    </div>
+
+                    <div className="flex justify-end pt-4 border-t border-[#DBD7C9] mt-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowBulkTextModal(false)}
+                        className="px-3 py-1.5 border border-[#C6C1B0] rounded text-xs"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* TAB 3: MCQ QUESTION BANK */}
-          {activeTab === 'mcq' && (
+          {activeTab === 'mcq' && isSuperAdmin && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -712,7 +1001,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
           )}
 
           {/* TAB 4: CODING PROBLEMS */}
-          {activeTab === 'coding' && (
+          {activeTab === 'coding' && isSuperAdmin && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -825,8 +1114,151 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
             </div>
           )}
 
+          {/* TAB: ORGANIZER TEAM (SUPERADMIN ONLY) */}
+          {activeTab === 'organizers' && isSuperAdmin && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-[#16233F]">Organizer Team Management</h2>
+                  <p className="text-xs text-[#59626F]">
+                    Create student coordinator accounts with restricted <strong>Leaderboard-only access</strong>.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowAddOrgModal(true)}
+                  className="px-3 py-1.5 bg-[#16233F] text-white text-xs font-semibold rounded-[3px] hover:bg-[#25355B]"
+                >
+                  + Add Organizer
+                </button>
+              </div>
+
+              {/* Organizers Table */}
+              <div className="bg-white border border-[#DBD7C9] rounded-[4px] overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[#F6F6F2] border-b border-[#DBD7C9] font-semibold text-[#16233F]">
+                      <th className="py-2.5 px-3">Username</th>
+                      <th className="py-2.5 px-3">Email</th>
+                      <th className="py-2.5 px-3 text-center">Assigned Role</th>
+                      <th className="py-2.5 px-3 text-center">Permissions</th>
+                      <th className="py-2.5 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#DBD7C9]">
+                    {organizers.map((o) => (
+                      <tr key={o.id} className="hover:bg-[#F6F6F2]/50">
+                        <td className="py-2.5 px-3 font-mono font-medium text-[#16233F]">{o.username}</td>
+                        <td className="py-2.5 px-3 text-[#59626F]">{o.email}</td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-[2px] font-mono text-[10px] font-bold ${
+                            o.role === 'SUPERADMIN' ? 'bg-[#3FB950]/20 text-[#248037] border border-[#3FB950]/40' : 'bg-[#E3B341]/20 text-[#9E6A03] border border-[#E3B341]/40'
+                          }`}>
+                            {o.role}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center text-[#59626F]">
+                          {o.role === 'SUPERADMIN' ? 'Full Superadmin Control' : 'Leaderboard & Live Monitor Only'}
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          {o.username !== 'admin' && o.id !== admin?.id ? (
+                            <button
+                              onClick={() => handleDeleteOrganizer(o.id, o.username)}
+                              className="text-[#A82A2A] hover:underline font-mono text-[11px]"
+                            >
+                              Revoke Access
+                            </button>
+                          ) : (
+                            <span className="text-[#8B93A0] text-[11px] font-mono">Current / Primary</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Add Organizer Modal */}
+              {showAddOrgModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-[6px] max-w-md w-full p-6 shadow-xl border border-[#DBD7C9]">
+                    <h3 className="font-serif text-lg font-bold text-[#16233F] mb-1">Add Organizer / Coordinator</h3>
+                    <p className="text-xs text-[#59626F] mb-4">
+                      Create credentials for event coordinators. Coordinators can only view the live leaderboard.
+                    </p>
+                    <form onSubmit={handleAddOrganizer} className="space-y-3 text-xs">
+                      <div>
+                        <label className="block text-[#59626F] font-semibold mb-1">Username</label>
+                        <input
+                          type="text"
+                          required
+                          value={newOrg.username}
+                          onChange={(e) => setNewOrg({ ...newOrg, username: e.target.value })}
+                          placeholder="e.g. coordinator_ai"
+                          className="w-full border border-[#C6C1B0] p-2 rounded"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#59626F] font-semibold mb-1">Institutional Email</label>
+                        <input
+                          type="email"
+                          required
+                          value={newOrg.email}
+                          onChange={(e) => setNewOrg({ ...newOrg, email: e.target.value })}
+                          placeholder="e.g. coord@rgmcet.edu.in"
+                          className="w-full border border-[#C6C1B0] p-2 rounded"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#59626F] font-semibold mb-1">Password</label>
+                        <input
+                          type="password"
+                          required
+                          value={newOrg.password}
+                          onChange={(e) => setNewOrg({ ...newOrg, password: e.target.value })}
+                          placeholder="••••••••"
+                          className="w-full border border-[#C6C1B0] p-2 rounded"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#59626F] font-semibold mb-1">Access Level</label>
+                        <select
+                          value={newOrg.role}
+                          onChange={(e) => setNewOrg({ ...newOrg, role: e.target.value })}
+                          className="w-full border border-[#C6C1B0] p-2 rounded bg-white"
+                        >
+                          <option value="ORGANIZER">ORGANIZER (Restricted to Live Leaderboard Only)</option>
+                          <option value="SUPERADMIN">SUPERADMIN (Full Control: Settings, Questions, Rounds)</option>
+                        </select>
+                      </div>
+
+                      <div className="p-2.5 bg-[#F6F6F2] rounded border border-[#DBD7C9] text-[11px] text-[#59626F]">
+                        🛡️ <strong>Security Note:</strong> Student organizers cannot view questions, edit marks, or access competition controls.
+                      </div>
+
+                      <div className="flex justify-end space-x-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowAddOrgModal(false)}
+                          className="px-3 py-1.5 border border-[#C6C1B0] rounded text-xs"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-1.5 bg-[#16233F] text-white rounded text-xs font-semibold hover:bg-[#25355B]"
+                        >
+                          Create Account
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* TAB 5: SETTINGS */}
-          {activeTab === 'settings' && (
+          {activeTab === 'settings' && isSuperAdmin && (
             <div className="space-y-6">
               <div>
                 <h2 className="text-lg font-bold text-[#16233F]">Competition Settings</h2>

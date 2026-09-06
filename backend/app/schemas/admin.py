@@ -121,6 +121,10 @@ class ImportResult(BaseModel):
     errors: list[ImportValidationRow]
 
 
+class BulkTextImportRequest(BaseModel):
+    raw_text: str = Field(..., min_length=1, description="Raw CSV or TSV lines: roll_number, name, email, academic_year")
+
+
 class PinResetResponse(BaseModel):
     roll_number: str
     new_pin: str
