@@ -193,6 +193,7 @@ async def get_or_start_mcq_attempt(
     )
 
 @router.post("/answer")
+@router.post("/save-answer")
 async def save_answer(
     payload: SaveAnswerRequest,
     current_participant: Participant = Depends(get_current_participant),

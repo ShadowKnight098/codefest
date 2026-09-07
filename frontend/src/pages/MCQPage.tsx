@@ -43,12 +43,27 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
   const [maxViolations, setMaxViolations] = useState<number>(3);
+  const [securityToast, setSecurityToast] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(!!document.fullscreenElement);
   const attemptIdRef = useRef<string>('');
   const saveTimeoutRef = useRef<number | null>(null);
+
+  const showToast = (msg: string) => {
+    setSecurityToast(msg);
+    setTimeout(() => setSecurityToast(null), 3500);
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  };
 
   // 1. Fetch or initialize attempt from backend
   useEffect(() => {
     let timerInterval: number;
+
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
 
     const loadAttempt = async () => {
       try {
@@ -113,7 +128,7 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
             alert(res.message);
             onTerminated?.();
           } else {
-            alert(`SECURITY WARNING: Tab switch detected! (${res.violation_count} of ${res.max_violations} strikes recorded).\nFurther tab switching will permanently terminate your assessment.`);
+            showToast(`⚠️ SECURITY STRIKE: Tab switch detected! (${res.violation_count} of ${res.max_violations} strikes)`);
           }
         } catch (e) {
           console.error('Violation report failed', e);
@@ -126,27 +141,36 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
     // Strict Anti-Cheat: Disable Copy, Cut, Paste, and Right-Click Context Menu
     const preventCopy = (e: Event) => {
       e.preventDefault();
-      alert('Action blocked: Copying and pasting are strictly prohibited during the assessment.');
+      showToast('🚫 Action Blocked: Copy & Paste is strictly disabled.');
       return false;
     };
     const preventContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       return false;
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'C' || e.key === 'V' || e.key === 'X')) {
+        e.preventDefault();
+        showToast('🚫 Action Blocked: Clipboard shortcuts (Ctrl+C, Ctrl+V, Ctrl+X) are disabled.');
+      }
+    };
 
     document.addEventListener('copy', preventCopy);
     document.addEventListener('cut', preventCopy);
     document.addEventListener('paste', preventCopy);
     document.addEventListener('contextmenu', preventContextMenu);
+    window.addEventListener('keydown', handleKeyDown, true);
 
     return () => {
       if (timerInterval) clearInterval(timerInterval);
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      document.removeEventListener('fullscreenchange', handleFsChange);
       document.removeEventListener('visibilitychange', handleVisibility);
       document.removeEventListener('copy', preventCopy);
       document.removeEventListener('cut', preventCopy);
       document.removeEventListener('paste', preventCopy);
       document.removeEventListener('contextmenu', preventContextMenu);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [attemptId]);
 
@@ -280,8 +304,15 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
   const remainingCount = questions.length - answeredCount;
 
   return (
-    <div className="min-h-screen bg-[#F6F6F2] flex flex-col select-none">
+    <div className="min-h-screen bg-[#F6F6F2] flex flex-col select-none relative">
       {smallViewportNotice}
+
+      {securityToast && (
+        <div className="fixed top-4 inset-x-0 mx-auto w-fit max-w-lg bg-[#AE2E22] text-white px-5 py-3 rounded-[6px] shadow-2xl text-xs font-semibold z-50 flex items-center space-x-2 border border-red-400">
+          <span>⚠️</span>
+          <span>{securityToast}</span>
+        </div>
+      )}
 
       {/* SHARED HEADER (§1) */}
       <AssessmentHeader
@@ -290,6 +321,21 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
         remainingSeconds={remainingSeconds}
         showDrawerButton={true}
         onToggleDrawer={() => setDrawerOpen(!drawerOpen)}
+        rightAction={
+          !isFullscreen ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (document.documentElement.requestFullscreen) {
+                  document.documentElement.requestFullscreen().catch(() => {});
+                }
+              }}
+              className="px-2.5 py-1 bg-[#FFF3CD] text-[#856404] border border-[#FFEEBA] rounded text-[11px] font-bold animate-pulse hover:bg-[#FFE8A1]"
+            >
+              ⛶ Enter Fullscreen
+            </button>
+          ) : undefined
+        }
       />
 
       {/* MAIN THREE-PANEL GRID (22% / 53% / 25%) */}
