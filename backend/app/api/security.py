@@ -46,7 +46,7 @@ async def report_violation(
         return ViolationResponse(
             status="WARNING",
             violation_count=count,
-            max_violations=5,
+            max_violations=3,
             terminated=False,
             message="Violation already recorded."
         )
@@ -65,7 +65,7 @@ async def report_violation(
         select(CompetitionSetting.value).where(CompetitionSetting.key == "max_security_violations")
     )
     max_val = max_setting.scalar_one_or_none()
-    max_violations = int(max_val) if max_val else 5
+    max_violations = int(max_val) if max_val else 3
 
     # Record event
     event = SecurityEvent(

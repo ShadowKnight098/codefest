@@ -59,7 +59,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
   const [submitResult, setSubmitResult] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
-  const [maxViolations, setMaxViolations] = useState<number>(5);
+  const [maxViolations, setMaxViolations] = useState<number>(3);
   const attemptIdRef = useRef<string>('');
 
   // Terminal Console state
@@ -123,24 +123,43 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
 
     document.addEventListener('visibilitychange', handleVisibility);
 
-    const preventCopy = (e: Event) => {
+    // Strict Anti-Cheat: Disable Copy, Cut, Paste, Context Menu, and Keyboard Shortcuts
+    const preventCopyOrPaste = (e: Event) => {
       const target = e.target as HTMLElement;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+      if (target && target.getAttribute('data-allow-paste') === 'true') {
         return;
       }
       e.preventDefault();
-      alert('Action blocked: Copying and pasting are restricted during the assessment.');
+      e.stopPropagation();
+      alert('Action blocked: Copying and pasting are strictly disabled during the assessment.');
     };
 
-    document.addEventListener('copy', preventCopy);
-    document.addEventListener('cut', preventCopy);
-    document.addEventListener('contextmenu', (e) => e.preventDefault());
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'C' || e.key === 'V' || e.key === 'X')) {
+        const target = e.target as HTMLElement;
+        if (target && target.getAttribute('data-allow-paste') === 'true') {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        alert('Action blocked: Clipboard shortcuts (Ctrl+C, Ctrl+V, Ctrl+X) are disabled during the assessment.');
+      }
+    };
+
+    window.addEventListener('copy', preventCopyOrPaste, true);
+    window.addEventListener('cut', preventCopyOrPaste, true);
+    window.addEventListener('paste', preventCopyOrPaste, true);
+    window.addEventListener('contextmenu', (e) => e.preventDefault(), true);
+    window.addEventListener('keydown', handleKeyDown, true);
 
     return () => {
       clearInterval(timerInterval);
       document.removeEventListener('visibilitychange', handleVisibility);
-      document.removeEventListener('copy', preventCopy);
-      document.removeEventListener('cut', preventCopy);
+      window.removeEventListener('copy', preventCopyOrPaste, true);
+      window.removeEventListener('cut', preventCopyOrPaste, true);
+      window.removeEventListener('paste', preventCopyOrPaste, true);
+      window.removeEventListener('contextmenu', (e) => e.preventDefault(), true);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, []);
 
@@ -541,6 +560,8 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
                 lineNumbers: 'on',
                 scrollBeyondLastLine: false,
                 automaticLayout: true,
+                contextmenu: false,
+                copyWithSyntaxHighlighting: false,
               }}
             />
           </div>
@@ -728,6 +749,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
                     value={customInput}
                     onChange={(e) => setCustomInput(e.target.value)}
                     rows={6}
+                    data-allow-paste="true"
                     placeholder="Enter input data here..."
                     className="w-full bg-[#161B22] border border-white/10 rounded-[4px] p-2.5 text-white font-mono text-xs focus:outline-none focus:border-[#388BFD]"
                   />

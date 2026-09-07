@@ -95,6 +95,25 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   const [winners1, setWinners1] = useState<any[]>([]);
   const [winners2, setWinners2] = useState<any[]>([]);
 
+  // Auto-sync & Live Refresh state
+  const [autoSync, setAutoSync] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [lastSynced, setLastSynced] = useState<Date>(new Date());
+
+  // Round 1 Filter state
+  const [r1Filter, setR1Filter] = useState<'ALL' | 'QUALIFIED' | 'DISQUALIFIED'>('ALL');
+  const [r1YearFilter, setR1YearFilter] = useState<number | ''>('');
+  const [r1Search, setR1Search] = useState<string>('');
+
+  // Round 2 Filter state
+  const [r2YearFilter, setR2YearFilter] = useState<number | ''>('');
+  const [r2Search, setR2Search] = useState<string>('');
+
+  // Leaderboard Filter state
+  const [lbFilter, setLbFilter] = useState<'ALL' | 'QUALIFIED' | 'DISQUALIFIED'>('ALL');
+  const [lbYearFilter, setLbYearFilter] = useState<number | ''>('');
+  const [lbSearch, setLbSearch] = useState<string>('');
+
   const fetchOverview = async () => {
     try {
       const statsData = await apiFetch<any>('/admin/monitor/live');
@@ -194,6 +213,26 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     }
   };
 
+  const refreshActiveTab = async () => {
+    setIsRefreshing(true);
+    try {
+      if (activeTab === 'overview' && isSuperAdmin) await fetchOverview();
+      else if (activeTab === 'participants' && isSuperAdmin) await fetchParticipants();
+      else if (activeTab === 'mcq' && isSuperAdmin) await fetchQuestions();
+      else if (activeTab === 'coding' && isSuperAdmin) await fetchProblems();
+      else if (activeTab === 'organizers' && isSuperAdmin) await fetchOrganizers();
+      else if (activeTab === 'settings' && isSuperAdmin) await fetchSettings();
+      else if (activeTab === 'export') await fetchLeaderboard();
+      else if (activeTab === 'winners1') await fetchWinners1();
+      else if (activeTab === 'winners2') await fetchWinners2();
+      setLastSynced(new Date());
+    } catch (e) {
+      console.error('Refresh failed', e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   // Helper: download data as CSV in the browser (no server auth needed)
   const downloadCSV = (rows: any[], filename: string, headers: string[], keys: string[]) => {
     const lines = [headers.join(',')];
@@ -224,31 +263,57 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
       setActiveTab('export');
       return;
     }
-
-    if (activeTab === 'overview' && isSuperAdmin) {
-      fetchOverview();
-      const interval = setInterval(fetchOverview, 5000);
-      return () => clearInterval(interval);
-    } else if (activeTab === 'participants' && isSuperAdmin) {
-      fetchParticipants();
-    } else if (activeTab === 'mcq' && isSuperAdmin) {
-      fetchQuestions();
-    } else if (activeTab === 'coding' && isSuperAdmin) {
-      fetchProblems();
-    } else if (activeTab === 'organizers' && isSuperAdmin) {
-      fetchOrganizers();
-    } else if (activeTab === 'settings' && isSuperAdmin) {
-      fetchSettings();
-    } else if (activeTab === 'export') {
-      fetchLeaderboard();
-      const interval = setInterval(fetchLeaderboard, 5000);
-      return () => clearInterval(interval);
-    } else if (activeTab === 'winners1') {
-      fetchWinners1();
-    } else if (activeTab === 'winners2') {
-      fetchWinners2();
-    }
+    refreshActiveTab();
   }, [activeTab, yearFilter, search, qYearFilter, isSuperAdmin]);
+
+  // Periodic Live Auto-Sync
+  useEffect(() => {
+    if (!autoSync) return;
+    const interval = setInterval(() => {
+      refreshActiveTab();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [autoSync, activeTab, yearFilter, search, qYearFilter, isSuperAdmin]);
+
+  const filteredWinners1 = winners1.filter((w) => {
+    if (r1Filter === 'QUALIFIED' && !w.mcq_qualified) return false;
+    if (r1Filter === 'DISQUALIFIED' && w.mcq_qualified) return false;
+    if (r1YearFilter && w.academic_year !== r1YearFilter) return false;
+    if (r1Search) {
+      const s = r1Search.toLowerCase();
+      return (
+        w.roll_number?.toLowerCase().includes(s) ||
+        w.name?.toLowerCase().includes(s)
+      );
+    }
+    return true;
+  });
+
+  const filteredWinners2 = winners2.filter((w) => {
+    if (r2YearFilter && w.academic_year !== r2YearFilter) return false;
+    if (r2Search) {
+      const s = r2Search.toLowerCase();
+      return (
+        w.roll_number?.toLowerCase().includes(s) ||
+        w.name?.toLowerCase().includes(s)
+      );
+    }
+    return true;
+  });
+
+  const filteredLeaderboard = leaderboard.filter((w) => {
+    if (lbFilter === 'QUALIFIED' && !w.mcq_qualified) return false;
+    if (lbFilter === 'DISQUALIFIED' && w.mcq_qualified) return false;
+    if (lbYearFilter && w.academic_year !== lbYearFilter) return false;
+    if (lbSearch) {
+      const s = lbSearch.toLowerCase();
+      return (
+        w.roll_number?.toLowerCase().includes(s) ||
+        w.name?.toLowerCase().includes(s)
+      );
+    }
+    return true;
+  });
 
   const toggleRound = async (roundId: string, currentStatus: boolean) => {
     setLoading(true);
@@ -539,7 +604,38 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
             </span>
           </div>
         </div>
+
+        {/* Live Sync and Refresh Controls */}
         <div className="flex items-center space-x-3 text-xs">
+          <span className="text-[11px] font-mono text-white/60 hidden md:inline">
+            Synced: {lastSynced.toLocaleTimeString()}
+          </span>
+
+          <button
+            onClick={() => setAutoSync(!autoSync)}
+            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs transition-colors border font-medium ${
+              autoSync
+                ? 'bg-[#3FB950]/20 text-[#3FB950] border-[#3FB950]/50'
+                : 'bg-white/10 text-white/60 border-white/20 hover:text-white'
+            }`}
+            title="Toggle 5-second automatic data synchronization"
+          >
+            <span className={`w-2 h-2 rounded-full ${autoSync ? 'bg-[#3FB950] animate-pulse' : 'bg-white/40'}`} />
+            <span>{autoSync ? 'Live Sync (5s)' : 'Sync Off'}</span>
+          </button>
+
+          <button
+            onClick={refreshActiveTab}
+            disabled={isRefreshing}
+            className="flex items-center space-x-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 rounded text-xs transition-colors font-medium border border-white/20 disabled:opacity-50"
+            title="Manually fetch latest data from server"
+          >
+            <span className={isRefreshing ? 'animate-spin inline-block' : ''}>🔄</span>
+            <span>{isRefreshing ? 'Refreshing…' : 'Refresh'}</span>
+          </button>
+
+          <span className="text-white/40">|</span>
+
           <span className="text-white/70">Logged in as <strong>{admin?.username}</strong></span>
           <button
             onClick={() => { logout(); onLogout(); }}
@@ -1646,17 +1742,72 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   <h2 className="text-lg font-bold text-[#16233F]">📊 Live Leaderboard</h2>
                   <p className="text-xs text-[#59626F]">Live verified rankings — auto-refreshes every 5 seconds</p>
                 </div>
-                <button
-                  onClick={() => downloadCSV(
-                    leaderboard,
-                    'competition_full_results.csv',
-                    ['Rank','Roll Number','Name','Year','MCQ Score','Qualified','Coding Score','Total Score','Violations'],
-                    ['rank','roll_number','name','academic_year','mcq_score','mcq_qualified','coding_score','total_score','violations']
-                  )}
-                  className="px-4 py-2 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] transition-colors"
-                >
-                  ⬇ Download Full Results CSV
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => refreshActiveTab()}
+                    disabled={isRefreshing}
+                    className="px-3 py-1.5 border border-[#DBD7C9] text-[#16233F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2] flex items-center space-x-1"
+                  >
+                    <span className={isRefreshing ? 'animate-spin' : ''}>↺</span>
+                    <span>{isRefreshing ? 'Refreshing…' : 'Refresh'}</span>
+                  </button>
+                  <button
+                    onClick={() => downloadCSV(
+                      filteredLeaderboard,
+                      `leaderboard_${lbFilter.toLowerCase()}${lbYearFilter ? `_y${lbYearFilter}` : ''}.csv`,
+                      ['Rank','Roll Number','Name','Year','MCQ Score','Qualified','Coding Score','Total Score','Violations'],
+                      ['rank','roll_number','name','academic_year','mcq_score','mcq_qualified','coding_score','total_score','violations']
+                    )}
+                    className="px-4 py-2 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] transition-colors flex items-center space-x-1.5"
+                  >
+                    <span>⬇ Download Filtered CSV ({filteredLeaderboard.length})</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter Controls Strip */}
+              <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-[4px] border border-[#DBD7C9]">
+                <div className="flex items-center space-x-1.5 text-xs">
+                  <span className="font-semibold text-[#59626F]">Filter:</span>
+                  <select
+                    value={lbFilter}
+                    onChange={(e) => setLbFilter(e.target.value as any)}
+                    className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
+                  >
+                    <option value="ALL">All Participants</option>
+                    <option value="QUALIFIED">✓ Qualified Only</option>
+                    <option value="DISQUALIFIED">✗ Not Qualified</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center space-x-1.5 text-xs">
+                  <span className="font-semibold text-[#59626F]">Academic Year:</span>
+                  <select
+                    value={lbYearFilter}
+                    onChange={(e) => setLbYearFilter(e.target.value ? Number(e.target.value) : '')}
+                    className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
+                  >
+                    <option value="">All Years (1–4)</option>
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3">Year 3</option>
+                    <option value="4">Year 4</option>
+                  </select>
+                </div>
+
+                <div className="flex-1 min-w-[200px]">
+                  <input
+                    type="text"
+                    value={lbSearch}
+                    onChange={(e) => setLbSearch(e.target.value)}
+                    placeholder="Search by Roll Number or Name…"
+                    className="h-8 px-3 text-xs border border-[#C6C1B0] rounded-[3px] w-full"
+                  />
+                </div>
+
+                <div className="text-xs text-[#8B93A0] font-mono">
+                  Showing <strong>{filteredLeaderboard.length}</strong> of {leaderboard.length} records
+                </div>
               </div>
 
               <div className="bg-white border border-[#DBD7C9] rounded-[4px] overflow-hidden">
@@ -1674,7 +1825,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#DBD7C9]">
-                    {leaderboard.map((e) => (
+                    {filteredLeaderboard.map((e) => (
                       <tr key={e.participant_id} className={`hover:bg-[#F6F6F2]/50 ${e.rank <= 3 ? 'bg-[#FFFBEB]' : ''}`}>
                         <td className="py-2.5 px-3 text-center font-mono font-bold text-[#16233F]">
                           {e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : `#${e.rank}`}
@@ -1700,8 +1851,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     ))}
                   </tbody>
                 </table>
-                {leaderboard.length === 0 && (
-                  <p className="text-xs text-[#8B93A0] text-center py-8">No results yet. Leaderboard will populate as participants complete rounds.</p>
+                {filteredLeaderboard.length === 0 && (
+                  <p className="text-xs text-[#8B93A0] text-center py-8">No participants match the selected filter.</p>
                 )}
               </div>
             </div>
@@ -1713,32 +1864,79 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-[#16233F]">🥇 Round 1 — MCQ Results</h2>
-                  <p className="text-xs text-[#59626F]">All participants ranked by MCQ score. Green = qualified for Round 2.</p>
+                  <p className="text-xs text-[#59626F]">All participants ranked by MCQ score. Filter by qualification status or year.</p>
                 </div>
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => fetchWinners1()}
-                    className="px-3 py-1.5 border border-[#DBD7C9] text-[#16233F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2]"
+                    onClick={() => refreshActiveTab()}
+                    disabled={isRefreshing}
+                    className="px-3 py-1.5 border border-[#DBD7C9] text-[#16233F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2] flex items-center space-x-1"
                   >
-                    ↺ Refresh
+                    <span className={isRefreshing ? 'animate-spin' : ''}>↺</span>
+                    <span>{isRefreshing ? 'Refreshing…' : 'Refresh'}</span>
                   </button>
                   <button
                     onClick={() => downloadCSV(
-                      winners1,
-                      'round1_mcq_results.csv',
+                      filteredWinners1,
+                      `round1_mcq_results_${r1Filter.toLowerCase()}${r1YearFilter ? `_y${r1YearFilter}` : ''}.csv`,
                       ['Rank','Roll Number','Name','Year','MCQ Score (/ 25)','Qualified for Round 2','Violations'],
                       ['r1_rank','roll_number','name','academic_year','mcq_score','mcq_qualified','violations']
                     )}
-                    className="px-4 py-2 bg-[#1E7E34] text-white text-xs font-bold rounded-[3px] hover:bg-[#166027] transition-colors"
+                    className="px-4 py-2 bg-[#1E7E34] text-white text-xs font-bold rounded-[3px] hover:bg-[#166027] transition-colors flex items-center space-x-1.5"
                   >
-                    ⬇ Download Round 1 CSV
+                    <span>⬇ Download Filtered CSV ({filteredWinners1.length})</span>
                   </button>
                 </div>
               </div>
 
-              {winners1.length >= 3 && (
+              {/* Filter Controls Strip */}
+              <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-[4px] border border-[#DBD7C9]">
+                <div className="flex items-center space-x-1.5 text-xs">
+                  <span className="font-semibold text-[#59626F]">Qualification:</span>
+                  <select
+                    value={r1Filter}
+                    onChange={(e) => setR1Filter(e.target.value as any)}
+                    className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
+                  >
+                    <option value="ALL">All Participants ({winners1.length})</option>
+                    <option value="QUALIFIED">✓ Qualified for Round 2 Only ({winners1.filter(w => w.mcq_qualified).length})</option>
+                    <option value="DISQUALIFIED">✗ Not Qualified ({winners1.filter(w => !w.mcq_qualified).length})</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center space-x-1.5 text-xs">
+                  <span className="font-semibold text-[#59626F]">Academic Year:</span>
+                  <select
+                    value={r1YearFilter}
+                    onChange={(e) => setR1YearFilter(e.target.value ? Number(e.target.value) : '')}
+                    className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
+                  >
+                    <option value="">All Years (1–4)</option>
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3">Year 3</option>
+                    <option value="4">Year 4</option>
+                  </select>
+                </div>
+
+                <div className="flex-1 min-w-[200px]">
+                  <input
+                    type="text"
+                    value={r1Search}
+                    onChange={(e) => setR1Search(e.target.value)}
+                    placeholder="Search by Roll Number or Name…"
+                    className="h-8 px-3 text-xs border border-[#C6C1B0] rounded-[3px] w-full"
+                  />
+                </div>
+
+                <div className="text-xs text-[#8B93A0] font-mono">
+                  Showing <strong>{filteredWinners1.length}</strong> records
+                </div>
+              </div>
+
+              {filteredWinners1.length >= 3 && (
                 <div className="grid grid-cols-3 gap-3">
-                  {[winners1[1], winners1[0], winners1[2]].map((w, i) => (
+                  {[filteredWinners1[1], filteredWinners1[0], filteredWinners1[2]].map((w, i) => (
                     <div key={w?.participant_id} className={`rounded-[6px] p-4 border-2 text-center ${
                       i === 1 ? 'border-[#E3B341] bg-[#FFFBEB]' : i === 0 ? 'border-[#8B93A0] bg-[#F6F6F2]' : 'border-[#CD7F32] bg-[#FFF5EE]'
                     }`}>
@@ -1770,7 +1968,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#DBD7C9]">
-                    {winners1.map((e) => (
+                    {filteredWinners1.map((e) => (
                       <tr key={e.participant_id} className={`${e.mcq_qualified ? 'bg-[#F0FBF4]' : ''} hover:bg-[#F6F6F2]/70`}>
                         <td className="py-2.5 px-3 text-center font-mono font-bold text-[#16233F]">
                           {e.r1_rank === 1 ? '🥇' : e.r1_rank === 2 ? '🥈' : e.r1_rank === 3 ? '🥉' : `#${e.r1_rank}`}
@@ -1791,8 +1989,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     ))}
                   </tbody>
                 </table>
-                {winners1.length === 0 && (
-                  <p className="text-xs text-[#8B93A0] text-center py-8">No MCQ attempts submitted yet.</p>
+                {filteredWinners1.length === 0 && (
+                  <p className="text-xs text-[#8B93A0] text-center py-8">No results match your filter criteria.</p>
                 )}
               </div>
             </div>
@@ -1808,28 +2006,62 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                 </div>
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => fetchWinners2()}
-                    className="px-3 py-1.5 border border-[#DBD7C9] text-[#16233F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2]"
+                    onClick={() => refreshActiveTab()}
+                    disabled={isRefreshing}
+                    className="px-3 py-1.5 border border-[#DBD7C9] text-[#16233F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2] flex items-center space-x-1"
                   >
-                    ↺ Refresh
+                    <span className={isRefreshing ? 'animate-spin' : ''}>↺</span>
+                    <span>{isRefreshing ? 'Refreshing…' : 'Refresh'}</span>
                   </button>
                   <button
                     onClick={() => downloadCSV(
-                      winners2,
-                      'round2_coding_results.csv',
+                      filteredWinners2,
+                      `round2_coding_results${r2YearFilter ? `_y${r2YearFilter}` : ''}.csv`,
                       ['Rank','Roll Number','Name','Year','MCQ Score','Coding Score','Total Score','Violations'],
                       ['r2_rank','roll_number','name','academic_year','mcq_score','coding_score','total_score','violations']
                     )}
-                    className="px-4 py-2 bg-[#C0392B] text-white text-xs font-bold rounded-[3px] hover:bg-[#A82A2A] transition-colors"
+                    className="px-4 py-2 bg-[#C0392B] text-white text-xs font-bold rounded-[3px] hover:bg-[#A82A2A] transition-colors flex items-center space-x-1.5"
                   >
-                    ⬇ Download Round 2 CSV
+                    <span>⬇ Download Filtered CSV ({filteredWinners2.length})</span>
                   </button>
                 </div>
               </div>
 
-              {winners2.length >= 3 && (
+              {/* Filter Controls Strip */}
+              <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-[4px] border border-[#DBD7C9]">
+                <div className="flex items-center space-x-1.5 text-xs">
+                  <span className="font-semibold text-[#59626F]">Academic Year:</span>
+                  <select
+                    value={r2YearFilter}
+                    onChange={(e) => setR2YearFilter(e.target.value ? Number(e.target.value) : '')}
+                    className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
+                  >
+                    <option value="">All Years (1–4)</option>
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3">Year 3</option>
+                    <option value="4">Year 4</option>
+                  </select>
+                </div>
+
+                <div className="flex-1 min-w-[200px]">
+                  <input
+                    type="text"
+                    value={r2Search}
+                    onChange={(e) => setR2Search(e.target.value)}
+                    placeholder="Search by Roll Number or Name…"
+                    className="h-8 px-3 text-xs border border-[#C6C1B0] rounded-[3px] w-full"
+                  />
+                </div>
+
+                <div className="text-xs text-[#8B93A0] font-mono">
+                  Showing <strong>{filteredWinners2.length}</strong> of {winners2.length} records
+                </div>
+              </div>
+
+              {filteredWinners2.length >= 3 && (
                 <div className="grid grid-cols-3 gap-3">
-                  {[winners2[1], winners2[0], winners2[2]].map((w, i) => (
+                  {[filteredWinners2[1], filteredWinners2[0], filteredWinners2[2]].map((w, i) => (
                     <div key={w?.participant_id} className={`rounded-[6px] p-4 border-2 text-center ${
                       i === 1 ? 'border-[#E3B341] bg-[#FFFBEB]' : i === 0 ? 'border-[#8B93A0] bg-[#F6F6F2]' : 'border-[#CD7F32] bg-[#FFF5EE]'
                     }`}>
@@ -1860,7 +2092,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#DBD7C9]">
-                    {winners2.map((e) => (
+                    {filteredWinners2.map((e) => (
                       <tr key={e.participant_id} className={`${e.r2_rank <= 3 ? 'bg-[#FFFBEB]' : ''} hover:bg-[#F6F6F2]/70`}>
                         <td className="py-2.5 px-3 text-center font-mono font-bold text-[#16233F]">
                           {e.r2_rank === 1 ? '🥇' : e.r2_rank === 2 ? '🥈' : e.r2_rank === 3 ? '🥉' : `#${e.r2_rank}`}
@@ -1878,8 +2110,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     ))}
                   </tbody>
                 </table>
-                {winners2.length === 0 && (
-                  <p className="text-xs text-[#8B93A0] text-center py-8">No coding submissions yet.</p>
+                {filteredWinners2.length === 0 && (
+                  <p className="text-xs text-[#8B93A0] text-center py-8">No results match your filter criteria.</p>
                 )}
               </div>
             </div>

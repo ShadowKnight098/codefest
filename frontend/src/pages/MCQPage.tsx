@@ -42,7 +42,7 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
-  const [maxViolations, setMaxViolations] = useState<number>(5);
+  const [maxViolations, setMaxViolations] = useState<number>(3);
   const attemptIdRef = useRef<string>('');
   const saveTimeoutRef = useRef<number | null>(null);
 
