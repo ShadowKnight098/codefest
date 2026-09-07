@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { apiFetch, ApiError } from '../api/client';
 import { AssessmentHeader } from '../components/AssessmentHeader';
+import { useAuth } from '../context/AuthContext';
 
 const STARTER_TEMPLATES: Record<string, string> = {
   python: `def solve(a, b):
@@ -74,6 +75,7 @@ public class Main {
 };
 
 export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }) => {
+  const { participant } = useAuth();
   const [attempt, setAttempt] = useState<any>(null);
   const [selectedProblemIndex, setSelectedProblemIndex] = useState(0);
   const [language, setLanguage] = useState<string>('python');
@@ -102,6 +104,8 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
   const [showCompletedModal, setShowCompletedModal] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(3600);
 
+  const autoSubmitRef = useRef(false);
+
   useEffect(() => {
     fetchAttempt();
 
@@ -113,6 +117,11 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
     const timerInterval = setInterval(() => {
       setRemainingSeconds((prev) => {
         if (prev <= 1) {
+          // Auto final-submit when timer hits 0
+          if (!autoSubmitRef.current) {
+            autoSubmitRef.current = true;
+            handleTimerExpiredSubmit();
+          }
           return 0;
         }
         return prev - 1;
@@ -171,6 +180,10 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
       showToast('🚫 Action Blocked: Copy & Paste is strictly disabled during the assessment.');
     };
 
+    const preventContextMenu = (e: Event) => {
+      e.preventDefault();
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'C' || e.key === 'V' || e.key === 'X')) {
         const target = e.target as HTMLElement;
@@ -186,7 +199,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
     window.addEventListener('copy', preventCopyOrPaste, true);
     window.addEventListener('cut', preventCopyOrPaste, true);
     window.addEventListener('paste', preventCopyOrPaste, true);
-    window.addEventListener('contextmenu', (e) => e.preventDefault(), true);
+    window.addEventListener('contextmenu', preventContextMenu, true);
     window.addEventListener('keydown', handleKeyDown, true);
 
     return () => {
@@ -196,16 +209,16 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
       window.removeEventListener('copy', preventCopyOrPaste, true);
       window.removeEventListener('cut', preventCopyOrPaste, true);
       window.removeEventListener('paste', preventCopyOrPaste, true);
-      window.removeEventListener('contextmenu', (e) => e.preventDefault(), true);
+      window.removeEventListener('contextmenu', preventContextMenu, true);
       window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, []);
 
   const currentProblem = attempt?.problems?.[selectedProblemIndex];
 
-  // Unique key for caching code per attempt, problem, and language
-  const attemptPrefix = attempt?.attempt_id || 'active';
-  const currentCodeKey = `${attemptPrefix}-${selectedProblemIndex}-${language}`;
+  // Unique key for caching code per participant, problem, and language
+  const userKey = participant?.id || attempt?.attempt_id || 'active';
+  const currentCodeKey = `user_${userKey}_prob_${selectedProblemIndex}_lang_${language}`;
   const code = codeCache[currentCodeKey] ?? (STARTER_TEMPLATES[language] || '');
 
   const setCode = (newCode: string) => {
@@ -250,9 +263,27 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
     }
   };
 
+  // Called automatically when the coding timer reaches 0
+  const handleTimerExpiredSubmit = async () => {
+    const aid = attemptIdRef.current;
+    if (!aid) return;
+    try {
+      await apiFetch<any>('/coding/final-submit', {
+        method: 'POST',
+        body: JSON.stringify({ attempt_id: aid }),
+      });
+    } catch {
+      // Try query param fallback
+      try {
+        await apiFetch<any>(`/coding/final-submit?attempt_id=${aid}`, { method: 'POST' });
+      } catch { /* best effort */ }
+    }
+    setShowCompletedModal(true);
+  };
+
   const handleLanguageChange = (newLang: string) => {
     setLanguage(newLang);
-    const key = `${attempt?.attempt_id || 'active'}-${selectedProblemIndex}-${newLang}`;
+    const key = `user_${userKey}_prob_${selectedProblemIndex}_lang_${newLang}`;
     if (!codeCache[key]) {
       setCodeCache((prev) => ({ ...prev, [key]: STARTER_TEMPLATES[newLang] || '' }));
     }
@@ -710,6 +741,8 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
           {/* Monaco Editor Container */}
           <div className={`overflow-hidden transition-all ${isPanelExpanded ? 'h-0 hidden' : 'flex-1'}`}>
             <Editor
+              key={`monaco_${userKey}_${selectedProblemIndex}_${language}`}
+              path={`model_${userKey}_${selectedProblemIndex}_${language}`}
               height="100%"
               language={language === 'c' || language === 'cpp' ? 'cpp' : language}
               value={code}
@@ -933,7 +966,49 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
                     </div>
                   </div>
 
-                  <div className="text-xs text-[#59626F]">
+                  {/* Test Cases Breakdown: Shows public vs hidden test cases WITHOUT leaking hidden input or output */}
+                  {submitResult.test_cases && submitResult.test_cases.length > 0 && (
+                    <div className="space-y-2 pt-2 border-t border-[#DBD7C9]/60">
+                      <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#59626F]">
+                        Test Cases Evaluation Breakdown:
+                      </div>
+                      <div className="grid grid-cols-1 gap-2">
+                        {submitResult.test_cases.map((tc: any) => (
+                          <div
+                            key={tc.order_num}
+                            className={`p-2.5 rounded-[4px] border flex items-center justify-between text-xs font-mono ${
+                              tc.passed
+                                ? 'bg-[#E8F3EC] border-[#BEDFCB] text-[#1E7A46]'
+                                : 'bg-[#FDEDEC] border-[#F5C2C7] text-[#C0392B]'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2">
+                              <span className="font-bold text-sm">
+                                {tc.passed ? '✓' : '✗'}
+                              </span>
+                              <span className="font-semibold text-[#1B2029]">
+                                Case #{tc.order_num} ({tc.is_hidden ? 'Hidden Test Case' : 'Public Sample Case'})
+                              </span>
+                              {tc.is_hidden && (
+                                <span className="text-[9.5px] px-1.5 py-0.5 rounded bg-black/5 text-[#59626F] font-sans font-medium">
+                                  🔒 Hidden Case
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center space-x-3 text-[11.5px]">
+                              <span className="font-bold">{tc.status}</span>
+                              <span className="text-[#59626F]">{tc.execution_time_ms}ms</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-[11px] text-[#59626F] italic mt-1">
+                        🔒 Note: Hidden test case inputs and expected outputs remain sealed to protect competition integrity.
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="text-xs text-[#59626F] pt-1">
                     Your best score for this problem has been saved and factored into your total Level 2 ranking score.
                   </div>
                 </div>
@@ -1033,22 +1108,21 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
             </div>
 
             <div className="bg-[#F6F6F2] p-4 rounded-[4px] border border-[#DBD7C9] text-left space-y-2 text-xs">
-              <div className="flex justify-between items-center py-1 border-b border-[#DBD7C9]/50">
-                <span className="text-[#59626F]">Problem 1 (Two Sum):</span>
-                <span className="font-mono font-bold text-[#16233F]">
-                  {finalResult?.problem_scores?.[0]?.best_score ?? (attempt?.problems?.[0] ? problemScores[attempt.problems[0].id] || 0 : 0)} / 20 Marks
-                </span>
-              </div>
-              <div className="flex justify-between items-center py-1 border-b border-[#DBD7C9]/50">
-                <span className="text-[#59626F]">Problem 2 (Trapping Rain Water):</span>
-                <span className="font-mono font-bold text-[#16233F]">
-                  {finalResult?.problem_scores?.[1]?.best_score ?? (attempt?.problems?.[1] ? problemScores[attempt.problems[1].id] || 0 : 0)} / 40 Marks
-                </span>
-              </div>
+              {attempt?.problems?.map((p: any, idx: number) => {
+                const bScore = finalResult?.problem_scores?.find((ps: any) => ps.problem_id === p.id)?.best_score ?? (problemScores[p.id] || 0);
+                return (
+                  <div key={p.id} className="flex justify-between items-center py-1 border-b border-[#DBD7C9]/50">
+                    <span className="text-[#59626F]">Problem {idx + 1} ({p.title}):</span>
+                    <span className="font-mono font-bold text-[#16233F]">
+                      {bScore} / {p.marks} Marks
+                    </span>
+                  </div>
+                );
+              })}
               <div className="flex justify-between items-center pt-2 font-bold text-sm">
                 <span>Final Score:</span>
                 <span className="font-mono text-[#1E7A46]">
-                  {finalResult?.total_score ?? (attempt?.problems?.reduce((acc: number, p: any) => acc + (problemScores[p.id] || 0), 0) || 0)} / 60 Marks
+                  {finalResult?.total_score ?? (attempt?.problems?.reduce((acc: number, p: any) => acc + (problemScores[p.id] || 0), 0) || 0)} / {attempt?.problems?.reduce((acc: number, p: any) => acc + (p.marks || 0), 0) || 60} Marks
                 </span>
               </div>
             </div>

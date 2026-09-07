@@ -100,8 +100,8 @@ async def get_dashboard_state(
         select(RoundResult).where(RoundResult.participant_id == participant_id)
     )
     all_results = results_res.scalars().all()
-    r1_result = next((r for r in all_results if round_1 and r.round_id == round_1.id), None)
-    r2_result = next((r for r in all_results if round_2 and r.round_id == round_2.id), None)
+    r1_result = next((r for r in all_results if round_1_dict and r.round_id == round_1_dict["id"]), None)
+    r2_result = next((r for r in all_results if round_2_dict and r.round_id == round_2_dict["id"]), None)
 
     l1_summary = ResultSummary(
         round_number=1,
@@ -217,7 +217,7 @@ async def get_dashboard_state(
             # Check qualification
             if r1_result and r1_result.is_qualified:
                 # Student is qualified! Check if Level 2 is open
-                if round_2 and round_2.is_open:
+                if round_2_dict and round_2_dict["is_open"]:
                     return DashboardStateResponse(
                         participant_name=current_participant.name,
                         roll_number=current_participant.roll_number,
@@ -277,7 +277,7 @@ async def get_dashboard_state(
                 )
 
     # No attempt yet
-    if round_1 and round_1.is_open:
+    if round_1_dict and round_1_dict["is_open"]:
         return DashboardStateResponse(
             participant_name=current_participant.name,
             roll_number=current_participant.roll_number,

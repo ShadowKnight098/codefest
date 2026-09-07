@@ -75,6 +75,13 @@ class SubmitCodeRequest(BaseModel):
     language: str
     code: str
 
+class TestCaseSummary(BaseModel):
+    order_num: int
+    is_hidden: bool
+    passed: bool
+    status: str
+    execution_time_ms: int
+
 class SubmitCodeResponse(BaseModel):
     submission_id: str
     problem_id: str
@@ -85,6 +92,7 @@ class SubmitCodeResponse(BaseModel):
     execution_time_ms: Optional[int]
     terminal_output: str
     verdict: str
+    test_cases: List[TestCaseSummary] = []
 
 class FinalSubmitRequest(BaseModel):
     attempt_id: str
@@ -524,6 +532,17 @@ async def submit_code(
     term_lines.append(f"Total Time:    {total_time_ms}ms")
     term_lines.append(f"Submission ID: {submission.id[:8]}")
 
+    tc_summaries = [
+        TestCaseSummary(
+            order_num=idx,
+            is_hidden=tc.is_hidden,
+            passed=bool(p_flag),
+            status="PASSED" if p_flag else (stat or "FAILED"),
+            execution_time_ms=t_ms
+        )
+        for idx, (tc, p_flag, t_ms, stat) in enumerate(case_logs, start=1)
+    ]
+
     return SubmitCodeResponse(
         submission_id=submission.id,
         problem_id=problem.id,
@@ -533,7 +552,8 @@ async def submit_code(
         score=earned_score,
         execution_time_ms=total_time_ms,
         terminal_output="\n".join(term_lines),
-        verdict=verdict
+        verdict=verdict,
+        test_cases=tc_summaries
     )
 
 @router.api_route("/final-submit", methods=["GET", "POST", "PUT"], response_model=FinalSubmitResponse)
@@ -606,7 +626,7 @@ async def final_submit_coding(
 
     # Mark attempt SUBMITTED
     attempt.status = "SUBMITTED"
-    attempt.ended_at = datetime.now(timezone.utc)
+    attempt.submitted_at = datetime.now(timezone.utc)
 
     # Record in RoundResult for Round 2
     round_2 = (await db.execute(select(Round).where(Round.round_number == 2))).scalar_one_or_none()
