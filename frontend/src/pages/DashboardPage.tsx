@@ -128,9 +128,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
   const { participant, logout } = useAuth();
   const [backendState, setBackendState] = useState<DashboardState | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  
-  // Dev state preview switcher ('live' or one of the 8 states)
-  const [previewStateKey, setPreviewStateKey] = useState<string>('live');
 
   // Fetch live server-authoritative state
   const fetchState = async () => {
@@ -150,11 +147,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
     return () => clearInterval(interval);
   }, []);
 
-  // Compute active config based on dev switcher or live backend
-  const activeKey: string = previewStateKey !== 'live'
-    ? previewStateKey
-    : (backendState?.state || 'LEVEL1_AVAILABLE');
-
+  const activeKey: string = backendState?.state || 'LEVEL1_AVAILABLE';
   const displayConfig = PRESET_STATES[activeKey] || PRESET_STATES['LEVEL1_AVAILABLE'];
 
   // Status Badge Component
@@ -373,48 +366,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
             </div>
           </div>
         </div>
-      </div>
-
-      {/* DEV-ONLY STATE PREVIEW SWITCHER (per spec section 5) */}
-      <div className="fixed bottom-3 inset-x-0 mx-auto w-fit max-w-[95vw] bg-[#16233F] text-white px-3.5 py-2 rounded-[6px] shadow-lg border border-white/20 flex flex-wrap items-center gap-1.5 text-[11px] z-50">
-        <span className="font-semibold text-white/60 mr-1 uppercase tracking-wider text-[10px]">
-          Dev Preview:
-        </span>
-        <button
-          type="button"
-          onClick={() => setPreviewStateKey('live')}
-          className={`px-2 py-1 rounded-[3px] font-medium transition-colors ${
-            previewStateKey === 'live'
-              ? 'bg-white text-[#16233F] font-semibold'
-              : 'text-white/80 hover:bg-white/10'
-          }`}
-        >
-          Live API ({backendState?.state || 'Syncing'})
-        </button>
-        <span className="text-white/30">|</span>
-        {Object.keys(PRESET_STATES).map((key) => {
-          const shortLabel = key
-            .replace('LEVEL1_', 'L1 ')
-            .replace('LEVEL2_', 'L2 ')
-            .replace('WAITING_FOR_LEVEL2', 'Wait L2')
-            .replace('NOT_QUALIFIED', 'Not Qual')
-            .replace('_', ' ');
-
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setPreviewStateKey(key)}
-              className={`px-2 py-1 rounded-[3px] font-medium transition-colors capitalize ${
-                previewStateKey === key
-                  ? 'bg-white text-[#16233F] font-semibold'
-                  : 'text-white/70 hover:bg-white/10'
-              }`}
-            >
-              {shortLabel.toLowerCase()}
-            </button>
-          );
-        })}
       </div>
     </div>
   );
