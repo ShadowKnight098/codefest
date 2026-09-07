@@ -291,13 +291,10 @@ async def run_code(
             terminal_output="\n".join(t_lines)
         )
 
-    # 2. Public sample test cases branch
+    # 2. Public sample test cases branch (Executed concurrently in parallel for <200ms latency)
     public_cases = [tc for tc in problem.test_cases if not tc.is_hidden]
-    results: List[TestCaseResult] = []
-    all_passed = True
-    endpoint_used = None
 
-    for tc in public_cases:
+    async def _run_single_case(tc):
         res = await judge0_service.execute_code(
             source_code=payload.code,
             language=payload.language,
@@ -306,9 +303,8 @@ async def run_code(
             cpu_time_limit_sec=problem.time_limit_ms / 1000.0,
             memory_limit_mb=problem.memory_limit_mb
         )
-
         if not res.get("success"):
-            results.append(TestCaseResult(
+            return TestCaseResult(
                 test_case_id=tc.id,
                 input_data=tc.input_data,
                 expected_output=tc.expected_output,
@@ -316,16 +312,10 @@ async def run_code(
                 passed=False,
                 status="ERROR",
                 error_message=res.get("error")
-            ))
-            all_passed = False
-            continue
+            ), res.get("endpoint_used")
 
-        endpoint_used = res.get("endpoint_used")
         passed = res.get("passed", False)
-        if not passed:
-            all_passed = False
-
-        results.append(TestCaseResult(
+        return TestCaseResult(
             test_case_id=tc.id,
             input_data=tc.input_data,
             expected_output=tc.expected_output,
@@ -334,8 +324,12 @@ async def run_code(
             status=res.get("status", "Unknown"),
             execution_time_ms=int(res["execution_time_sec"] * 1000) if res.get("execution_time_sec") else None,
             error_message=res.get("stderr") or res.get("compile_output") or None
-        ))
+        ), res.get("endpoint_used")
 
+    eval_outcomes = await asyncio.gather(*[_run_single_case(tc) for tc in public_cases])
+    results = [outcome[0] for outcome in eval_outcomes]
+    endpoint_used = eval_outcomes[0][1] if eval_outcomes else None
+    all_passed = all(r.passed for r in results)
     passed_count = sum(1 for r in results if r.passed)
 
     term_lines = [
@@ -376,7 +370,7 @@ async def submit_code(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Evaluates code against ALL test cases (public + hidden) via Judge0.
+    Evaluates code against ALL test cases (public + hidden) concurrently.
     Server calculates authoritative score and returns full terminal evaluation stream.
     """
     attempt_res = await db.execute(
@@ -399,13 +393,9 @@ async def submit_code(
         raise HTTPException(status_code=404, detail="Problem not found.")
 
     all_cases = sorted(problem.test_cases, key=lambda tc: tc.order_num)
-    passed_count = 0
     total_cases = len(all_cases) or 1
-    total_time_ms = 0
-    failure_reason = None
-    case_logs = []
 
-    for tc in all_cases:
+    async def _eval_case(tc):
         res = await judge0_service.execute_code(
             source_code=payload.code,
             language=payload.language,
@@ -417,16 +407,17 @@ async def submit_code(
         is_pass = res.get("success") and res.get("passed")
         t_ms = int(res["execution_time_sec"] * 1000) if res.get("execution_time_sec") else 0
         status_txt = res.get("status", "Error")
-        if is_pass:
-            passed_count += 1
-            total_time_ms += t_ms
-        elif not failure_reason:
-            failure_reason = status_txt
-        case_logs.append((tc, is_pass, t_ms, status_txt))
+        return (tc, is_pass, t_ms, status_txt)
+
+    case_logs = await asyncio.gather(*[_eval_case(tc) for tc in all_cases])
+
+    passed_count = sum(1 for c in case_logs if c[1])
+    total_time_ms = sum(c[2] for c in case_logs)
+    first_fail = next((c[3] for c in case_logs if not c[1]), None)
 
     fraction = passed_count / total_cases
     earned_score = int(round(fraction * problem.marks))
-    verdict = "ACCEPTED" if passed_count == total_cases else ("PARTIALLY ACCEPTED" if passed_count > 0 else (failure_reason or "WRONG ANSWER").upper())
+    verdict = "ACCEPTED" if passed_count == total_cases else ("PARTIALLY ACCEPTED" if passed_count > 0 else (first_fail or "WRONG ANSWER").upper())
 
     submission = CodingSubmission(
         attempt_id=attempt.id,
@@ -438,7 +429,7 @@ async def submit_code(
         total_test_cases=total_cases,
         score=earned_score,
         execution_time_ms=total_time_ms,
-        failure_reason=failure_reason
+        failure_reason=first_fail
     )
     db.add(submission)
     await db.commit()
@@ -473,9 +464,11 @@ async def submit_code(
         verdict=verdict
     )
 
-@router.post("/final-submit", response_model=FinalSubmitResponse)
+@router.api_route("/final-submit", methods=["GET", "POST", "PUT"], response_model=FinalSubmitResponse)
+@router.api_route("/final-submit/", methods=["GET", "POST", "PUT"], response_model=FinalSubmitResponse)
 async def final_submit_coding(
-    payload: FinalSubmitRequest,
+    payload: Optional[FinalSubmitRequest] = None,
+    attempt_id: Optional[str] = None,
     current_participant: Participant = Depends(get_current_participant),
     db: AsyncSession = Depends(get_db)
 ):
@@ -484,13 +477,25 @@ async def final_submit_coding(
     Aggregates best score achieved per problem, marks attempt as SUBMITTED,
     and updates authoritative RoundResult so it reflects on Dashboard and Leaderboard.
     """
-    attempt_res = await db.execute(
-        select(CodingAttempt).where(
-            CodingAttempt.id == payload.attempt_id,
-            CodingAttempt.participant_id == current_participant.id
+    target_attempt_id = (payload.attempt_id if payload and payload.attempt_id else None) or attempt_id
+
+    if target_attempt_id:
+        attempt_res = await db.execute(
+            select(CodingAttempt).where(
+                CodingAttempt.id == target_attempt_id,
+                CodingAttempt.participant_id == current_participant.id
+            )
         )
-    )
-    attempt = attempt_res.scalar_one_or_none()
+        attempt = attempt_res.scalar_one_or_none()
+    else:
+        # Auto-lookup latest coding attempt
+        attempt_res = await db.execute(
+            select(CodingAttempt).where(
+                CodingAttempt.participant_id == current_participant.id
+            ).order_by(CodingAttempt.started_at.desc())
+        )
+        attempt = attempt_res.scalar_one_or_none()
+
     if not attempt:
         raise HTTPException(status_code=404, detail="Active coding attempt not found.")
 

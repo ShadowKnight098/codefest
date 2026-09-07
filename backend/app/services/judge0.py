@@ -7,8 +7,91 @@ import time
 import tempfile
 import shutil
 import subprocess
+import re
 from typing import List, Optional, Dict, Any
 from app.core.config import settings
+
+WRAPPER_TEMPLATE = r'''
+# --- Fest Dynamic Function Harness ---
+import sys
+import json
+import ast
+
+def _auto_parse_val(s):
+    s = s.strip()
+    if not s:
+        return ""
+    try:
+        return ast.literal_eval(s)
+    except Exception:
+        pass
+    if "," in s:
+        parts = [p.strip() for p in s.split(",") if p.strip()]
+        try:
+            return [ast.literal_eval(p) for p in parts]
+        except Exception:
+            return parts
+    return s
+
+def _run_fest_harness():
+    raw_in = sys.stdin.read().strip()
+    all_funcs = [
+        obj for name, obj in list(globals().items())
+        if callable(obj) and not name.startswith("_") and hasattr(obj, "__code__") and (obj.__code__.co_filename == "<string>" or "solution.py" in obj.__code__.co_filename)
+    ]
+    user_funcs = [f for f in all_funcs if f.__name__ not in ("_run_fest_harness", "_auto_parse_val")]
+    if not user_funcs:
+        return
+
+    target_func = user_funcs[-1]
+    param_count = target_func.__code__.co_argcount
+
+    if param_count == 0:
+        res = target_func()
+        if res is not None:
+            print(res)
+        return
+
+    if "|" in raw_in:
+        arg_chunks = raw_in.split("|")
+    elif "\n" in raw_in:
+        arg_chunks = raw_in.splitlines()
+    elif "," in raw_in and param_count > 1:
+        arg_chunks = raw_in.split(",")
+    else:
+        arg_chunks = raw_in.split()
+
+    parsed_args = [_auto_parse_val(c) for c in arg_chunks if c.strip() != ""]
+
+    try:
+        if len(parsed_args) >= param_count:
+            res = target_func(*parsed_args[:param_count])
+        elif len(parsed_args) == 1 and param_count > 1 and isinstance(parsed_args[0], (list, tuple)):
+            res = target_func(*parsed_args[0][:param_count])
+        else:
+            res = target_func(*parsed_args)
+            
+        if res is not None:
+            if isinstance(res, (list, tuple)):
+                print(json.dumps(res) if any(isinstance(x, (list, dict)) for x in res) else str(res).replace("(", "[").replace(")", "]"))
+            elif isinstance(res, bool):
+                print(str(res).lower())
+            else:
+                print(res)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+
+if __name__ == '__main__':
+    _run_fest_harness()
+'''
+
+def enhance_python_code(code: str) -> str:
+    has_main = "__main__" in code
+    has_direct_print = re.search(r"^\s*print\s*\(", code, re.MULTILINE) is not None
+    if has_main or has_direct_print:
+        return code
+    return f"{code}\n\n{WRAPPER_TEMPLATE}"
 
 def _execute_sync(
     source_code: str,
@@ -31,8 +114,9 @@ def _execute_sync(
 
         if lang in ("python", "py"):
             file_path = os.path.join(temp_dir, "solution.py")
+            prepared_code = enhance_python_code(source_code)
             with open(file_path, "w", encoding="utf-8") as f:
-                f.write(source_code)
+                f.write(prepared_code)
 
             try:
                 proc = subprocess.run(
@@ -189,19 +273,25 @@ async def run_local_code(
 class Judge0LoadBalancer:
     """
     Distributes code execution submissions across multiple Judge0 instances (e.g. 4 laptops).
-    Uses round-robin rotation and per-endpoint health tracking.
-    Seamlessly falls back to local built-in sandbox if external nodes are unreachable.
+    Uses round-robin rotation and fast circuit-breaker health tracking.
+    Seamlessly falls back to local built-in sandbox instantaneously if external nodes are unreachable.
     """
     def __init__(self, endpoints: Optional[List[str]] = None):
         configured = endpoints if endpoints is not None else settings.judge0_endpoint_list
         self.endpoints = [e.rstrip("/") for e in configured if e and e.strip()]
         self._cycle = itertools.cycle(self.endpoints) if self.endpoints else None
+        self._offline_until: Dict[str, float] = {}
         self.timeout = 10.0
 
     def get_next_endpoint(self) -> Optional[str]:
         if not self._cycle:
             return None
-        return next(self._cycle)
+        now = time.time()
+        for _ in range(len(self.endpoints)):
+            ep = next(self._cycle)
+            if self._offline_until.get(ep, 0) < now:
+                return ep
+        return None
 
     def get_headers(self) -> Dict[str, str]:
         headers = {"Content-Type": "application/json"}
@@ -212,13 +302,17 @@ class Judge0LoadBalancer:
     async def check_health(self) -> Dict[str, bool]:
         """Check health of all configured Judge0 nodes."""
         status_map = {}
-        async with httpx.AsyncClient(timeout=2.0) as client:
+        async with httpx.AsyncClient(timeout=1.0) as client:
             for ep in self.endpoints:
                 try:
                     res = await client.get(f"{ep}/about", headers=self.get_headers())
-                    status_map[ep] = res.status_code == 200
+                    is_ok = res.status_code == 200
+                    status_map[ep] = is_ok
+                    if not is_ok:
+                        self._offline_until[ep] = time.time() + 60.0
                 except Exception:
                     status_map[ep] = False
+                    self._offline_until[ep] = time.time() + 60.0
         return status_map
 
     async def execute_code(
@@ -232,7 +326,7 @@ class Judge0LoadBalancer:
     ) -> Dict[str, Any]:
         """
         Submits code to next Judge0 worker node with wait=true for fast synchronous execution.
-        If all Judge0 nodes are offline or unreachable, seamlessly runs on the local sandbox.
+        If all Judge0 nodes are offline or unreachable, seamlessly runs on the local sandbox without latency.
         """
         lang_id = settings.judge0_language_map.get(language.lower(), 71)
 
@@ -246,42 +340,40 @@ class Judge0LoadBalancer:
         if expected_output is not None:
             payload["expected_output"] = expected_output
 
-        errors = []
-        # Try configured external endpoints
-        if self.endpoints:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(connect=1.5, read=self.timeout, write=4.0, pool=4.0)) as client:
-                for _ in range(len(self.endpoints)):
-                    endpoint = self.get_next_endpoint()
-                    try:
-                        url = f"{endpoint}/submissions?wait=true&base64_encoded=false"
-                        res = await client.post(url, json=payload, headers=self.get_headers())
-                        if res.status_code in [200, 201]:
-                            data = res.json()
-                            status_id = data.get("status", {}).get("id", 0)
-                            status_desc = data.get("status", {}).get("description", "Unknown")
-                            stdout = data.get("stdout") or ""
-                            stderr = data.get("stderr") or ""
-                            compile_output = data.get("compile_output") or ""
-                            exec_time = data.get("time")
-                            passed = (status_id == 3)
+        endpoint = self.get_next_endpoint()
+        if endpoint:
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(connect=0.4, read=self.timeout, write=2.0, pool=2.0)) as client:
+                    url = f"{endpoint}/submissions?wait=true&base64_encoded=false"
+                    res = await client.post(url, json=payload, headers=self.get_headers())
+                    if res.status_code in [200, 201]:
+                        data = res.json()
+                        status_id = data.get("status", {}).get("id", 0)
+                        status_desc = data.get("status", {}).get("description", "Unknown")
+                        stdout = data.get("stdout") or ""
+                        stderr = data.get("stderr") or ""
+                        compile_output = data.get("compile_output") or ""
+                        exec_time = data.get("time")
+                        passed = (status_id == 3)
 
-                            return {
-                                "success": True,
-                                "endpoint_used": endpoint,
-                                "passed": passed,
-                                "status_id": status_id,
-                                "status": status_desc,
-                                "stdout": stdout.strip(),
-                                "stderr": stderr.strip(),
-                                "compile_output": compile_output.strip(),
-                                "execution_time_sec": float(exec_time) if exec_time else None
-                            }
-                        else:
-                            errors.append(f"{endpoint}: HTTP {res.status_code}")
-                    except Exception as e:
-                        errors.append(f"{endpoint}: {str(e)}")
+                        return {
+                            "success": True,
+                            "endpoint_used": endpoint,
+                            "passed": passed,
+                            "status_id": status_id,
+                            "status": status_desc,
+                            "stdout": stdout.strip(),
+                            "stderr": stderr.strip(),
+                            "compile_output": compile_output.strip(),
+                            "execution_time_sec": float(exec_time) if exec_time else None
+                        }
+                    else:
+                        self._offline_until[endpoint] = time.time() + 60.0
+            except Exception:
+                # Mark endpoint offline for 60s so subsequent tests don't stall
+                self._offline_until[endpoint] = time.time() + 60.0
 
-        # Seamless Fallback: Execute using built-in local runner
+        # Seamless Instant Fallback: Execute using built-in local runner
         local_res = await run_local_code(
             source_code=source_code,
             language=language,
