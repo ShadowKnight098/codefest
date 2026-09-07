@@ -267,7 +267,11 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         method: 'POST',
         body: formData,
       });
-      setMessage(`Imported ${res.imported} participants successfully (${res.skipped} skipped).`);
+      let msg = `Imported ${res.imported} participants successfully (${res.skipped} skipped).`;
+      if (res.skipped > 0 && res.errors && res.errors.length > 0) {
+        msg += ` Issues: ${res.errors.map((err: any) => `Row ${err.row_number} (${err.roll_number || 'N/A'}): ${err.error}`).join(' | ')}`;
+      }
+      setMessage(msg);
       fetchParticipants();
     } catch (e: any) {
       setMessage(`Import failed: ${e?.detail || e.message}`);
@@ -398,7 +402,11 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         method: 'POST',
         body: JSON.stringify({ raw_text: bulkText }),
       });
-      setMessage(`Imported ${res.imported} participants (${res.skipped} skipped).`);
+      let msg = `Imported ${res.imported} participants (${res.skipped} skipped).`;
+      if (res.skipped > 0 && res.errors && res.errors.length > 0) {
+        msg += ` Issues: ${res.errors.map((err: any) => `Row ${err.row_number} (${err.roll_number || 'N/A'}): ${err.error}`).join(' | ')}`;
+      }
+      setMessage(msg);
       setShowBulkTextModal(false);
       setBulkText('');
       fetchParticipants();

@@ -2,6 +2,7 @@ import csv
 import io
 import random
 import string
+import re
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -133,6 +134,41 @@ async def reset_participant_pin(
     await db.commit()
     return PinResetResponse(roll_number=participant.roll_number, new_pin=new_pin)
 
+def parse_academic_year(val: any) -> int:
+    if val is None:
+        return 3
+    s = str(val).strip().upper()
+    if not s:
+        return 3
+    m = re.search(r'\b([1-4])\b', s)
+    if m:
+        return int(m.group(1))
+    m2 = re.search(r'([1-4])(?:ST|ND|RD|TH)?\s*(?:YEAR|YR)?', s)
+    if m2:
+        return int(m2.group(1))
+    if "IV" in s:
+        return 4
+    if "III" in s:
+        return 3
+    if "II" in s:
+        return 2
+    if "I" in s:
+        return 1
+    for ch in s:
+        if ch in "1234":
+            return int(ch)
+    return 3
+
+def normalize_header_key(k: any) -> str:
+    return re.sub(r'[^a-z0-9]', '', str(k).lower())
+
+def sanitize_email(email: str, roll: str) -> str:
+    email = (email or "").strip().lower()
+    clean_roll = re.sub(r'[^a-z0-9]', '', roll.lower()) or "student"
+    if not email or "@" not in email or "." not in email.split("@")[-1]:
+        return f"{clean_roll}@codefest.local"
+    return email
+
 @router.post("/import", response_model=ImportResult)
 async def import_participants_csv(
     file: UploadFile = File(...),
@@ -141,7 +177,8 @@ async def import_participants_csv(
 ):
     """
     Bulk import participants from CSV.
-    Expected CSV columns: roll_number, email, name, academic_year, [pin]
+    Supports flexible header names (RollNumber, Name, Email, Year, etc.) and formats (3 YEAR, III, etc.).
+    Automatically upserts existing participants.
     """
     content = await file.read()
     try:
@@ -157,71 +194,123 @@ async def import_participants_csv(
     row_num = 1
     for row in reader:
         row_num += 1
-        roll = (row.get("roll_number") or row.get("roll") or "").strip().upper()
-        email = (row.get("email") or "").strip().lower()
-        name = (row.get("name") or "").strip()
-        year_raw = (row.get("academic_year") or row.get("year") or "").strip()
-        pin = (row.get("pin") or roll).strip().upper()
+        row_norm = {normalize_header_key(k): (v or "").strip() for k, v in row.items() if k}
 
-        if not roll or not email or not name or not year_raw:
+        # Extract roll number
+        roll = None
+        for k in ("rollnumber", "rollno", "roll", "htno", "hallticket", "regno", "id"):
+            if k in row_norm and row_norm[k]:
+                roll = row_norm[k].strip().upper()
+                break
+        if not roll:
+            for k, v in row_norm.items():
+                if "roll" in k or "ticket" in k:
+                    roll = v.strip().upper()
+                    break
+
+        # Extract name
+        name = None
+        for k in ("name", "studentname", "fullname", "candidatename"):
+            if k in row_norm and row_norm[k]:
+                name = row_norm[k].strip()
+                break
+        if not name:
+            for k, v in row_norm.items():
+                if "name" in k:
+                    name = v.strip()
+                    break
+
+        # Extract email
+        email = None
+        for k in ("email", "emailid", "mail", "mailid", "emailaddress"):
+            if k in row_norm and row_norm[k]:
+                email = row_norm[k].strip().lower()
+                break
+        if not email:
+            for k, v in row_norm.items():
+                if "email" in k or "mail" in k:
+                    email = v.strip().lower()
+                    break
+
+        # Extract year
+        year_raw = None
+        for k in ("year", "academicyear", "yr", "class", "batch"):
+            if k in row_norm and row_norm[k]:
+                year_raw = row_norm[k].strip()
+                break
+        if not year_raw:
+            for k, v in row_norm.items():
+                if "year" in k:
+                    year_raw = v.strip()
+                    break
+
+        # Fallback to positional values if headers were unmapped
+        if not roll and len(row) >= 1:
+            values = list(row.values())
+            roll = (values[0] or "").strip().upper()
+            if len(values) >= 2 and not name:
+                name = (values[1] or "").strip()
+            if len(values) >= 3 and not email:
+                email = (values[2] or "").strip().lower()
+            if len(values) >= 4 and not year_raw:
+                year_raw = (values[3] or "").strip()
+
+        if not roll:
             skipped += 1
             errors.append(ImportValidationRow(
                 row_number=row_num,
-                roll_number=roll,
-                email=email,
-                name=name,
+                roll_number="",
+                email=email or "",
+                name=name or "",
                 academic_year=0,
                 status="error",
-                error="Missing required fields: roll_number, email, name, or academic_year"
+                error="Row missing roll number"
             ))
             continue
 
-        try:
-            year = int(year_raw)
-            if year < 1 or year > 4:
-                raise ValueError()
-        except ValueError:
-            skipped += 1
-            errors.append(ImportValidationRow(
-                row_number=row_num,
-                roll_number=roll,
-                email=email,
-                name=name,
-                academic_year=0,
-                status="error",
-                error=f"Invalid academic_year: {year_raw} (must be 1-4)"
-            ))
-            continue
+        if not name:
+            name = roll
 
-        # Check existing
-        existing = await db.execute(
+        year = parse_academic_year(year_raw)
+        email = sanitize_email(email, roll)
+
+        # Check if email is used by a DIFFERENT participant to avoid unique collision
+        email_conflict = await db.execute(
             select(Participant.id).where(
-                (Participant.roll_number == roll) | (Participant.email == email)
+                (Participant.email == email) & (Participant.roll_number != roll)
             )
         )
-        if existing.scalar_one_or_none():
-            skipped += 1
-            errors.append(ImportValidationRow(
-                row_number=row_num,
+        if email_conflict.scalar_one_or_none():
+            clean_roll = re.sub(r'[^a-z0-9]', '', roll.lower()) or "student"
+            email = f"{clean_roll}_{email}"
+
+        # Extract PIN or default to roll number
+        pin = (row.get("pin") or row_norm.get("pin") or roll).strip().upper()
+
+        # Check if roll_number already exists -> update (upsert)
+        existing = await db.execute(
+            select(Participant).where(Participant.roll_number == roll)
+        )
+        existing_p = existing.scalar_one_or_none()
+
+        if existing_p:
+            existing_p.name = name
+            existing_p.email = email
+            existing_p.academic_year = year
+            existing_p.is_enabled = True
+            existing_p.hashed_pin = hash_pin(pin)
+            imported += 1
+        else:
+            new_participant = Participant(
                 roll_number=roll,
                 email=email,
                 name=name,
                 academic_year=year,
-                status="error",
-                error="Roll number or Email already exists in database."
-            ))
-            continue
-
-        new_participant = Participant(
-            roll_number=roll,
-            email=email,
-            name=name,
-            academic_year=year,
-            hashed_pin=hash_pin(pin),
-            is_enabled=True
-        )
-        db.add(new_participant)
-        imported += 1
+                hashed_pin=hash_pin(pin),
+                is_enabled=True
+            )
+            db.add(new_participant)
+            imported += 1
 
     await db.commit()
     return ImportResult(
@@ -239,88 +328,115 @@ async def import_participants_text(
     _: dict = Depends(require_superadmin)
 ):
     """
-    Bulk import participants by directly pasting text/CSV/TSV lines:
-    Format: roll_number, name, email, academic_year
+    Bulk import participants by directly pasting text/CSV/TSV lines.
+    Handles headers, quotes, custom formats (e.g. '3 YEAR'), and auto-upserts existing students.
     """
-    lines = [line.strip() for line in payload.raw_text.strip().splitlines() if line.strip()]
+    raw = payload.raw_text.strip()
+    if not raw:
+        return ImportResult(total_rows=0, imported=0, skipped=0, errors=[])
+
+    delimiter = "\t" if "\t" in raw else ","
+    reader = csv.reader(io.StringIO(raw), delimiter=delimiter)
+
     imported = 0
     skipped = 0
     errors: List[ImportValidationRow] = []
 
+    header_mapped = False
+    col_map = {"roll": 0, "name": 1, "email": 2, "year": 3}
+
     row_num = 0
-    for line in lines:
+    for parts in reader:
+        if not parts or not any(p.strip() for p in parts):
+            continue
+
+        parts = [p.strip() for p in parts]
         row_num += 1
-        if line.startswith("#"):
+
+        # Check if row 1 is a header line
+        first_row_check = [normalize_header_key(p) for p in parts]
+        if not header_mapped and any("roll" in k or "email" in k or "name" in k for k in first_row_check):
+            header_mapped = True
+            for idx, k in enumerate(first_row_check):
+                if "roll" in k or "ticket" in k:
+                    col_map["roll"] = idx
+                elif "name" in k:
+                    col_map["name"] = idx
+                elif "email" in k or "mail" in k:
+                    col_map["email"] = idx
+                elif "year" in k or "class" in k:
+                    col_map["year"] = idx
             continue
 
-        parts = [p.strip() for p in (line.split("\t") if "\t" in line else line.split(","))]
-        if len(parts) < 4:
+        # Extract by mapped column or position
+        roll = parts[col_map["roll"]].strip().upper() if len(parts) > col_map["roll"] else ""
+        name = parts[col_map["name"]].strip() if len(parts) > col_map["name"] else ""
+        email = parts[col_map["email"]].strip().lower() if len(parts) > col_map["email"] else ""
+        year_raw = parts[col_map["year"]].strip() if len(parts) > col_map["year"] else ""
+
+        # Skip comment or duplicate header lines
+        if roll.startswith("#") or roll in ("ROLL", "ROLLNUMBER", "ROLL_NUMBER", "ROLL NUMBER", "ROLLNO"):
+            continue
+
+        # If email and name got swapped (e.g. column 1 was email and 2 was name)
+        if "@" in name and "@" not in email:
+            name, email = email, name
+
+        if not roll:
             skipped += 1
             errors.append(ImportValidationRow(
                 row_number=row_num,
-                roll_number=parts[0] if len(parts) > 0 else "",
-                email=parts[2] if len(parts) > 2 else "",
-                name=parts[1] if len(parts) > 1 else "",
-                academic_year=0,
-                status="error",
-                error="Line must have at least 4 items: roll_number, name, email, academic_year"
-            ))
-            continue
-
-        roll = parts[0].strip().upper()
-        name = parts[1].strip()
-        email = parts[2].strip().lower()
-        year_raw = parts[3].strip()
-
-        if roll in ("ROLL", "ROLL_NUMBER", "ROLL NUMBER", "ROLLNO"):
-            continue
-
-        try:
-            year = int(year_raw)
-            if year < 1 or year > 4:
-                raise ValueError()
-        except ValueError:
-            skipped += 1
-            errors.append(ImportValidationRow(
-                row_number=row_num,
-                roll_number=roll,
+                roll_number="",
                 email=email,
                 name=name,
                 academic_year=0,
                 status="error",
-                error=f"Invalid academic_year: '{year_raw}' (must be 1, 2, 3, or 4)"
+                error="Line missing roll number"
             ))
             continue
 
-        existing = await db.execute(
+        if not name:
+            name = roll
+
+        year = parse_academic_year(year_raw)
+        email = sanitize_email(email, roll)
+
+        # Check if email is already taken by ANOTHER roll number
+        email_conflict = await db.execute(
             select(Participant.id).where(
-                (Participant.roll_number == roll) | (Participant.email == email)
+                (Participant.email == email) & (Participant.roll_number != roll)
             )
         )
-        if existing.scalar_one_or_none():
-            skipped += 1
-            errors.append(ImportValidationRow(
-                row_number=row_num,
+        if email_conflict.scalar_one_or_none():
+            clean_roll = re.sub(r'[^a-z0-9]', '', roll.lower()) or "student"
+            email = f"{clean_roll}_{email}"
+
+        pin = roll.strip().upper()
+
+        # Upsert
+        existing = await db.execute(
+            select(Participant).where(Participant.roll_number == roll)
+        )
+        existing_p = existing.scalar_one_or_none()
+
+        if existing_p:
+            existing_p.name = name
+            existing_p.email = email
+            existing_p.academic_year = year
+            existing_p.is_enabled = True
+            existing_p.hashed_pin = hash_pin(pin)
+            imported += 1
+        else:
+            new_participant = Participant(
                 roll_number=roll,
                 email=email,
                 name=name,
                 academic_year=year,
-                status="error",
-                error="Roll number or Email already exists in database."
-            ))
-            continue
-
-        pin = (parts[4] if len(parts) > 4 and parts[4].strip() else roll).strip().upper()
-        new_participant = Participant(
-            roll_number=roll,
-            email=email,
-            name=name,
-            academic_year=year,
-            hashed_pin=hash_pin(pin),
-            is_enabled=True
-        )
-        db.add(new_participant)
-        imported += 1
+                hashed_pin=hash_pin(pin),
+                is_enabled=True
+            )
+            db.add(new_participant)
+            imported += 1
 
     await db.commit()
     return ImportResult(
