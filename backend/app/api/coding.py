@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +42,7 @@ class CodingAttemptResponse(BaseModel):
     duration_seconds: int
     problems: List[CodingProblemOut]
     violations_count: int = 0
+    best_scores: Dict[str, int] = {}
 
 class RunCodeRequest(BaseModel):
     problem_id: str
@@ -84,6 +85,25 @@ class SubmitCodeResponse(BaseModel):
     terminal_output: str
     verdict: str
 
+class FinalSubmitRequest(BaseModel):
+    attempt_id: str
+
+class ProblemScoreSummary(BaseModel):
+    problem_id: str
+    title: str
+    order_num: int
+    marks: int
+    best_score: int
+    status: str
+
+class FinalSubmitResponse(BaseModel):
+    attempt_id: str
+    status: str
+    total_score: int
+    total_marks: int
+    problem_scores: List[ProblemScoreSummary]
+    message: str
+
 # ─── Endpoints ───
 
 @router.get("/attempt", response_model=CodingAttemptResponse)
@@ -101,18 +121,20 @@ async def get_or_start_coding_attempt(
         )
 
     # Check qualification from Round 1
-    # Check result
-    result_query = await db.execute(
-        select(RoundResult).where(
-            RoundResult.participant_id == current_participant.id,
-            RoundResult.is_qualified == True
+    round_1 = (await db.execute(select(Round).where(Round.round_number == 1).limit(1))).scalar_one_or_none()
+    if round_1:
+        result_query = await db.execute(
+            select(RoundResult).where(
+                RoundResult.participant_id == current_participant.id,
+                RoundResult.round_id == round_1.id,
+                RoundResult.is_qualified == True
+            ).limit(1)
         )
-    )
-    if not result_query.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Participant has not qualified for Level 2."
-        )
+        if not result_query.scalars().first():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Participant has not qualified for Level 2."
+            )
 
     # Dynamic duration from settings or round default
     duration_setting = await db.execute(
@@ -189,13 +211,21 @@ async def get_or_start_coding_attempt(
     )
     violations_count = v_res.scalar() or 0
 
+    sub_res = await db.execute(
+        select(CodingSubmission.problem_id, func.max(CodingSubmission.score))
+        .where(CodingSubmission.attempt_id == attempt.id)
+        .group_by(CodingSubmission.problem_id)
+    )
+    best_scores = {row[0]: row[1] or 0 for row in sub_res.all()}
+
     return CodingAttemptResponse(
         attempt_id=attempt.id,
         status=attempt.status,
         remaining_seconds=remaining,
         duration_seconds=attempt.duration_seconds,
         problems=problem_list,
-        violations_count=violations_count
+        violations_count=violations_count,
+        best_scores=best_scores
     )
 
 @router.post("/run", response_model=RunCodeResponse)
@@ -441,4 +471,94 @@ async def submit_code(
         execution_time_ms=total_time_ms,
         terminal_output="\n".join(term_lines),
         verdict=verdict
+    )
+
+@router.post("/final-submit", response_model=FinalSubmitResponse)
+async def final_submit_coding(
+    payload: FinalSubmitRequest,
+    current_participant: Participant = Depends(get_current_participant),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Finalize Level 2 Coding Assessment.
+    Aggregates best score achieved per problem, marks attempt as SUBMITTED,
+    and updates authoritative RoundResult so it reflects on Dashboard and Leaderboard.
+    """
+    attempt_res = await db.execute(
+        select(CodingAttempt).where(
+            CodingAttempt.id == payload.attempt_id,
+            CodingAttempt.participant_id == current_participant.id
+        )
+    )
+    attempt = attempt_res.scalar_one_or_none()
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Active coding attempt not found.")
+
+    # Fetch all coding problems
+    prob_res = await db.execute(select(CodingProblem).order_by(CodingProblem.order_num.asc()))
+    problems = prob_res.scalars().all()
+
+    # Fetch all submissions for this attempt
+    sub_res = await db.execute(
+        select(CodingSubmission).where(CodingSubmission.attempt_id == attempt.id)
+    )
+    submissions = sub_res.scalars().all()
+
+    # Compute best score per problem
+    best_scores: Dict[str, int] = {}
+    for s in submissions:
+        if s.problem_id not in best_scores or s.score > best_scores[s.problem_id]:
+            best_scores[s.problem_id] = s.score
+
+    problem_summaries = []
+    total_score = 0
+    total_marks = 0
+
+    for p in problems:
+        b_score = best_scores.get(p.id, 0)
+        total_score += b_score
+        total_marks += p.marks
+        problem_summaries.append(ProblemScoreSummary(
+            problem_id=p.id,
+            title=p.title,
+            order_num=p.order_num,
+            marks=p.marks,
+            best_score=b_score,
+            status="Solved" if b_score == p.marks else ("Partial" if b_score > 0 else "Unsolved")
+        ))
+
+    # Mark attempt SUBMITTED
+    attempt.status = "SUBMITTED"
+    attempt.ended_at = datetime.now(timezone.utc)
+
+    # Record in RoundResult for Round 2
+    round_2 = (await db.execute(select(Round).where(Round.round_number == 2))).scalar_one_or_none()
+    if round_2:
+        res_check = await db.execute(
+            select(RoundResult).where(
+                RoundResult.participant_id == current_participant.id,
+                RoundResult.round_id == round_2.id
+            )
+        )
+        existing_result = res_check.scalar_one_or_none()
+        if existing_result:
+            existing_result.score = total_score
+            existing_result.is_qualified = True
+        else:
+            db.add(RoundResult(
+                participant_id=current_participant.id,
+                round_id=round_2.id,
+                score=total_score,
+                is_qualified=True
+            ))
+
+    await db.commit()
+
+    return FinalSubmitResponse(
+        attempt_id=attempt.id,
+        status="SUBMITTED",
+        total_score=total_score,
+        total_marks=total_marks,
+        problem_scores=problem_summaries,
+        message="Coding assessment submitted successfully."
     )

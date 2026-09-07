@@ -104,17 +104,17 @@ export const LoginPage: React.FC<{ onOpenAdmin?: () => void }> = ({ onOpenAdmin 
               title="Official Evaluation Environment"
             >
               <div className="text-[13px] font-semibold text-white/90 tracking-normal">
-                Department of AI & Machine Learning
+                Department of CSE (AI &amp; ML)
               </div>
               <div className="text-[12px] text-white/55 mt-0.5">
-                RGM College of Engineering & Technology
+                RGM College of Engineering &amp; Technology
               </div>
             </div>
 
             {/* Fest Name (large serif) */}
             <div onClick={handleSecretClick} className="mt-8 cursor-default">
               <div className="font-serif text-[38px] leading-[1.08] font-semibold text-white">
-                TechFest
+                CodeFest
               </div>
               <div className="font-serif text-[38px] leading-[1.08] font-normal text-white/70">
                 2026
@@ -141,9 +141,20 @@ export const LoginPage: React.FC<{ onOpenAdmin?: () => void }> = ({ onOpenAdmin 
             </div>
           </div>
 
-          {/* Footer note */}
-          <div className="border-t border-white/15 pt-5 mt-8 text-[12px] leading-[1.55] text-white/60">
-            Access is restricted to registered participants. If you have not received your credentials, contact your event coordinator.
+          {/* HOD & Faculty Details Block */}
+          <div className="border-t border-white/15 pt-4 mt-6">
+            <div className="text-[10.5px] font-mono tracking-wider uppercase text-white/45 mb-0.5">
+              Head of the Department
+            </div>
+            <div className="text-[13.5px] font-semibold text-white">
+              Dr. Kishore Kumar <span className="text-[11.5px] font-normal text-white/70">(M.Tech, Ph.D)</span>
+            </div>
+            <div className="text-[11.5px] text-white/70">
+              HOD, Department of CSE (AI &amp; ML)
+            </div>
+            <div className="text-[11px] text-white/45 mt-0.5">
+              RGMCET, Nandyal
+            </div>
           </div>
         </div>
 

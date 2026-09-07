@@ -1,5 +1,6 @@
 import csv
 import io
+import re
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,34 @@ from app.schemas.admin import (
 from app.api.deps import get_current_admin
 
 router = APIRouter(prefix="/admin/mcq-questions", tags=["Admin MCQ Questions"])
+
+def normalize_header_key(k: any) -> str:
+    return re.sub(r'[^a-z0-9]', '', str(k).lower()) if k else ""
+
+def parse_academic_year(val: any) -> int:
+    if val is None:
+        return 2
+    s = str(val).strip().upper()
+    if not s:
+        return 2
+    m = re.search(r'\b([1-4])\b', s)
+    if m:
+        return int(m.group(1))
+    m2 = re.search(r'([1-4])(?:ST|ND|RD|TH)?\s*(?:YEAR|YR)?', s)
+    if m2:
+        return int(m2.group(1))
+    if "IV" in s:
+        return 4
+    if "III" in s:
+        return 3
+    if "II" in s:
+        return 2
+    if "I" in s:
+        return 1
+    for ch in s:
+        if ch in "1234":
+            return int(ch)
+    return 2
 
 @router.get("", response_model=List[MCQQuestionResponse])
 async def list_mcq_questions(
@@ -127,29 +156,67 @@ async def import_mcq_questions_csv(
     skipped = 0
 
     for row in reader:
-        year_raw = (row.get("academic_year") or row.get("year") or "").strip()
-        topic = (row.get("topic") or "General").strip()
-        diff = (row.get("difficulty") or "MEDIUM").strip().upper()
-        text = (row.get("question_text") or row.get("question") or "").strip()
-        opt_a = (row.get("option_a") or "").strip()
-        opt_b = (row.get("option_b") or "").strip()
-        opt_c = (row.get("option_c") or "").strip()
-        opt_d = (row.get("option_d") or "").strip()
-        correct = (row.get("correct_option") or row.get("answer") or "").strip().upper()
+        row_norm = {normalize_header_key(k): (v or "").strip() for k, v in row.items() if k}
+
+        text = ""
+        for k in ("questiontext", "question", "qtext", "problem"):
+            if k in row_norm and row_norm[k]:
+                text = row_norm[k]
+                break
+        if not text:
+            for k, v in row_norm.items():
+                if "question" in k:
+                    text = v
+                    break
+
+        opt_a = row_norm.get("optiona") or row_norm.get("opta") or row_norm.get("a") or ""
+        opt_b = row_norm.get("optionb") or row_norm.get("optb") or row_norm.get("b") or ""
+        opt_c = row_norm.get("optionc") or row_norm.get("optc") or row_norm.get("c") or ""
+        opt_d = row_norm.get("optiond") or row_norm.get("optd") or row_norm.get("d") or ""
+
+        # Positional fallback if options weren't named
+        if not (opt_a and opt_b and opt_c and opt_d) and len(row) >= 5:
+            vals = list(row.values())
+            if not text:
+                text = vals[0]
+            if len(vals) >= 5:
+                opt_a = opt_a or vals[1]
+                opt_b = opt_b or vals[2]
+                opt_c = opt_c or vals[3]
+                opt_d = opt_d or vals[4]
+
+        correct_raw = (row_norm.get("correctoption") or row_norm.get("answer") or row_norm.get("correct") or "").upper().strip()
+        correct = ""
+        if "A" in correct_raw and not any(x in correct_raw for x in ["B", "C", "D"]):
+            correct = "A"
+        elif "B" in correct_raw and not any(x in correct_raw for x in ["A", "C", "D"]):
+            correct = "B"
+        elif "C" in correct_raw and not any(x in correct_raw for x in ["A", "B", "D"]):
+            correct = "C"
+        elif "D" in correct_raw and not any(x in correct_raw for x in ["A", "B", "C"]):
+            correct = "D"
+        elif correct_raw in ["1", "OPTION 1", "OPTION A"]:
+            correct = "A"
+        elif correct_raw in ["2", "OPTION 2", "OPTION B"]:
+            correct = "B"
+        elif correct_raw in ["3", "OPTION 3", "OPTION C"]:
+            correct = "C"
+        elif correct_raw in ["4", "OPTION 4", "OPTION D"]:
+            correct = "D"
+        elif correct_raw and correct_raw[0] in ["A", "B", "C", "D"]:
+            correct = correct_raw[0]
 
         if not text or not opt_a or not opt_b or not opt_c or not opt_d or correct not in ["A", "B", "C", "D"]:
             skipped += 1
             continue
 
-        try:
-            year = int(year_raw)
-            if year < 1 or year > 4:
-                year = 2
-        except ValueError:
-            year = 2
-
+        topic = row_norm.get("topic") or row_norm.get("subject") or "General"
+        diff = (row_norm.get("difficulty") or row_norm.get("level") or "MEDIUM").upper()
         if diff not in ["EASY", "MEDIUM", "HARD"]:
             diff = "MEDIUM"
+
+        year_raw = row_norm.get("academicyear") or row_norm.get("year") or row_norm.get("class")
+        year = parse_academic_year(year_raw)
 
         q = MCQQuestion(
             academic_year=year,

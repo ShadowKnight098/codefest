@@ -34,7 +34,7 @@ export const AdminLoginPage: React.FC<Props> = ({ onSuccess }) => {
             Operations & Control
           </div>
           <h1 className="text-xl font-bold text-[#16233F]">Admin Command Center</h1>
-          <p className="text-xs text-[#59626F] mt-1">TechFest 2026 · AI/ML Department</p>
+          <p className="text-xs text-[#59626F] mt-1">CodeFest 2026 · Department of CSE (AI &amp; ML)</p>
         </div>
 
         {error && (

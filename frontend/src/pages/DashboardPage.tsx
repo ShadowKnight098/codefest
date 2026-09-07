@@ -59,7 +59,7 @@ const PRESET_STATES: Record<string, DisplayStateConfig> = {
     panel: {
       type: 'error',
       title: 'Not qualified',
-      message: 'You scored 14 / 25 on Level 1. The qualifying score for Level 2 was 18 / 25. Thank you for participating in TechFest 2026.'
+      message: 'You scored 14 / 25 on Level 1. The qualifying score for Level 2 was 18 / 25. Thank you for participating in CodeFest 2026.'
     }
   },
   'WAITING_FOR_LEVEL2': {
@@ -195,10 +195,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
         <div className="flex items-center justify-between pb-6 border-b border-[#DBD7C9]">
           <div>
             <div className="text-[11.5px] font-bold tracking-[0.08em] text-[#59626F] uppercase">
-              AI &amp; ML DEPARTMENT
+              CSE (AI &amp; ML)
             </div>
             <div className="font-serif text-[18px] font-bold text-[#1B2029] leading-tight">
-              TechFest 2026
+              CodeFest 2026
             </div>
           </div>
 

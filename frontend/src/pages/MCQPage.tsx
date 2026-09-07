@@ -299,10 +299,10 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
         <div className="hidden lg:flex w-[22%] bg-[#F6F6F2] border-r border-[#DBD7C9] p-8 flex-col justify-between">
           <div>
             <div className="text-[11.5px] font-bold tracking-[0.08em] text-[#59626F] uppercase">
-              AI &amp; ML DEPARTMENT
+              CSE (AI &amp; ML)
             </div>
             <div className="font-serif text-[17px] font-bold text-[#1B2029]">
-              TechFest 2026
+              CodeFest 2026
             </div>
 
             <div className="mt-6 pt-6 border-t border-[#DBD7C9]">

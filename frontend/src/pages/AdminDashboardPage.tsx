@@ -488,7 +488,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         <div className="flex items-center space-x-3">
           <div className="w-2.5 h-2.5 rounded-full bg-[#3FB950]" />
           <div>
-            <span className="font-bold tracking-tight text-sm">TechFest 2026</span>
+            <span className="font-bold tracking-tight text-sm">CodeFest 2026</span>
             <span className="text-white/80 text-xs ml-2">
               {isSuperAdmin ? 'Faculty Command Center' : 'Organizer Portal'}
             </span>

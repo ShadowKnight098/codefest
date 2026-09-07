@@ -15,7 +15,7 @@ export const Header: React.FC = () => {
           </div>
           <div>
             <div className="text-[11px] font-semibold tracking-wider text-blue-400 uppercase">
-              Department of Artificial Intelligence & Machine Learning
+              Department of CSE (AI &amp; ML)
             </div>
             <div className="text-sm font-bold text-slate-100 tracking-tight">
               Annual Technical Fest 2026 <span className="text-slate-500 font-normal">|</span> Competition Portal

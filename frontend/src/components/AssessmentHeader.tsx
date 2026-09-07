@@ -6,6 +6,7 @@ interface AssessmentHeaderProps {
   remainingSeconds: number;
   onToggleDrawer?: () => void;
   showDrawerButton?: boolean;
+  rightAction?: React.ReactNode;
 }
 
 export const AssessmentHeader: React.FC<AssessmentHeaderProps> = ({
@@ -14,6 +15,7 @@ export const AssessmentHeader: React.FC<AssessmentHeaderProps> = ({
   remainingSeconds,
   onToggleDrawer,
   showDrawerButton = false,
+  rightAction,
 }) => {
   // Format MM:SS
   const formatTime = (secs: number) => {
@@ -29,16 +31,16 @@ export const AssessmentHeader: React.FC<AssessmentHeaderProps> = ({
       {/* Left: Department & Fest Identity (inline) */}
       <div className="flex items-center space-x-2.5">
         <span className="text-[12px] font-bold tracking-[0.08em] text-[#59626F] uppercase">
-          AI &amp; ML DEPARTMENT
+          CSE (AI &amp; ML)
         </span>
         <span className="text-[#DBD7C9]">·</span>
         <span className="font-serif text-[16px] font-bold text-[#1B2029]">
-          TechFest 2026
+          CodeFest 2026
         </span>
       </div>
 
-      {/* Right: Round Info & Timer */}
-      <div className="flex items-center space-x-6">
+      {/* Right: Round Info, Timer & Optional Final Actions */}
+      <div className="flex items-center space-x-5">
         <div className="text-right">
           <div className="font-mono text-[12px] text-[#8B93A0] leading-none mb-1">
             {roundCode}
@@ -57,6 +59,9 @@ export const AssessmentHeader: React.FC<AssessmentHeaderProps> = ({
         >
           {formatTime(remainingSeconds)}
         </div>
+
+        {/* Right Action (e.g. Final Submit button) */}
+        {rightAction}
 
         {/* Drawer button for screens below 1100px */}
         {showDrawerButton && onToggleDrawer && (
