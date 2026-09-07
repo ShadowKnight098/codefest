@@ -550,7 +550,10 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     if (!confirm(`Are you sure you want to completely RESET Level 1 (MCQ Assessment) for ${p.roll_number} (${p.name})?\n\nThis will clear their previous attempt, answers, violations, and timer, letting them start Level 1 freshly.`)) return;
     setLoading(true);
     try {
-      const res = await apiFetch<any>(`/admin/participants/${p.id}/reset-level1`, { method: 'POST' });
+      const res = await apiFetch<any>(`/admin/participants/${p.id}/reset-level1`, {
+        method: 'POST',
+        body: JSON.stringify({})
+      });
       alert(res.message || `Level 1 reset for ${p.roll_number}.`);
       setMessage(res.message);
       setSelectedParticipantForEmergency(null);
@@ -566,7 +569,10 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     if (!confirm(`Are you sure you want to completely RESET Level 2 (Coding Assessment) for ${p.roll_number} (${p.name})?\n\nThis will clear their coding submissions, violations, and timer, letting them start Level 2 freshly.`)) return;
     setLoading(true);
     try {
-      const res = await apiFetch<any>(`/admin/participants/${p.id}/reset-level2`, { method: 'POST' });
+      const res = await apiFetch<any>(`/admin/participants/${p.id}/reset-level2`, {
+        method: 'POST',
+        body: JSON.stringify({})
+      });
       alert(res.message || `Level 2 reset for ${p.roll_number}.`);
       setMessage(res.message);
       setSelectedParticipantForEmergency(null);
@@ -582,7 +588,10 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     if (!confirm(`Manually QUALIFY ${p.roll_number} (${p.name}) for Level 2 (Coding)?\n\nThis allows the student to immediately enter Level 2 even if they had a device issue in Level 1.`)) return;
     setLoading(true);
     try {
-      const res = await apiFetch<any>(`/admin/participants/${p.id}/override-level2-qualification`, { method: 'POST' });
+      const res = await apiFetch<any>(`/admin/participants/${p.id}/override-level2-qualification`, {
+        method: 'POST',
+        body: JSON.stringify({})
+      });
       alert(res.message || `${p.roll_number} qualified for Level 2.`);
       setMessage(res.message);
       setSelectedParticipantForEmergency(null);

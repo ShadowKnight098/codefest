@@ -17,6 +17,7 @@ from app.schemas.admin import (
     ImportResult, ImportValidationRow, PinResetResponse, BulkTextImportRequest
 )
 from app.api.deps import get_current_admin, require_superadmin
+from app.core.cache import memory_cache
 
 router = APIRouter(prefix="/admin/participants", tags=["Admin Participants"])
 
@@ -450,7 +451,8 @@ async def import_participants_text(
 
 # ─── Technical Emergency Reset & Reassignment Endpoints ───
 
-@router.post("/{participant_id}/reset-level1")
+@router.api_route("/{participant_id}/reset-level1", methods=["GET", "POST", "PUT"])
+@router.api_route("/{participant_id}/reset-level1/", methods=["GET", "POST", "PUT"])
 async def reset_participant_level1(
     participant_id: str,
     db: AsyncSession = Depends(get_db),
@@ -490,10 +492,14 @@ async def reset_participant_level1(
     )
 
     await db.commit()
+    memory_cache.delete("admin_leaderboard")
+    memory_cache.delete("admin_live_stats")
+    memory_cache.delete(f"part:{participant_id}")
     return {"message": f"Level 1 (MCQ Assessment) for {participant.roll_number} has been completely reset. The student can now start Level 1 fresh."}
 
 
-@router.post("/{participant_id}/reset-level2")
+@router.api_route("/{participant_id}/reset-level2", methods=["GET", "POST", "PUT"])
+@router.api_route("/{participant_id}/reset-level2/", methods=["GET", "POST", "PUT"])
 async def reset_participant_level2(
     participant_id: str,
     db: AsyncSession = Depends(get_db),
@@ -533,10 +539,14 @@ async def reset_participant_level2(
     )
 
     await db.commit()
+    memory_cache.delete("admin_leaderboard")
+    memory_cache.delete("admin_live_stats")
+    memory_cache.delete(f"part:{participant_id}")
     return {"message": f"Level 2 (Coding Assessment) for {participant.roll_number} has been completely reset. The student can now start Level 2 fresh."}
 
 
-@router.post("/{participant_id}/override-level2-qualification")
+@router.api_route("/{participant_id}/override-level2-qualification", methods=["GET", "POST", "PUT"])
+@router.api_route("/{participant_id}/override-level2-qualification/", methods=["GET", "POST", "PUT"])
 async def override_level2_qualification(
     participant_id: str,
     db: AsyncSession = Depends(get_db),
@@ -574,5 +584,8 @@ async def override_level2_qualification(
         ))
 
     await db.commit()
+    memory_cache.delete("admin_leaderboard")
+    memory_cache.delete("admin_live_stats")
+    memory_cache.delete(f"part:{participant_id}")
     return {"message": f"{participant.roll_number} has been successfully qualified for Level 2."}
 
