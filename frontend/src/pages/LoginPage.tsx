@@ -103,10 +103,13 @@ export const LoginPage: React.FC<{ onOpenAdmin?: () => void }> = ({ onOpenAdmin 
               className="cursor-default"
               title="Official Evaluation Environment"
             >
-              <div className="text-[13px] font-semibold text-white/90 tracking-normal">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-white/60 mb-0.5">
+                Conducted by
+              </div>
+              <div className="text-[13.5px] font-semibold text-white tracking-normal">
                 Department of CSE (AI &amp; ML)
               </div>
-              <div className="text-[12px] text-white/55 mt-0.5">
+              <div className="text-[12px] text-white/70 mt-0.5">
                 RGM College of Engineering &amp; Technology
               </div>
             </div>
@@ -277,12 +280,15 @@ export const LoginPage: React.FC<{ onOpenAdmin?: () => void }> = ({ onOpenAdmin 
           </div>
 
           {/* Footer */}
-          <div className="mt-8 pt-4 border-t border-[#DBD7C9]/60 text-center">
+          <div className="mt-8 pt-4 border-t border-[#DBD7C9]/60 text-center space-y-1.5">
             <p className="text-[12.5px] text-[#59626F]">
               Trouble signing in?{' '}
               <a href="#contact" className="underline hover:text-[#16233F]">
                 Contact your event coordinator.
               </a>
+            </p>
+            <p className="text-[11.5px] text-[#8B93A0] font-medium font-sans">
+              Made by 3rd year students
             </p>
           </div>
         </div>

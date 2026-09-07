@@ -16,14 +16,16 @@ int solve(int a, int b) {
 }
 
 int main() {
-    int a, b;
-    if (scanf("%d %d", &a, &b) == 2 || scanf("%d , %d", &a, &b) == 2) {
+    int a = 0, b = 0;
+    if (scanf("%d %d", &a, &b) == 2 || scanf("%d , %d", &a, &b) == 2 || scanf("%d,%d", &a, &b) == 2) {
         printf("%d\\n", solve(a, b));
     }
     return 0;
 }
 `,
   cpp: `#include <iostream>
+#include <sstream>
+#include <string>
 
 using namespace std;
 
@@ -35,9 +37,14 @@ int solve(int a, int b) {
 int main() {
     ios_base::sync_with_stdio(false);
     cin.tie(NULL);
-    int a, b;
-    if (cin >> a >> b) {
-        cout << solve(a, b) << "\n";
+    string s;
+    if (getline(cin, s)) {
+        for (char &c : s) if (c == ',') c = ' ';
+        stringstream ss(s);
+        int a = 0, b = 0;
+        if (ss >> a >> b) {
+            cout << solve(a, b) << "\\n";
+        }
     }
     return 0;
 }
@@ -52,10 +59,14 @@ public class Main {
 
     public static void main(String[] args) {
         Scanner sc = new Scanner(System.in);
-        if (sc.hasNextInt()) {
-            int a = sc.nextInt();
-            int b = sc.hasNextInt() ? sc.nextInt() : 0;
-            System.out.println(solve(a, b));
+        if (sc.hasNextLine()) {
+            String line = sc.nextLine().replace(",", " ");
+            Scanner numSc = new Scanner(line);
+            if (numSc.hasNextInt()) {
+                int a = numSc.nextInt();
+                int b = numSc.hasNextInt() ? numSc.nextInt() : 0;
+                System.out.println(solve(a, b));
+            }
         }
     }
 }
