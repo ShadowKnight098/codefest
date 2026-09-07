@@ -259,7 +259,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   };
 
   useEffect(() => {
-    if (!isSuperAdmin && activeTab !== 'export') {
+    if (!isSuperAdmin && activeTab !== 'export' && activeTab !== 'winners1' && activeTab !== 'winners2') {
       setActiveTab('export');
       return;
     }
@@ -584,6 +584,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
       ]
     : [
         { id: 'export' as Tab, label: '📊 Live Leaderboard' },
+        { id: 'winners1' as Tab, label: '🥇 Round 1 Results' },
+        { id: 'winners2' as Tab, label: '🏆 Round 2 Results' },
       ];
 
   return (
@@ -600,7 +602,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
             <span className={`text-[10px] ml-2 font-mono px-1.5 py-0.5 rounded ${
               isSuperAdmin ? 'bg-[#3FB950]/20 text-[#3FB950] border border-[#3FB950]/40' : 'bg-[#E3B341]/20 text-[#E3B341] border border-[#E3B341]/40'
             }`}>
-              {isSuperAdmin ? 'SUPERADMIN (Full Access)' : 'ORGANIZER (Leaderboard Access Only)'}
+              {isSuperAdmin ? 'SUPERADMIN (Full Access)' : 'ORGANIZER (Leaderboard & Results)'}
             </span>
           </div>
         </div>

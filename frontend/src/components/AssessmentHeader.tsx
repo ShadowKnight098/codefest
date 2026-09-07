@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface AssessmentHeaderProps {
   roundCode: string; // e.g. "LEVEL 01"
@@ -17,6 +17,24 @@ export const AssessmentHeader: React.FC<AssessmentHeaderProps> = ({
   showDrawerButton = false,
   rightAction,
 }) => {
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(!!document.fullscreenElement);
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
+
   // Format MM:SS
   const formatTime = (secs: number) => {
     const m = Math.floor(Math.max(0, secs) / 60);
@@ -40,7 +58,21 @@ export const AssessmentHeader: React.FC<AssessmentHeaderProps> = ({
       </div>
 
       {/* Right: Round Info, Timer & Optional Final Actions */}
-      <div className="flex items-center space-x-5">
+      <div className="flex items-center space-x-4">
+        {/* Fullscreen Button */}
+        <button
+          onClick={toggleFullscreen}
+          className={`px-2.5 py-1 text-xs font-mono rounded-[3px] border transition-colors flex items-center space-x-1.5 ${
+            isFullscreen
+              ? 'bg-[#E8F3EC] text-[#1E7A46] border-[#BEDFCB]'
+              : 'bg-[#FFF3CD] text-[#856404] border-[#FFEEBA] hover:bg-[#FFEBAA]'
+          }`}
+          title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen Mode'}
+          type="button"
+        >
+          <span>{isFullscreen ? '⛶ Fullscreen Active' : '⛶ Go Fullscreen'}</span>
+        </button>
+
         <div className="text-right">
           <div className="font-mono text-[12px] text-[#8B93A0] leading-none mb-1">
             {roundCode}

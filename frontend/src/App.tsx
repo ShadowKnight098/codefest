@@ -101,7 +101,13 @@ const AppContent: React.FC = () => {
 
       {currentView === 'mcq' && (
         <MCQPage
-          onComplete={() => setCurrentView('waiting')}
+          onComplete={(isQualified) => {
+            if (isQualified) {
+              setCurrentView('waiting');
+            } else {
+              setCurrentView('dashboard');
+            }
+          }}
           onTerminated={() => setCurrentView('termination')}
         />
       )}

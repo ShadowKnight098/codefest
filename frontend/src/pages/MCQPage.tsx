@@ -16,7 +16,7 @@ interface Question {
 }
 
 interface MCQPageProps {
-  onComplete: () => void;
+  onComplete: (isQualified?: boolean) => void;
   onTerminated?: () => void;
 }
 
@@ -251,7 +251,7 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
             {errorMessage}
           </p>
           <button
-            onClick={onComplete}
+            onClick={() => onComplete(false)}
             className="btn-primary h-[42px] px-6 text-[14px] font-semibold"
             type="button"
           >
@@ -700,7 +700,7 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
 
             {/* Action Button */}
             <button
-              onClick={onComplete}
+              onClick={() => onComplete(!!submitResult.is_qualified)}
               className="w-full btn-primary h-[42px] text-[14px] font-semibold flex items-center justify-center space-x-2"
               type="button"
             >

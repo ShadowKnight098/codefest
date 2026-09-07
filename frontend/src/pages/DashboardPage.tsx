@@ -275,11 +275,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                 {renderBadge(displayConfig.r1.status)}
                 {displayConfig.r1.action && (
                   <button
-                    onClick={onStartMCQ}
-                    className="btn-primary h-[36px] px-4 text-[13px] font-semibold"
+                    onClick={() => {
+                      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+                        document.documentElement.requestFullscreen().catch(() => {});
+                      }
+                      onStartMCQ?.();
+                    }}
+                    className="btn-primary h-[36px] px-4 text-[13px] font-semibold flex items-center space-x-1.5"
                     type="button"
                   >
-                    {displayConfig.r1.action}
+                    <span>{displayConfig.r1.action}</span>
+                    <span>→</span>
                   </button>
                 )}
               </div>
@@ -307,11 +313,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                 {renderBadge(displayConfig.r2.status)}
                 {displayConfig.r2.action && (
                   <button
-                    onClick={onStartCoding}
-                    className="btn-primary h-[36px] px-4 text-[13px] font-semibold"
+                    onClick={() => {
+                      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+                        document.documentElement.requestFullscreen().catch(() => {});
+                      }
+                      onStartCoding?.();
+                    }}
+                    className="btn-primary h-[36px] px-4 text-[13px] font-semibold flex items-center space-x-1.5"
                     type="button"
                   >
-                    {displayConfig.r2.action}
+                    <span>{displayConfig.r2.action}</span>
+                    <span>→</span>
                   </button>
                 )}
               </div>

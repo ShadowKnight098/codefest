@@ -11,12 +11,14 @@ export const WaitingPage: React.FC<WaitingPageProps> = ({
   onLevel2Opened,
   onReturnToDashboard,
 }) => {
-  // Poll server state every 8 seconds per spec: "This page updates automatically once Level 2 opens"
+  // Poll server state every 6 seconds per spec
   useEffect(() => {
     const checkState = async () => {
       try {
         const data = await apiFetch<DashboardState>('/api/dashboard/state');
-        if (data.can_start_level2 || data.state === 'LEVEL2_AVAILABLE') {
+        if (data.state === 'NOT_QUALIFIED' || (data.level1_result && !data.level1_result.is_qualified)) {
+          onReturnToDashboard();
+        } else if (data.can_start_level2 || data.state === 'LEVEL2_AVAILABLE') {
           onLevel2Opened();
         }
       } catch (err) {
@@ -24,9 +26,10 @@ export const WaitingPage: React.FC<WaitingPageProps> = ({
       }
     };
 
-    const interval = setInterval(checkState, 8000);
+    checkState();
+    const interval = setInterval(checkState, 6000);
     return () => clearInterval(interval);
-  }, [onLevel2Opened]);
+  }, [onLevel2Opened, onReturnToDashboard]);
 
   return (
     <div className="min-h-screen bg-[#F6F6F2] flex flex-col items-center justify-center p-6 text-center">
