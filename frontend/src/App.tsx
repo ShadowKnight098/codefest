@@ -94,6 +94,7 @@ const AppContent: React.FC = () => {
       {/* Participant view routing */}
       {currentView === 'dashboard' && (
         <DashboardPage
+          key={participant.id}
           onStartMCQ={() => setCurrentView('mcq')}
           onStartCoding={() => setCurrentView('coding')}
         />
@@ -101,6 +102,7 @@ const AppContent: React.FC = () => {
 
       {currentView === 'mcq' && (
         <MCQPage
+          key={participant.id}
           onComplete={(isQualified) => {
             if (isQualified) {
               setCurrentView('waiting');
@@ -114,6 +116,7 @@ const AppContent: React.FC = () => {
 
       {currentView === 'waiting' && (
         <WaitingPage
+          key={participant.id}
           onLevel2Opened={() => setCurrentView('coding')}
           onReturnToDashboard={() => setCurrentView('dashboard')}
         />
@@ -121,12 +124,14 @@ const AppContent: React.FC = () => {
 
       {currentView === 'coding' && (
         <CodingPage
+          key={participant.id}
           onComplete={() => setCurrentView('dashboard')}
         />
       )}
 
       {currentView === 'termination' && (
         <TerminationPage
+          key={participant.id}
           reason="repeated tab-switch violations during the assessment"
           onReturnToDashboard={() => setCurrentView('dashboard')}
         />

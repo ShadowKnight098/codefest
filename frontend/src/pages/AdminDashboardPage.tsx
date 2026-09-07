@@ -204,10 +204,10 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   const fetchWinners2 = async () => {
     try {
       const data = await apiFetch<any[]>('/admin/monitor/leaderboard');
-      // Round 2 winners = those who have a coding_score
+      // Round 2 winners / finalists = those with coding_score !== null or who qualified from Round 1
       const r2 = (Array.isArray(data) ? data : [])
-        .filter((e: any) => e.coding_score !== null)
-        .sort((a: any, b: any) => b.total_score - a.total_score || a.violations - b.violations)
+        .filter((e: any) => e.coding_score !== null || (e.mcq_qualified && (e.total_score > 0 || e.mcq_score !== null)))
+        .sort((a: any, b: any) => ((b.total_score || 0) - (a.total_score || 0)) || ((b.coding_score || 0) - (a.coding_score || 0)) || ((a.violations || 0) - (b.violations || 0)))
         .map((e: any, i: number) => ({ ...e, r2_rank: i + 1 }));
       setWinners2(r2);
     } catch (e) {

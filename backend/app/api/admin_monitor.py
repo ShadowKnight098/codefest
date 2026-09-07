@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, distinct
 from app.db.session import get_db
 from app.db.models import (
-    Participant, MCQAttempt, CodingAttempt, SecurityEvent, RoundResult, Round
+    Participant, MCQAttempt, CodingAttempt, SecurityEvent, RoundResult, Round, CodingSubmission
 )
 from app.schemas.admin import LiveStats, LeaderboardEntry
 from app.api.deps import get_current_admin
@@ -72,6 +72,24 @@ async def get_leaderboard(
     )).all()
     viol_map = {row[0]: row[1] for row in violations}
 
+    # Fetch realtime live coding submissions aggregated by problem
+    live_sub_rows = (await db.execute(
+        select(
+            CodingAttempt.participant_id,
+            CodingSubmission.problem_id,
+            func.max(CodingSubmission.score)
+        )
+        .join(CodingAttempt, CodingSubmission.attempt_id == CodingAttempt.id)
+        .group_by(CodingAttempt.participant_id, CodingSubmission.problem_id)
+    )).all()
+    live_coding_scores = {}
+    for p_id, _, score_val in live_sub_rows:
+        live_coding_scores[p_id] = live_coding_scores.get(p_id, 0) + (score_val or 0)
+
+    coding_att_parts = {
+        row[0] for row in (await db.execute(select(distinct(CodingAttempt.participant_id)))).all()
+    }
+
     # Map results by (participant_id, round_number)
     rounds = (await db.execute(select(Round))).scalars().all()
     round_map = {r.id: r.round_number for r in rounds}
@@ -88,7 +106,15 @@ async def get_leaderboard(
         
         mcq_s = mcq_data[0] if mcq_data else None
         mcq_q = mcq_data[1] if mcq_data else None
-        code_s = coding_data[0] if coding_data else None
+
+        if coding_data is not None:
+            code_s = coding_data[0]
+        elif p.id in live_coding_scores:
+            code_s = live_coding_scores[p.id]
+        elif p.id in coding_att_parts:
+            code_s = 0
+        else:
+            code_s = None
         
         total = (mcq_s or 0) + (code_s or 0)
         viols = viol_map.get(p.id, 0)

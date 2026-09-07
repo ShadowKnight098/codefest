@@ -203,8 +203,9 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
 
   const currentProblem = attempt?.problems?.[selectedProblemIndex];
 
-  // Unique key for caching code per problem and language
-  const currentCodeKey = `${selectedProblemIndex}-${language}`;
+  // Unique key for caching code per attempt, problem, and language
+  const attemptPrefix = attempt?.attempt_id || 'active';
+  const currentCodeKey = `${attemptPrefix}-${selectedProblemIndex}-${language}`;
   const code = codeCache[currentCodeKey] ?? (STARTER_TEMPLATES[language] || '');
 
   const setCode = (newCode: string) => {
@@ -214,6 +215,13 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
   const fetchAttempt = async () => {
     try {
       const data = await apiFetch<any>('/coding/attempt');
+      // Reset any previous attempt or session code cache if attempt ID changes
+      if (attemptIdRef.current && attemptIdRef.current !== data.attempt_id) {
+        setCodeCache({});
+        setSelectedProblemIndex(0);
+        setRunResults(null);
+        setSubmitResult(null);
+      }
       setAttempt(data);
       attemptIdRef.current = data.attempt_id;
       if (data.remaining_seconds !== undefined) {
@@ -244,7 +252,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
 
   const handleLanguageChange = (newLang: string) => {
     setLanguage(newLang);
-    const key = `${selectedProblemIndex}-${newLang}`;
+    const key = `${attempt?.attempt_id || 'active'}-${selectedProblemIndex}-${newLang}`;
     if (!codeCache[key]) {
       setCodeCache((prev) => ({ ...prev, [key]: STARTER_TEMPLATES[newLang] || '' }));
     }

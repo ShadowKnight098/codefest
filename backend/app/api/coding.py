@@ -13,6 +13,7 @@ from app.db.models import (
 )
 from app.api.deps import get_current_participant
 from app.services.judge0 import judge0_service
+from app.core.cache import memory_cache
 
 router = APIRouter(prefix="/coding", tags=["Coding Assessment"])
 
@@ -217,6 +218,32 @@ async def get_or_start_coding_attempt(
         .group_by(CodingSubmission.problem_id)
     )
     best_scores = {row[0]: row[1] or 0 for row in sub_res.all()}
+
+    # Ensure participant has a RoundResult entry for Round 2 so they appear in Round 2 monitor/tables immediately
+    if round_2:
+        rr_check = await db.execute(
+            select(RoundResult).where(
+                RoundResult.participant_id == current_participant.id,
+                RoundResult.round_id == round_2.id
+            )
+        )
+        existing_rr = rr_check.scalar_one_or_none()
+        current_sum = sum(best_scores.values())
+        if not existing_rr:
+            db.add(RoundResult(
+                participant_id=current_participant.id,
+                round_id=round_2.id,
+                score=current_sum,
+                is_qualified=False
+            ))
+            await db.commit()
+            memory_cache.delete("admin_leaderboard")
+            memory_cache.delete("admin_live_stats")
+        elif existing_rr.score != current_sum and current_sum > existing_rr.score:
+            existing_rr.score = current_sum
+            await db.commit()
+            memory_cache.delete("admin_leaderboard")
+            memory_cache.delete("admin_live_stats")
 
     return CodingAttemptResponse(
         attempt_id=attempt.id,
@@ -448,6 +475,38 @@ async def submit_code(
     await db.commit()
     await db.refresh(submission)
 
+    # Automatically aggregate current attempt score and sync RoundResult for Round 2 in real time
+    sub_res = await db.execute(
+        select(CodingSubmission.problem_id, func.max(CodingSubmission.score))
+        .where(CodingSubmission.attempt_id == attempt.id)
+        .group_by(CodingSubmission.problem_id)
+    )
+    current_attempt_score = sum(row[1] or 0 for row in sub_res.all())
+
+    round_2 = (await db.execute(select(Round).where(Round.round_number == 2))).scalar_one_or_none()
+    if round_2:
+        res_check = await db.execute(
+            select(RoundResult).where(
+                RoundResult.participant_id == current_participant.id,
+                RoundResult.round_id == round_2.id
+            )
+        )
+        existing_result = res_check.scalar_one_or_none()
+        if existing_result:
+            if current_attempt_score > existing_result.score:
+                existing_result.score = current_attempt_score
+        else:
+            db.add(RoundResult(
+                participant_id=current_participant.id,
+                round_id=round_2.id,
+                score=current_attempt_score,
+                is_qualified=False
+            ))
+        await db.commit()
+
+    memory_cache.delete("admin_leaderboard")
+    memory_cache.delete("admin_live_stats")
+
     term_lines = [
         f"fest@sandbox:~$ submit --problem P{problem.order_num} solution.{payload.language}",
         f"Evaluating submission against {total_cases} test cases (Public & Hidden)...",
@@ -571,6 +630,9 @@ async def final_submit_coding(
             ))
 
     await db.commit()
+
+    memory_cache.delete("admin_leaderboard")
+    memory_cache.delete("admin_live_stats")
 
     return FinalSubmitResponse(
         attempt_id=attempt.id,
