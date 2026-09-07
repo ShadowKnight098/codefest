@@ -24,8 +24,8 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
   if (!headers.has('Authorization')) {
     const isAdminEndpoint = cleanPath.includes('/admin');
     const token = isAdminEndpoint
-      ? (localStorage.getItem('fest_admin_token') || localStorage.getItem('fest_token'))
-      : (localStorage.getItem('fest_token') || localStorage.getItem('fest_admin_token'));
+      ? localStorage.getItem('fest_admin_token')
+      : localStorage.getItem('fest_token');
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
     }
