@@ -316,18 +316,18 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   });
 
   const toggleRound = async (roundId: string, currentStatus: boolean) => {
-    setLoading(true);
+    // 1. Instant Optimistic State Update
+    setRounds((prev) => prev.map((r) => r.id === roundId ? { ...r, is_open: !currentStatus } : r));
     try {
       await apiFetch(`/admin/rounds/${roundId}`, {
         method: 'PUT',
         body: JSON.stringify({ is_open: !currentStatus }),
       });
-      setMessage(`Round status updated successfully.`);
-      await fetchOverview();
+      setMessage(`Round ${!currentStatus ? 'OPENED' : 'CLOSED'} successfully.`);
     } catch (e: any) {
-      setMessage(`Error: ${e?.detail || e.message}`);
-    } finally {
-      setLoading(false);
+      // Revert if network error
+      setRounds((prev) => prev.map((r) => r.id === roundId ? { ...r, is_open: currentStatus } : r));
+      alert(`Failed to toggle round: ${e?.detail || e.message}`);
     }
   };
 
@@ -701,9 +701,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     <h3 className="text-base font-bold text-[#16233F] mb-1">{r.name}</h3>
                     <p className="text-xs text-[#59626F] mb-4">Duration: {r.duration_minutes} minutes</p>
                     <button
-                      disabled={loading}
                       onClick={() => toggleRound(r.id, r.is_open)}
-                      className={`w-full py-2 text-xs font-bold rounded-[3px] transition-colors ${
+                      className={`w-full py-2.5 text-xs font-bold rounded-[3px] transition-all shadow-sm active:scale-[0.98] ${
                         r.is_open
                           ? 'bg-[#A82A2A] text-white hover:bg-[#8B2020]'
                           : 'bg-[#1E7E34] text-white hover:bg-[#166027]'
@@ -1353,20 +1352,20 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
               {/* Add Problem Modal */}
               {showAddProbModal && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                  <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-6 max-w-lg w-full text-xs space-y-4 shadow-xl">
+                  <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-6 max-w-2xl w-full text-xs space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
                     <div className="border-b border-[#DBD7C9] pb-2">
                       <h3 className="text-sm font-bold text-[#16233F]">Create New Coding Problem</h3>
-                      <p className="text-[11px] text-[#59626F]">Add a new Level 2 programming challenge</p>
+                      <p className="text-[11px] text-[#59626F]">Add a new Level 2 programming challenge with public &amp; hidden evaluation test cases</p>
                     </div>
 
-                    <form onSubmit={handleAddProblem} className="space-y-3">
+                    <form onSubmit={handleAddProblem} className="space-y-4">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Problem Title</label>
                           <input
                             value={newProb.title}
                             onChange={(e) => setNewProb({ ...newProb, title: e.target.value })}
-                            placeholder="e.g. Valid Palindrome"
+                            placeholder="e.g. Two Sum or Valid Palindrome"
                             className="w-full border border-[#C6C1B0] p-1.5 rounded"
                             required
                           />
@@ -1400,8 +1399,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         <textarea
                           value={newProb.description}
                           onChange={(e) => setNewProb({ ...newProb, description: e.target.value })}
-                          placeholder="Describe the task and expected logic..."
-                          className="w-full border border-[#C6C1B0] p-2 rounded h-24 font-sans text-xs"
+                          placeholder="Describe the problem, input format, and output format..."
+                          className="w-full border border-[#C6C1B0] p-2 rounded h-20 font-sans text-xs"
                           required
                         />
                       </div>
@@ -1412,7 +1411,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                           value={newProb.constraints}
                           onChange={(e) => setNewProb({ ...newProb, constraints: e.target.value })}
                           placeholder="1 <= N <= 10^5&#10;Time Limit: 2000ms"
-                          className="w-full border border-[#C6C1B0] p-2 rounded h-16 font-mono text-xs"
+                          className="w-full border border-[#C6C1B0] p-2 rounded h-14 font-mono text-xs"
                         />
                       </div>
 
@@ -1437,6 +1436,109 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         </div>
                       </div>
 
+                      {/* Initial Test Cases Section */}
+                      <div className="border-t border-[#DBD7C9] pt-3">
+                        <div className="flex justify-between items-center mb-2">
+                          <h4 className="font-bold text-[#16233F] uppercase tracking-wider text-[11px]">
+                            Initial Test Cases ({newProb.test_cases.length})
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewProb({
+                                ...newProb,
+                                test_cases: [
+                                  ...newProb.test_cases,
+                                  {
+                                    input_data: '',
+                                    expected_output: '',
+                                    is_hidden: newProb.test_cases.length > 0,
+                                    order_num: newProb.test_cases.length + 1
+                                  }
+                                ]
+                              });
+                            }}
+                            className="text-[11px] text-[#1E7E34] hover:underline font-semibold"
+                          >
+                            + Add Another Test Case
+                          </button>
+                        </div>
+
+                        <div className="space-y-3">
+                          {newProb.test_cases.map((tc, tcIdx) => (
+                            <div key={tcIdx} className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="font-mono font-bold text-[11px] text-[#16233F]">
+                                  Test Case #{tcIdx + 1}
+                                </span>
+                                <div className="flex items-center space-x-3">
+                                  <label className="flex items-center space-x-1 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={tc.is_hidden}
+                                      onChange={(e) => {
+                                        const updated = [...newProb.test_cases];
+                                        updated[tcIdx].is_hidden = e.target.checked;
+                                        setNewProb({ ...newProb, test_cases: updated });
+                                      }}
+                                    />
+                                    <span className="text-[10.5px] font-semibold text-[#59626F]">Hidden for Evaluation</span>
+                                  </label>
+                                  {newProb.test_cases.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const updated = newProb.test_cases.filter((_, i) => i !== tcIdx);
+                                        setNewProb({ ...newProb, test_cases: updated });
+                                      }}
+                                      className="text-[#A82A2A] hover:underline text-[10.5px]"
+                                    >
+                                      Remove
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 font-mono text-xs">
+                                <div>
+                                  <label className="block text-[9.5px] text-[#59626F] uppercase font-bold mb-0.5">
+                                    Standard Input (stdin)
+                                  </label>
+                                  <textarea
+                                    rows={2}
+                                    value={tc.input_data}
+                                    onChange={(e) => {
+                                      const updated = [...newProb.test_cases];
+                                      updated[tcIdx].input_data = e.target.value;
+                                      setNewProb({ ...newProb, test_cases: updated });
+                                    }}
+                                    placeholder="e.g. 10 20 or [2,7,11,15]|9"
+                                    className="w-full border border-[#C6C1B0] p-1.5 rounded font-mono text-[11px] bg-white"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[9.5px] text-[#59626F] uppercase font-bold mb-0.5">
+                                    Expected Output (stdout)
+                                  </label>
+                                  <textarea
+                                    rows={2}
+                                    value={tc.expected_output}
+                                    onChange={(e) => {
+                                      const updated = [...newProb.test_cases];
+                                      updated[tcIdx].expected_output = e.target.value;
+                                      setNewProb({ ...newProb, test_cases: updated });
+                                    }}
+                                    placeholder="e.g. 30 or [0,1]"
+                                    className="w-full border border-[#C6C1B0] p-1.5 rounded font-mono text-[11px] bg-white font-bold text-[#1E7A46]"
+                                    required
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
                       <div className="flex justify-end space-x-2 pt-3 border-t border-[#DBD7C9]">
                         <button
                           type="button"
@@ -1447,9 +1549,10 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         </button>
                         <button
                           type="submit"
-                          className="px-4 py-1.5 bg-[#16233F] text-white rounded text-xs font-semibold hover:bg-[#25355B]"
+                          disabled={loading}
+                          className="px-4 py-1.5 bg-[#16233F] text-white rounded text-xs font-semibold hover:bg-[#25355B] disabled:opacity-50"
                         >
-                          Create Problem
+                          {loading ? 'Creating…' : 'Create Problem'}
                         </button>
                       </div>
                     </form>
@@ -1465,34 +1568,41 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <div className="text-[10.5px] font-mono uppercase font-bold text-[#1E7E34]">
                         P{selectedProblemForTestCase.order_num}: {selectedProblemForTestCase.title}
                       </div>
-                      <h3 className="text-sm font-bold text-[#16233F]">Add Test Case</h3>
+                      <h3 className="text-sm font-bold text-[#16233F]">Add Custom Test Case</h3>
+                      <p className="text-[11px] text-[#59626F]">Define specific input arguments and expected output</p>
                     </div>
 
                     <form onSubmit={handleAddTestCase} className="space-y-3">
                       <div>
-                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">
-                          Standard Input (stdin)
-                        </label>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase">
+                            Standard Input (stdin)
+                          </label>
+                          <span className="text-[10px] text-[#8B93A0]">Space / Comma / Multiline / Pipe supported</span>
+                        </div>
                         <textarea
                           rows={4}
                           value={newTestCase.input_data}
                           onChange={(e) => setNewTestCase({ ...newTestCase, input_data: e.target.value })}
-                          placeholder="e.g. 2,7,11,15|9"
+                          placeholder="e.g.&#10;10 20&#10;or: [2, 7, 11, 15] | 9&#10;or: hello world"
                           className="w-full border border-[#C6C1B0] p-2 rounded font-mono text-xs focus:outline-none focus:border-[#16233F]"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">
-                          Expected Output (stdout)
-                        </label>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase">
+                            Expected Output (stdout)
+                          </label>
+                          <span className="text-[10px] text-[#8B93A0]">Exact text or number to match</span>
+                        </div>
                         <textarea
                           rows={3}
                           value={newTestCase.expected_output}
                           onChange={(e) => setNewTestCase({ ...newTestCase, expected_output: e.target.value })}
-                          placeholder="e.g. 0,1"
+                          placeholder="e.g. 30 or [0, 1] or true"
                           required
-                          className="w-full border border-[#C6C1B0] p-2 rounded font-mono text-xs focus:outline-none focus:border-[#16233F]"
+                          className="w-full border border-[#C6C1B0] p-2 rounded font-mono text-xs focus:outline-none focus:border-[#16233F] font-bold text-[#1E7A46]"
                         />
                       </div>
 
@@ -1517,7 +1627,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                                 checked={!newTestCase.is_hidden}
                                 onChange={() => setNewTestCase({ ...newTestCase, is_hidden: false })}
                               />
-                              <span className="font-semibold text-[#1E7A46]">Public Sample</span>
+                              <span className="font-semibold text-[#1E7A46]">👁 Public Sample</span>
                             </label>
                             <label className="flex items-center space-x-1.5 cursor-pointer">
                               <input
@@ -1526,7 +1636,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                                 checked={newTestCase.is_hidden}
                                 onChange={() => setNewTestCase({ ...newTestCase, is_hidden: true })}
                               />
-                              <span className="font-semibold text-[#C0392B]">Hidden Case</span>
+                              <span className="font-semibold text-[#C0392B]">🔒 Hidden Case</span>
                             </label>
                           </div>
                         </div>

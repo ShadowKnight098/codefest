@@ -93,6 +93,19 @@ def enhance_python_code(code: str) -> str:
         return code
     return f"{code}\n\n{WRAPPER_TEMPLATE}"
 
+def normalize_java_code(code: str) -> str:
+    """Ensures Java code has a public class Main and compiles properly without ClassNotFoundException."""
+    if "public class Main" in code:
+        return code
+    # If there is a public class with another name, rename it to Main
+    if re.search(r"public\s+class\s+(\w+)", code):
+        return re.sub(r"public\s+class\s+(\w+)", "public class Main", code, count=1)
+    # If there is a package-private class, make it public class Main
+    if re.search(r"\bclass\s+(\w+)", code):
+        return re.sub(r"\bclass\s+(\w+)", "public class Main", code, count=1)
+    # If no class wrapper exists at all
+    return f"import java.util.*;\nimport java.io.*;\n\npublic class Main {{\n{code}\n}}"
+
 def _execute_sync(
     source_code: str,
     language: str,
@@ -137,9 +150,10 @@ def _execute_sync(
                 stderr_text = f"Execution exceeded time limit of {cpu_time_limit_sec}s."
 
         elif lang == "java":
+            prepared_code = normalize_java_code(source_code)
             file_path = os.path.join(temp_dir, "Main.java")
             with open(file_path, "w", encoding="utf-8") as f:
-                f.write(source_code)
+                f.write(prepared_code)
 
             # Compile
             try:
@@ -328,10 +342,15 @@ class Judge0LoadBalancer:
         Submits code to next Judge0 worker node with wait=true for fast synchronous execution.
         If all Judge0 nodes are offline or unreachable, seamlessly runs on the local sandbox without latency.
         """
-        lang_id = settings.judge0_language_map.get(language.lower(), 71)
+        lang_id = settings.judge0_language_map.get(language.lower().strip(), 71)
+        normalized_code = source_code
+        if language.lower().strip() == "java":
+            normalized_code = normalize_java_code(source_code)
+        elif language.lower().strip() in ("python", "py"):
+            normalized_code = enhance_python_code(source_code)
 
         payload = {
-            "source_code": source_code,
+            "source_code": normalized_code,
             "language_id": lang_id,
             "stdin": stdin,
             "cpu_time_limit": cpu_time_limit_sec,
