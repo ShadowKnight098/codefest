@@ -288,7 +288,7 @@ export const LoginPage: React.FC<{ onOpenAdmin?: () => void }> = ({ onOpenAdmin 
               </a>
             </p>
             <p className="text-[11.5px] text-[#8B93A0] font-medium font-sans">
-              Made by 3rd year students
+                Developed by 3rd year students
             </p>
           </div>
         </div>

@@ -8,7 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, func
 from app.db.session import get_db
-from app.db.models import Participant
+from app.db.models import (
+    Participant, MCQAttempt, CodingAttempt, RoundResult, SecurityEvent, Round
+)
 from app.core.security import hash_pin
 from app.schemas.admin import (
     ParticipantCreate, ParticipantUpdate, ParticipantAdminResponse,
@@ -445,3 +447,132 @@ async def import_participants_text(
         skipped=skipped,
         errors=errors
     )
+
+# ─── Technical Emergency Reset & Reassignment Endpoints ───
+
+@router.post("/{participant_id}/reset-level1")
+async def reset_participant_level1(
+    participant_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_admin)
+):
+    """
+    Emergency Technical Reset for Level 1 (MCQ Assessment).
+    Clears the participant's MCQ attempt, answers, violations, and Round 1 results,
+    allowing them to start or resume Level 1 completely fresh.
+    """
+    result = await db.execute(select(Participant).where(Participant.id == participant_id))
+    participant = result.scalar_one_or_none()
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found.")
+
+    # 1. Delete MCQ Security Events
+    await db.execute(
+        delete(SecurityEvent).where(
+            (SecurityEvent.participant_id == participant_id) &
+            (SecurityEvent.attempt_type == "MCQ")
+        )
+    )
+
+    # 2. Delete Round 1 Result
+    round_1 = (await db.execute(select(Round).where(Round.round_number == 1))).scalar_one_or_none()
+    if round_1:
+        await db.execute(
+            delete(RoundResult).where(
+                (RoundResult.participant_id == participant_id) &
+                (RoundResult.round_id == round_1.id)
+            )
+        )
+
+    # 3. Delete MCQ Attempt (cascades to questions and answers)
+    await db.execute(
+        delete(MCQAttempt).where(MCQAttempt.participant_id == participant_id)
+    )
+
+    await db.commit()
+    return {"message": f"Level 1 (MCQ Assessment) for {participant.roll_number} has been completely reset. The student can now start Level 1 fresh."}
+
+
+@router.post("/{participant_id}/reset-level2")
+async def reset_participant_level2(
+    participant_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_admin)
+):
+    """
+    Emergency Technical Reset for Level 2 (Coding Assessment).
+    Clears the participant's Coding attempt, submissions, violations, and Round 2 results,
+    allowing them to start or resume Level 2 completely fresh.
+    """
+    result = await db.execute(select(Participant).where(Participant.id == participant_id))
+    participant = result.scalar_one_or_none()
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found.")
+
+    # 1. Delete Coding Security Events
+    await db.execute(
+        delete(SecurityEvent).where(
+            (SecurityEvent.participant_id == participant_id) &
+            (SecurityEvent.attempt_type == "CODING")
+        )
+    )
+
+    # 2. Delete Round 2 Result
+    round_2 = (await db.execute(select(Round).where(Round.round_number == 2))).scalar_one_or_none()
+    if round_2:
+        await db.execute(
+            delete(RoundResult).where(
+                (RoundResult.participant_id == participant_id) &
+                (RoundResult.round_id == round_2.id)
+            )
+        )
+
+    # 3. Delete Coding Attempt (cascades to submissions)
+    await db.execute(
+        delete(CodingAttempt).where(CodingAttempt.participant_id == participant_id)
+    )
+
+    await db.commit()
+    return {"message": f"Level 2 (Coding Assessment) for {participant.roll_number} has been completely reset. The student can now start Level 2 fresh."}
+
+
+@router.post("/{participant_id}/override-level2-qualification")
+async def override_level2_qualification(
+    participant_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_admin)
+):
+    """
+    Emergency Technical Override: Manually qualify participant for Level 2.
+    Useful when a student encounters a technical glitch in Level 1 and faculty wants to grant them Round 2 access directly.
+    """
+    result = await db.execute(select(Participant).where(Participant.id == participant_id))
+    participant = result.scalar_one_or_none()
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found.")
+
+    round_1 = (await db.execute(select(Round).where(Round.round_number == 1))).scalar_one_or_none()
+    if not round_1:
+        raise HTTPException(status_code=400, detail="Round 1 not found.")
+
+    r1_res = await db.execute(
+        select(RoundResult).where(
+            (RoundResult.participant_id == participant_id) &
+            (RoundResult.round_id == round_1.id)
+        )
+    )
+    r1_result = r1_res.scalar_one_or_none()
+
+    if r1_result:
+        r1_result.is_qualified = True
+    else:
+        db.add(RoundResult(
+            participant_id=participant_id,
+            round_id=round_1.id,
+            score=18,
+            is_qualified=True
+        ))
+
+    await db.commit()
+    return {"message": f"{participant.roll_number} has been successfully qualified for Level 2."}
+

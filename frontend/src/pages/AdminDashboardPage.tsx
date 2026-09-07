@@ -28,6 +28,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     academic_year: 2,
   });
 
+  // Emergency Reassign / Technical Reset Modal
+  const [selectedParticipantForEmergency, setSelectedParticipantForEmergency] = useState<any>(null);
+
   // Bulk Text Import Modal
   const [showBulkTextModal, setShowBulkTextModal] = useState(false);
   const [bulkText, setBulkText] = useState('');
@@ -543,6 +546,54 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     }
   };
 
+  const handleResetLevel1 = async (p: any) => {
+    if (!confirm(`Are you sure you want to completely RESET Level 1 (MCQ Assessment) for ${p.roll_number} (${p.name})?\n\nThis will clear their previous attempt, answers, violations, and timer, letting them start Level 1 freshly.`)) return;
+    setLoading(true);
+    try {
+      const res = await apiFetch<any>(`/admin/participants/${p.id}/reset-level1`, { method: 'POST' });
+      alert(res.message || `Level 1 reset for ${p.roll_number}.`);
+      setMessage(res.message);
+      setSelectedParticipantForEmergency(null);
+      fetchParticipants();
+    } catch (e: any) {
+      alert(`Failed to reset Level 1: ${e?.detail || e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetLevel2 = async (p: any) => {
+    if (!confirm(`Are you sure you want to completely RESET Level 2 (Coding Assessment) for ${p.roll_number} (${p.name})?\n\nThis will clear their coding submissions, violations, and timer, letting them start Level 2 freshly.`)) return;
+    setLoading(true);
+    try {
+      const res = await apiFetch<any>(`/admin/participants/${p.id}/reset-level2`, { method: 'POST' });
+      alert(res.message || `Level 2 reset for ${p.roll_number}.`);
+      setMessage(res.message);
+      setSelectedParticipantForEmergency(null);
+      fetchParticipants();
+    } catch (e: any) {
+      alert(`Failed to reset Level 2: ${e?.detail || e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOverrideLevel2 = async (p: any) => {
+    if (!confirm(`Manually QUALIFY ${p.roll_number} (${p.name}) for Level 2 (Coding)?\n\nThis allows the student to immediately enter Level 2 even if they had a device issue in Level 1.`)) return;
+    setLoading(true);
+    try {
+      const res = await apiFetch<any>(`/admin/participants/${p.id}/override-level2-qualification`, { method: 'POST' });
+      alert(res.message || `${p.roll_number} qualified for Level 2.`);
+      setMessage(res.message);
+      setSelectedParticipantForEmergency(null);
+      fetchParticipants();
+    } catch (e: any) {
+      alert(`Failed to qualify for Level 2: ${e?.detail || e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAddOrganizer = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -820,7 +871,15 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                             {p.is_enabled ? 'Active' : 'Disabled'}
                           </button>
                         </td>
-                        <td className="py-2.5 px-3 text-right space-x-3">
+                        <td className="py-2.5 px-3 text-right space-x-2">
+                          <button
+                            onClick={() => setSelectedParticipantForEmergency(p)}
+                            className="px-2 py-0.5 bg-[#16233F] text-white rounded text-[10.5px] font-semibold hover:bg-[#25355B] transition-colors inline-flex items-center space-x-1"
+                            title="Emergency Technical Reset & Reassignment (Level 1, Level 2, or Direct Qualification)"
+                          >
+                            <span>⚙️</span>
+                            <span>Reassign / Fix</span>
+                          </button>
                           <button
                             onClick={() => handleResetPin(p.id, p.roll_number)}
                             className="text-[#16233F] hover:underline font-mono text-[11px]"
@@ -840,6 +899,123 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   </tbody>
                 </table>
               </div>
+
+              {/* Emergency Reassign / Technical Reset Modal */}
+              {selectedParticipantForEmergency && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-[6px] max-w-lg w-full p-6 shadow-2xl border border-[#DBD7C9] space-y-4 animate-in fade-in">
+                    <div className="border-b border-[#DBD7C9] pb-3 flex justify-between items-start">
+                      <div>
+                        <div className="text-[10px] font-mono uppercase tracking-wider text-[#A82A2A] font-bold">
+                          Emergency Operations &amp; Recovery
+                        </div>
+                        <h3 className="font-serif text-lg font-bold text-[#16233F]">
+                          {selectedParticipantForEmergency.roll_number} — {selectedParticipantForEmergency.name}
+                        </h3>
+                        <div className="text-xs text-[#59626F]">
+                          Year {selectedParticipantForEmergency.academic_year} · {selectedParticipantForEmergency.email}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setSelectedParticipantForEmergency(null)}
+                        className="text-[#8B93A0] hover:text-[#16233F] font-bold text-lg px-2"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <p className="text-xs text-[#59626F]">
+                      Use these recovery controls if the student experienced a power cut, system crash, or technical glitch during the contest.
+                    </p>
+
+                    <div className="space-y-3">
+                      {/* Action 1: Reset Level 1 */}
+                      <div className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-bold text-xs text-[#16233F] flex items-center space-x-1.5">
+                            <span>🔄 Reset Level 1 (MCQ)</span>
+                          </div>
+                          <p className="text-[11px] text-[#59626F] mt-0.5">
+                            Clears MCQ attempt, answers &amp; violations. Gives student a fresh 30-minute timer.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleResetLevel1(selectedParticipantForEmergency)}
+                          disabled={loading}
+                          className="px-3 py-1.5 bg-[#A82A2A] text-white font-semibold text-xs rounded hover:bg-[#8B2020] shrink-0 disabled:opacity-50"
+                        >
+                          Reset Level 1
+                        </button>
+                      </div>
+
+                      {/* Action 2: Reset Level 2 */}
+                      <div className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-bold text-xs text-[#16233F] flex items-center space-x-1.5">
+                            <span>💻 Reset Level 2 (Coding)</span>
+                          </div>
+                          <p className="text-[11px] text-[#59626F] mt-0.5">
+                            Clears Coding submissions, timer &amp; violations. Re-opens coding environment.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleResetLevel2(selectedParticipantForEmergency)}
+                          disabled={loading}
+                          className="px-3 py-1.5 bg-[#A82A2A] text-white font-semibold text-xs rounded hover:bg-[#8B2020] shrink-0 disabled:opacity-50"
+                        >
+                          Reset Level 2
+                        </button>
+                      </div>
+
+                      {/* Action 3: Force Qualify Level 2 */}
+                      <div className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-bold text-xs text-[#1E7E34] flex items-center space-x-1.5">
+                            <span>🏆 Direct Qualify for Level 2</span>
+                          </div>
+                          <p className="text-[11px] text-[#59626F] mt-0.5">
+                            Manually grants entry to Round 2 without requiring Level 1 score.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleOverrideLevel2(selectedParticipantForEmergency)}
+                          disabled={loading}
+                          className="px-3 py-1.5 bg-[#1E7E34] text-white font-semibold text-xs rounded hover:bg-[#166027] shrink-0 disabled:opacity-50"
+                        >
+                          Qualify for R2
+                        </button>
+                      </div>
+
+                      {/* Action 4: Reset Password */}
+                      <div className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-bold text-xs text-[#16233F]">
+                            🔑 Reset Password
+                          </div>
+                          <p className="text-[11px] text-[#59626F] mt-0.5">
+                            Resets login password back to Roll Number ({selectedParticipantForEmergency.roll_number}).
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleResetPin(selectedParticipantForEmergency.id, selectedParticipantForEmergency.roll_number)}
+                          className="px-3 py-1.5 bg-[#16233F] text-white font-semibold text-xs rounded hover:bg-[#25355B] shrink-0"
+                        >
+                          Reset Pass
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2 border-t border-[#DBD7C9]">
+                      <button
+                        onClick={() => setSelectedParticipantForEmergency(null)}
+                        className="px-4 py-1.5 border border-[#C6C1B0] rounded text-xs font-medium hover:bg-[#F6F6F2]"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Single Participant Modal */}
               {showAddPartModal && (
