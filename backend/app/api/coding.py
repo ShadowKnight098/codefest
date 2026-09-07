@@ -238,6 +238,19 @@ async def run_code(
     Executes code against sample/public test cases or custom input.
     Returns structured results and an authentic terminal output stream.
     """
+    # Ensure participant does not have a submitted or terminated attempt
+    att_res = await db.execute(
+        select(CodingAttempt).where(
+            CodingAttempt.participant_id == current_participant.id
+        ).order_by(CodingAttempt.started_at.desc())
+    )
+    current_attempt = att_res.scalar_one_or_none()
+    if current_attempt and current_attempt.status in ("SUBMITTED", "TERMINATED"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Assessment has already been submitted and finalized."
+        )
+
     prob_res = await db.execute(
         select(CodingProblem)
         .options(selectinload(CodingProblem.test_cases))

@@ -330,6 +330,36 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
     </div>
   );
 
+  if (isSubmitted && !submitResult) {
+    return (
+      <div className="min-h-screen bg-[#F6F6F2] flex items-center justify-center p-6 font-sans text-[#1B2029]">
+        <div className="bg-white border border-[#DBD7C9] rounded-[6px] max-w-md w-full p-8 text-center space-y-5 shadow-xl">
+          <div className="w-16 h-16 bg-[#E8F3EC] text-[#1E7A46] rounded-full flex items-center justify-center mx-auto text-3xl font-bold border border-[#BEDFCB]">
+            ✓
+          </div>
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-wider text-[#1E7A46] font-bold">
+              Assessment Completed
+            </div>
+            <h3 className="font-serif text-[24px] font-bold text-[#1B2029] mt-1">
+              Level 01 Already Submitted
+            </h3>
+            <p className="text-xs text-[#59626F] mt-2 leading-relaxed">
+              Your Level 1 MCQ assessment has been finalized and evaluated server-side. You cannot resume or re-enter this assessment.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onComplete(false)}
+            className="w-full py-3 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] transition-colors shadow-sm"
+          >
+            Return to Dashboard →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const answeredCount = questions.filter((q) => q.selected_option).length;
   const remainingCount = questions.length - answeredCount;
 

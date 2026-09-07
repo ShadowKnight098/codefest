@@ -94,17 +94,33 @@ def enhance_python_code(code: str) -> str:
     return f"{code}\n\n{WRAPPER_TEMPLATE}"
 
 def normalize_java_code(code: str) -> str:
-    """Ensures Java code has a public class Main and compiles properly without ClassNotFoundException."""
-    if "public class Main" in code:
-        return code
-    # If there is a public class with another name, rename it to Main
-    if re.search(r"public\s+class\s+(\w+)", code):
-        return re.sub(r"public\s+class\s+(\w+)", "public class Main", code, count=1)
-    # If there is a package-private class, make it public class Main
-    if re.search(r"\bclass\s+(\w+)", code):
-        return re.sub(r"\bclass\s+(\w+)", "public class Main", code, count=1)
-    # If no class wrapper exists at all
-    return f"import java.util.*;\nimport java.io.*;\n\npublic class Main {{\n{code}\n}}"
+    """
+    Ensures Java code compiles cleanly without ClassNotFoundException or import syntax errors.
+    Extracts all import statements to the top and ensures a public class Main wraps the logic.
+    """
+    # 1. Remove package declarations (competitive execution uses default package)
+    clean_code = re.sub(r'^\s*package\s+[^;]+;\s*', '', code, flags=re.MULTILINE)
+
+    # 2. Extract all import statements from anywhere in the source
+    raw_imports = re.findall(r'^\s*import\s+[^;]+;', clean_code, flags=re.MULTILINE)
+    import_set = set(imp.strip() for imp in raw_imports)
+    import_set.add('import java.util.*;')
+    import_set.add('import java.io.*;')
+
+    # Strip existing import statements from the code body so they don't end up inside a class
+    body = re.sub(r'^\s*import\s+[^;]+;\s*', '', clean_code, flags=re.MULTILINE).strip()
+
+    # 3. Check class definition
+    if re.search(r'public\s+class\s+(\w+)', body):
+        body = re.sub(r'public\s+class\s+(\w+)', 'public class Main', body, count=1)
+    elif re.search(r'\bclass\s+(\w+)', body):
+        body = re.sub(r'\bclass\s+(\w+)', 'public class Main', body, count=1)
+    else:
+        # No class wrapper exists, wrap body in public class Main
+        body = f'public class Main {{\n{body}\n}}'
+
+    imports_header = '\n'.join(sorted(import_set))
+    return f'{imports_header}\n\n{body}\n'
 
 def _execute_sync(
     source_code: str,

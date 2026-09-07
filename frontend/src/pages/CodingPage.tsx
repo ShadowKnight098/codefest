@@ -406,6 +406,57 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
     );
   }
 
+  if (attempt?.status === 'SUBMITTED' || attempt?.status === 'TERMINATED') {
+    return (
+      <div className="min-h-screen bg-[#F6F6F2] flex items-center justify-center p-6 font-sans text-[#1B2029]">
+        <div className="bg-white border border-[#DBD7C9] rounded-[6px] max-w-lg w-full p-8 text-center space-y-5 shadow-xl">
+          <div className="w-16 h-16 bg-[#E8F3EC] text-[#1E7A46] rounded-full flex items-center justify-center mx-auto text-3xl font-bold border border-[#BEDFCB]">
+            ✓
+          </div>
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-wider text-[#1E7A46] font-bold">
+              Assessment Completed
+            </div>
+            <h3 className="font-serif text-[24px] font-bold text-[#1B2029] mt-1">
+              Level 02 Already Submitted
+            </h3>
+            <p className="text-xs text-[#59626F] mt-1.5 leading-relaxed">
+              Your Level 2 coding assessment has been finalized and recorded. You cannot resume or re-enter the live workspace.
+            </p>
+          </div>
+
+          <div className="bg-[#F6F6F2] p-4 rounded-[4px] border border-[#DBD7C9] text-left space-y-2 text-xs">
+            {attempt?.problems?.map((p: any, idx: number) => (
+              <div key={p.id} className="flex justify-between items-center py-1.5 border-b border-[#DBD7C9]/60">
+                <span className="text-[#59626F] font-medium">Problem {idx + 1} ({p.title}):</span>
+                <span className="font-mono font-bold text-[#16233F]">
+                  {problemScores[p.id] || 0} / {p.marks} Marks
+                </span>
+              </div>
+            ))}
+            <div className="flex justify-between items-center pt-2 font-bold text-sm">
+              <span>Total Score Achieved:</span>
+              <span className="font-mono text-[#1E7A46]">
+                {attempt?.problems?.reduce((acc: number, p: any) => acc + (problemScores[p.id] || 0), 0) || 0} Marks
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (onComplete) onComplete();
+              else window.location.href = '/dashboard';
+            }}
+            className="w-full py-3 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] transition-colors shadow-sm"
+          >
+            Return to Dashboard →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (errorMessage) {
     return (
       <div className="min-h-screen bg-[#F6F6F2] flex items-center justify-center p-6">
