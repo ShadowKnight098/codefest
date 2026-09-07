@@ -251,8 +251,8 @@ Every value below **must be computed server-side from the database** on every re
 | Date | Milestone / Component | Author | Status | Notes |
 | :---: | :--- | :---: | :---: | :--- |
 | **2026-09-05** | Tracking Document Created | Antigravity | `COMPLETED` | Built comprehensive tracking system from `architecture.md`, `design.md`, and `implement.md`. |
-| **2026-09-05** | Phase 1 Foundation Scaffolding | Antigravity | `COMPLETED` | FastAPI backend + SQLite/Supabase models + Vite React TS Tailwind setup with design tokens. |
-| **2026-09-05** | Slice 1 (Auth & Dashboard) | Antigravity | `COMPLETED` | bcrypt PIN auth, HTTP-only session cookies, server state machine, Login & Dashboard UI tested and verified. |
-| **2026-09-05** | UI Spec Rebuild & Polish | Antigravity | `COMPLETED` | Rebuilt Login (44/56% two-column, Spectral serif, IBM Plex) & Dashboard (8-state matrix, credential strip, dev preview switcher) per exact UI spec. |
+| **2026-09-05** | Phase 1 Foundation Scaffolding | vaseem | `COMPLETED` | FastAPI backend + SQLite/Supabase models + Vite React TS Tailwind setup with design tokens. |
+| **2026-09-05** | Slice 1 (Auth & Dashboard) | vaseem | `COMPLETED` | bcrypt PIN auth, HTTP-only session cookies, server state machine, Login & Dashboard UI tested and verified. |
+| **2026-09-05** | UI Spec Rebuild & Polish | vaseem | `COMPLETED` | Rebuilt Login (44/56% two-column, Spectral serif, IBM Plex) & Dashboard (8-state matrix, credential strip, dev preview switcher) per exact UI spec. |
 | *Upcoming* | Slice 2: MCQ Assessment | Antigravity | `READY` | 3-panel UI, 25-question randomized persisted pool, autosave endpoint, server timer. |
 
