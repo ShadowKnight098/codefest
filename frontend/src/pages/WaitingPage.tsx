@@ -27,7 +27,7 @@ export const WaitingPage: React.FC<WaitingPageProps> = ({
     };
 
     checkState();
-    const interval = setInterval(checkState, 6000);
+    const interval = setInterval(checkState, 10000);
     return () => clearInterval(interval);
   }, [onLevel2Opened, onReturnToDashboard]);
 

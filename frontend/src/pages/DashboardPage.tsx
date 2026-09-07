@@ -146,7 +146,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
 
   useEffect(() => {
     fetchState();
-    const interval = setInterval(fetchState, 15000);
+    const interval = setInterval(fetchState, 10000);
     return () => clearInterval(interval);
   }, []);
 

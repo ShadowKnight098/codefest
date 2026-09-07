@@ -266,12 +266,12 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     refreshActiveTab();
   }, [activeTab, yearFilter, search, qYearFilter, isSuperAdmin]);
 
-  // Periodic Live Auto-Sync
+  // Periodic Live Auto-Sync (10 seconds to optimize server load)
   useEffect(() => {
     if (!autoSync) return;
     const interval = setInterval(() => {
       refreshActiveTab();
-    }, 5000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [autoSync, activeTab, yearFilter, search, qYearFilter, isSuperAdmin]);
 
@@ -620,10 +620,10 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                 ? 'bg-[#3FB950]/20 text-[#3FB950] border-[#3FB950]/50'
                 : 'bg-white/10 text-white/60 border-white/20 hover:text-white'
             }`}
-            title="Toggle 5-second automatic data synchronization"
+            title="Toggle 10-second automatic data synchronization"
           >
             <span className={`w-2 h-2 rounded-full ${autoSync ? 'bg-[#3FB950] animate-pulse' : 'bg-white/40'}`} />
-            <span>{autoSync ? 'Live Sync (5s)' : 'Sync Off'}</span>
+            <span>{autoSync ? 'Live Sync (10s)' : 'Sync Off'}</span>
           </button>
 
           <button
@@ -1742,7 +1742,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-[#16233F]">📊 Live Leaderboard</h2>
-                  <p className="text-xs text-[#59626F]">Live verified rankings — auto-refreshes every 5 seconds</p>
+                  <p className="text-xs text-[#59626F]">Live verified rankings — auto-refreshes every 10 seconds</p>
                 </div>
                 <div className="flex items-center space-x-2">
                   <button
