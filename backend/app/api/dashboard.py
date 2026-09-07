@@ -12,6 +12,7 @@ from app.api.deps import get_current_participant
 from app.schemas.dashboard import (
     DashboardStateResponse, ParticipantState, RoundInfo, ResultSummary
 )
+from app.core.cache import memory_cache
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -26,46 +27,60 @@ async def get_dashboard_state(
     """
     participant_id = current_participant.id
 
-    # 1. Fetch Rounds
-    rounds_res = await db.execute(select(Round).order_by(Round.round_number.asc()))
-    rounds = rounds_res.scalars().all()
-    round_1 = next((r for r in rounds if r.round_number == 1), None)
-    round_2 = next((r for r in rounds if r.round_number == 2), None)
+    # 1. Fetch Rounds (with in-memory cache)
+    cached_rounds = memory_cache.get("all_rounds_dict")
+    if cached_rounds is None:
+        rounds_res = await db.execute(select(Round).order_by(Round.round_number.asc()))
+        rounds = rounds_res.scalars().all()
+        cached_rounds = [
+            {
+                "id": r.id,
+                "round_number": r.round_number,
+                "name": r.name,
+                "is_open": r.is_open,
+                "duration_minutes": r.duration_minutes
+            }
+            for r in rounds
+        ]
+        memory_cache.set("all_rounds_dict", cached_rounds, ttl_seconds=3.0)
+
+    round_1_dict = next((r for r in cached_rounds if r["round_number"] == 1), None)
+    round_2_dict = next((r for r in cached_rounds if r["round_number"] == 2), None)
 
     round_1_info = RoundInfo(
-        round_id=round_1.id,
+        round_id=round_1_dict["id"],
         round_number=1,
-        name=round_1.name,
-        is_open=round_1.is_open,
-        duration_minutes=round_1.duration_minutes
-    ) if round_1 else None
+        name=round_1_dict["name"],
+        is_open=round_1_dict["is_open"],
+        duration_minutes=round_1_dict["duration_minutes"]
+    ) if round_1_dict else None
 
     round_2_info = RoundInfo(
-        round_id=round_2.id,
+        round_id=round_2_dict["id"],
         round_number=2,
-        name=round_2.name,
-        is_open=round_2.is_open,
-        duration_minutes=round_2.duration_minutes
-    ) if round_2 else None
+        name=round_2_dict["name"],
+        is_open=round_2_dict["is_open"],
+        duration_minutes=round_2_dict["duration_minutes"]
+    ) if round_2_dict else None
 
     # 2. Check MCQ Attempt (Round 1)
     mcq_attempt = None
-    if round_1:
+    if round_1_dict:
         att_res = await db.execute(
             select(MCQAttempt).where(
                 MCQAttempt.participant_id == participant_id,
-                MCQAttempt.round_id == round_1.id
+                MCQAttempt.round_id == round_1_dict["id"]
             )
         )
         mcq_attempt = att_res.scalar_one_or_none()
 
     # 3. Check Coding Attempt (Round 2)
     coding_attempt = None
-    if round_2:
+    if round_2_dict:
         c_att_res = await db.execute(
             select(CodingAttempt).where(
                 CodingAttempt.participant_id == participant_id,
-                CodingAttempt.round_id == round_2.id
+                CodingAttempt.round_id == round_2_dict["id"]
             )
         )
         coding_attempt = c_att_res.scalar_one_or_none()

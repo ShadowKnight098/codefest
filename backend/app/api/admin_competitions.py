@@ -9,6 +9,7 @@ from app.schemas.admin import (
     RoundCreate, RoundUpdate, RoundResponse
 )
 from app.api.deps import get_current_admin
+from app.core.cache import memory_cache
 
 router = APIRouter(prefix="/admin", tags=["Admin Competitions & Rounds"])
 
@@ -91,6 +92,7 @@ async def create_round(
     db.add(r)
     await db.commit()
     await db.refresh(r)
+    memory_cache.delete("all_rounds_dict")
     return r
 
 @router.put("/rounds/{round_id}", response_model=RoundResponse)
@@ -117,4 +119,5 @@ async def update_round(
 
     await db.commit()
     await db.refresh(r)
+    memory_cache.delete("all_rounds_dict")
     return r

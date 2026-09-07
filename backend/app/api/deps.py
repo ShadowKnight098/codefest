@@ -5,6 +5,7 @@ from app.db.session import get_db
 from app.db.models import Participant
 from app.core.config import settings
 from app.core.security import decode_session_token
+from app.core.cache import memory_cache
 
 async def get_current_participant(
     request: Request,
@@ -35,6 +36,15 @@ async def get_current_participant(
         )
 
     participant_id = payload["sub"]
+    cached_p = memory_cache.get(f"part:{participant_id}")
+    if cached_p is not None:
+        if not cached_p.is_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account has been disabled by the competition administrator."
+            )
+        return cached_p
+
     result = await db.execute(select(Participant).where(Participant.id == participant_id))
     participant = result.scalar_one_or_none()
 
@@ -50,6 +60,7 @@ async def get_current_participant(
             detail="Account has been disabled by the competition administrator."
         )
 
+    memory_cache.set(f"part:{participant_id}", participant, ttl_seconds=15.0)
     return participant
 
 
