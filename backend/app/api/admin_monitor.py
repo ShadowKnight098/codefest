@@ -107,10 +107,11 @@ async def get_leaderboard(
         mcq_s = mcq_data[0] if mcq_data else None
         mcq_q = mcq_data[1] if mcq_data else None
 
-        if coding_data is not None:
-            code_s = coding_data[0]
-        elif p.id in live_coding_scores:
-            code_s = live_coding_scores[p.id]
+        rr_code_score = coding_data[0] if coding_data is not None else None
+        live_code_score = live_coding_scores.get(p.id)
+        
+        if rr_code_score is not None or live_code_score is not None:
+            code_s = max(rr_code_score or 0, live_code_score or 0)
         elif p.id in coding_att_parts:
             code_s = 0
         else:

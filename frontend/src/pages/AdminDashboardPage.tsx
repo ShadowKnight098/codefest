@@ -206,8 +206,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
       const data = await apiFetch<any[]>('/admin/monitor/leaderboard');
       // Round 2 winners / finalists = those with coding_score !== null or who qualified from Round 1
       const r2 = (Array.isArray(data) ? data : [])
-        .filter((e: any) => e.coding_score !== null || (e.mcq_qualified && (e.total_score > 0 || e.mcq_score !== null)))
-        .sort((a: any, b: any) => ((b.total_score || 0) - (a.total_score || 0)) || ((b.coding_score || 0) - (a.coding_score || 0)) || ((a.violations || 0) - (b.violations || 0)))
+        .filter((e: any) => e.coding_score !== null || e.mcq_qualified)
+        .sort((a: any, b: any) => ((b.coding_score || 0) - (a.coding_score || 0)) || ((b.total_score || 0) - (a.total_score || 0)) || ((a.violations || 0) - (b.violations || 0)))
         .map((e: any, i: number) => ({ ...e, r2_rank: i + 1 }));
       setWinners2(r2);
     } catch (e) {
@@ -2366,9 +2366,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <div className="font-bold text-[#16233F] text-sm">{w?.name}</div>
                       <div className="text-[11px] text-[#59626F] font-mono">{w?.roll_number}</div>
                       <div className="text-xl font-bold font-mono text-[#16233F] mt-2">
-                        {w?.total_score}<span className="text-sm text-[#8B93A0]"> pts</span>
+                        {w?.coding_score ?? 0}<span className="text-sm text-[#8B93A0]"> / 60 pts (Code)</span>
                       </div>
-                      <div className="text-[10px] text-[#59626F] mt-0.5">MCQ: {w?.mcq_score}/25 · Code: {w?.coding_score}</div>
+                      <div className="text-[10px] text-[#59626F] mt-0.5">MCQ: {w?.mcq_score}/25 · Total: {w?.total_score}</div>
                     </div>
                   ))}
                 </div>

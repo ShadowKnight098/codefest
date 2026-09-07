@@ -6,7 +6,7 @@ from typing import Optional
 from app.db.session import get_db
 from app.db.models import (
     Participant, Round, MCQAttempt, CodingAttempt, 
-    RoundResult, SecurityEvent
+    RoundResult, SecurityEvent, CodingSubmission
 )
 from app.api.deps import get_current_participant
 from app.schemas.dashboard import (
@@ -95,13 +95,44 @@ async def get_dashboard_state(
         )
         violations_count = v_res.scalar_one() or 0
 
-    # 5. Check Results
+    # 5. Check Results & Compute Real-Time Coding Scores
     results_res = await db.execute(
         select(RoundResult).where(RoundResult.participant_id == participant_id)
     )
     all_results = results_res.scalars().all()
     r1_result = next((r for r in all_results if round_1_dict and r.round_id == round_1_dict["id"]), None)
     r2_result = next((r for r in all_results if round_2_dict and r.round_id == round_2_dict["id"]), None)
+
+    # Real-time aggregation of coding submissions
+    coding_score_live = 0
+    if coding_attempt:
+        sub_res = await db.execute(
+            select(func.max(CodingSubmission.score))
+            .where(CodingSubmission.attempt_id == coding_attempt.id)
+            .group_by(CodingSubmission.problem_id)
+        )
+        coding_score_live = sum(row[0] or 0 for row in sub_res.all())
+
+        # Self-heal RoundResult so leaderboard and dashboard always have authoritative scores
+        if round_2_dict:
+            eff_score = max(r2_result.score if r2_result else 0, coding_score_live)
+            is_done = (coding_attempt.status == "SUBMITTED")
+            if not r2_result:
+                r2_result = RoundResult(
+                    participant_id=participant_id,
+                    round_id=round_2_dict["id"],
+                    score=eff_score,
+                    is_qualified=is_done
+                )
+                db.add(r2_result)
+                await db.commit()
+                await db.refresh(r2_result)
+            elif eff_score > r2_result.score or (is_done and not r2_result.is_qualified):
+                r2_result.score = eff_score
+                if is_done:
+                    r2_result.is_qualified = True
+                await db.commit()
+                await db.refresh(r2_result)
 
     l1_summary = ResultSummary(
         round_number=1,
@@ -113,11 +144,11 @@ async def get_dashboard_state(
 
     l2_summary = ResultSummary(
         round_number=2,
-        score=r2_result.score,
-        total_marks=60, # 3 problems * 20 marks
-        is_qualified=r2_result.is_qualified,
-        status_label="Completed"
-    ) if r2_result else None
+        score=r2_result.score if r2_result else coding_score_live,
+        total_marks=60, # 2 problems: 20 + 40 marks
+        is_qualified=r2_result.is_qualified if r2_result else (coding_attempt and coding_attempt.status == "SUBMITTED"),
+        status_label="Completed" if (coding_attempt and coding_attempt.status == "SUBMITTED") else ("In Progress" if coding_attempt else "Locked")
+    ) if (r2_result or coding_attempt) else None
 
     # 6. Evaluate State Machine (per architecture.md §4)
     # Check if Terminated
