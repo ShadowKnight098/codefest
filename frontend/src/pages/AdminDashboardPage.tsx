@@ -76,6 +76,16 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     ]
   });
 
+  // Test Case management state
+  const [showAddTestCaseModal, setShowAddTestCaseModal] = useState(false);
+  const [selectedProblemForTestCase, setSelectedProblemForTestCase] = useState<any>(null);
+  const [newTestCase, setNewTestCase] = useState({
+    input_data: '',
+    expected_output: '',
+    is_hidden: false,
+    order_num: 1,
+  });
+
   // Settings tab state
   const [settingsList, setSettingsList] = useState<any[]>([]);
 
@@ -350,6 +360,36 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     if (!confirm('Are you sure you want to delete this problem?')) return;
     try {
       await apiFetch(`/admin/coding-problems/${id}`, { method: 'DELETE' });
+      fetchProblems();
+    } catch (e: any) {
+      alert(`Delete failed: ${e?.detail || e.message}`);
+    }
+  };
+
+  const handleAddTestCase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProblemForTestCase) return;
+    setLoading(true);
+    try {
+      await apiFetch(`/admin/coding-problems/${selectedProblemForTestCase.id}/test-cases`, {
+        method: 'POST',
+        body: JSON.stringify(newTestCase),
+      });
+      setMessage(`Test case added to "${selectedProblemForTestCase.title}".`);
+      setShowAddTestCaseModal(false);
+      setNewTestCase({ input_data: '', expected_output: '', is_hidden: false, order_num: 1 });
+      fetchProblems();
+    } catch (e: any) {
+      setMessage(`Failed to add test case: ${e?.detail || e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteTestCase = async (testCaseId: string, probTitle: string) => {
+    if (!confirm(`Delete test case from "${probTitle}"?`)) return;
+    try {
+      await apiFetch(`/admin/coding-problems/test-cases/${testCaseId}`, { method: 'DELETE' });
       fetchProblems();
     } catch (e: any) {
       alert(`Delete failed: ${e?.detail || e.message}`);
@@ -1067,55 +1107,146 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-[#16233F]">Coding Problem Manager</h2>
-                  <p className="text-xs text-[#59626F]">Add, edit, or configure coding challenges and hidden test cases</p>
+                  <h2 className="text-lg font-bold text-[#16233F]">Coding Problem &amp; Test Case Manager</h2>
+                  <p className="text-xs text-[#59626F]">Add, edit, or configure coding challenges, public sample test cases, and authoritative hidden evaluation test cases.</p>
                 </div>
                 <button
                   onClick={() => setShowAddProbModal(true)}
-                  className="px-3 py-1.5 bg-[#16233F] text-white text-xs font-semibold rounded-[3px]"
+                  className="px-3.5 py-1.5 bg-[#16233F] text-white text-xs font-semibold rounded-[3px] hover:bg-[#25355B]"
                 >
-                  + Add Problem
+                  + Add New Problem
                 </button>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {problems.map((p) => (
-                  <div key={p.id} className="bg-white border border-[#DBD7C9] rounded-[4px] p-5 text-xs space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <span className="font-mono font-bold text-sm text-[#16233F]">P{p.order_num}: {p.title}</span>
-                        <span className="px-2 py-0.5 bg-[#EEF1F6] text-[#16233F] font-mono rounded text-[10px]">
-                          {p.marks} Marks
+                  <div key={p.id} className="bg-white border border-[#DBD7C9] rounded-[6px] p-5 text-xs space-y-4 shadow-sm">
+                    <div className="flex items-center justify-between border-b border-[#DBD7C9] pb-3">
+                      <div className="flex items-center space-x-2.5">
+                        <span className="font-mono font-bold text-sm text-[#16233F] bg-[#EEF1F6] px-2 py-0.5 rounded-[3px]">
+                          P{p.order_num}
+                        </span>
+                        <span className="font-serif font-bold text-base text-[#16233F]">{p.title}</span>
+                        <span className={`px-2 py-0.5 font-mono rounded text-[10px] font-bold uppercase ${
+                          p.order_num === 1 ? 'bg-[#E8F3EC] text-[#1E7A46]' : 'bg-[#FDEDEC] text-[#C0392B]'
+                        }`}>
+                          {p.marks} Marks · {p.order_num === 1 ? 'EASY' : 'HARD'}
+                        </span>
+                        <span className="text-[11px] font-mono text-[#8B93A0]">
+                          Time Limit: {p.time_limit_ms}ms · RAM: {p.memory_limit_mb}MB
                         </span>
                       </div>
-                      <button
-                        onClick={() => handleDeleteProblem(p.id)}
-                        className="text-[#A82A2A] hover:underline"
-                      >
-                        Delete Problem
-                      </button>
+
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => {
+                            setSelectedProblemForTestCase(p);
+                            setNewTestCase({
+                              input_data: '',
+                              expected_output: '',
+                              is_hidden: false,
+                              order_num: (p.test_cases?.length || 0) + 1,
+                            });
+                            setShowAddTestCaseModal(true);
+                          }}
+                          className="px-3 py-1 bg-[#1E7E34] text-white font-semibold text-xs rounded-[3px] hover:bg-[#166027] transition-colors flex items-center space-x-1"
+                        >
+                          <span>+ Add Test Case</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProblem(p.id)}
+                          className="px-2.5 py-1 text-[#A82A2A] hover:bg-[#FDEDEC] rounded-[3px] transition-colors font-medium text-xs"
+                        >
+                          Delete Problem
+                        </button>
+                      </div>
                     </div>
 
-                    <p className="text-[#59626F] whitespace-pre-line">{p.description}</p>
-
                     <div>
-                      <h4 className="font-bold text-[#16233F] font-mono uppercase text-[10px] mb-1">
-                        Test Cases ({p.test_cases?.length || 0})
-                      </h4>
-                      <div className="grid grid-cols-2 gap-2">
-                        {p.test_cases?.map((tc: any, i: number) => (
-                          <div key={tc.id} className="p-2 bg-[#F6F6F2] border border-[#DBD7C9] rounded-[3px]">
-                            <div className="flex justify-between font-mono text-[10px] font-bold text-[#59626F]">
-                              <span>Case {i + 1}</span>
-                              <span className={tc.is_hidden ? 'text-[#A82A2A]' : 'text-[#1E7E34]'}>
-                                {tc.is_hidden ? 'HIDDEN' : 'PUBLIC'}
-                              </span>
-                            </div>
-                            <div className="font-mono text-[10px] text-[#16233F] mt-1">In: {tc.input_data}</div>
-                            <div className="font-mono text-[10px] text-[#16233F]">Out: {tc.expected_output}</div>
-                          </div>
-                        ))}
+                      <div className="font-mono text-[10px] uppercase font-bold text-[#59626F] mb-1">Description:</div>
+                      <p className="text-[#1B2029] whitespace-pre-line bg-[#F6F6F2] p-3 rounded-[3px] border border-[#DBD7C9]/60 leading-relaxed">
+                        {p.description}
+                      </p>
+                    </div>
+
+                    {p.constraints && (
+                      <div>
+                        <div className="font-mono text-[10px] uppercase font-bold text-[#59626F] mb-1">Constraints:</div>
+                        <pre className="text-[#59626F] font-mono text-[11px] bg-[#F6F6F2] p-2.5 rounded-[3px] border border-[#DBD7C9]/60 whitespace-pre-wrap">
+                          {p.constraints}
+                        </pre>
                       </div>
+                    )}
+
+                    {/* Test Cases Section */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-bold text-[#16233F] font-mono uppercase text-[11px] flex items-center space-x-1.5">
+                          <span>Test Cases ({p.test_cases?.length || 0})</span>
+                          <span className="text-[#8B93A0] font-normal normal-case text-[11px]">
+                            ({p.test_cases?.filter((tc: any) => !tc.is_hidden).length || 0} Public Sample, {p.test_cases?.filter((tc: any) => tc.is_hidden).length || 0} Hidden)
+                          </span>
+                        </h4>
+                      </div>
+
+                      {p.test_cases && p.test_cases.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {p.test_cases.map((tc: any, i: number) => (
+                            <div
+                              key={tc.id}
+                              className={`p-3 rounded-[4px] border transition-all ${
+                                tc.is_hidden
+                                  ? 'bg-[#FCF9F9] border-[#E8D2D2]'
+                                  : 'bg-[#F9FCFA] border-[#D0E5D7]'
+                              }`}
+                            >
+                              <div className="flex justify-between items-center mb-2">
+                                <div className="flex items-center space-x-2">
+                                  <span className="font-mono text-[11px] font-bold text-[#16233F]">
+                                    Case #{i + 1}
+                                  </span>
+                                  <span
+                                    className={`px-1.5 py-0.2 rounded font-mono text-[9.5px] font-bold uppercase ${
+                                      tc.is_hidden
+                                        ? 'bg-[#FDEDEC] text-[#C0392B] border border-[#F5B7B1]'
+                                        : 'bg-[#E8F3EC] text-[#1E7A46] border border-[#A9DFBF]'
+                                    }`}
+                                  >
+                                    {tc.is_hidden ? '🔒 Hidden Case' : '👁 Public Sample'}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteTestCase(tc.id, p.title)}
+                                  className="text-[#A82A2A] hover:bg-[#FDEDEC] px-1.5 py-0.5 rounded text-[11px] font-semibold"
+                                  title="Delete Test Case"
+                                >
+                                  ✕ Delete
+                                </button>
+                              </div>
+
+                              <div className="space-y-1.5 font-mono text-[11px]">
+                                <div>
+                                  <span className="text-[10px] text-[#59626F] block uppercase font-bold">Standard Input (stdin):</span>
+                                  <pre className="bg-white p-1.5 border border-[#DBD7C9] rounded text-[#16233F] overflow-x-auto max-h-20">
+                                    {tc.input_data || '(empty input)'}
+                                  </pre>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-[#59626F] block uppercase font-bold">Expected Output (stdout):</span>
+                                  <pre className="bg-white p-1.5 border border-[#DBD7C9] rounded text-[#1E7A46] font-bold overflow-x-auto max-h-20">
+                                    {tc.expected_output}
+                                  </pre>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-[#F6F6F2] border border-[#DBD7C9] rounded text-center text-[#59626F] italic">
+                          No test cases added yet. Click "+ Add Test Case" to create public samples and hidden test cases.
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1123,50 +1254,200 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
 
               {/* Add Problem Modal */}
               {showAddProbModal && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-                  <div className="bg-white border border-[#DBD7C9] rounded-[4px] p-6 max-w-lg w-full text-xs space-y-3">
-                    <h3 className="text-sm font-bold text-[#16233F]">Add Coding Problem</h3>
-                    <form onSubmit={handleAddProblem} className="space-y-2">
-                      <div>
-                        <label className="block text-[10px] text-[#59626F] font-bold">Title</label>
-                        <input
-                          value={newProb.title}
-                          onChange={(e) => setNewProb({ ...newProb, title: e.target.value })}
-                          className="w-full border border-[#C6C1B0] p-1 rounded"
-                          required
-                        />
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                  <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-6 max-w-lg w-full text-xs space-y-4 shadow-xl">
+                    <div className="border-b border-[#DBD7C9] pb-2">
+                      <h3 className="text-sm font-bold text-[#16233F]">Create New Coding Problem</h3>
+                      <p className="text-[11px] text-[#59626F]">Add a new Level 2 programming challenge</p>
+                    </div>
+
+                    <form onSubmit={handleAddProblem} className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Problem Title</label>
+                          <input
+                            value={newProb.title}
+                            onChange={(e) => setNewProb({ ...newProb, title: e.target.value })}
+                            placeholder="e.g. Valid Palindrome"
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Marks</label>
+                            <input
+                              type="number"
+                              value={newProb.marks}
+                              onChange={(e) => setNewProb({ ...newProb, marks: Number(e.target.value) })}
+                              className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Order #</label>
+                            <input
+                              type="number"
+                              value={newProb.order_num}
+                              onChange={(e) => setNewProb({ ...newProb, order_num: Number(e.target.value) })}
+                              className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                              required
+                            />
+                          </div>
+                        </div>
                       </div>
+
                       <div>
-                        <label className="block text-[10px] text-[#59626F] font-bold">Description</label>
+                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Problem Description</label>
                         <textarea
                           value={newProb.description}
                           onChange={(e) => setNewProb({ ...newProb, description: e.target.value })}
-                          className="w-full border border-[#C6C1B0] p-1 rounded h-20"
+                          placeholder="Describe the task and expected logic..."
+                          className="w-full border border-[#C6C1B0] p-2 rounded h-24 font-sans text-xs"
                           required
                         />
                       </div>
+
                       <div>
-                        <label className="block text-[10px] text-[#59626F] font-bold">Constraints</label>
-                        <input
+                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Constraints &amp; Limits</label>
+                        <textarea
                           value={newProb.constraints}
                           onChange={(e) => setNewProb({ ...newProb, constraints: e.target.value })}
-                          className="w-full border border-[#C6C1B0] p-1 rounded"
+                          placeholder="1 <= N <= 10^5&#10;Time Limit: 2000ms"
+                          className="w-full border border-[#C6C1B0] p-2 rounded h-16 font-mono text-xs"
                         />
                       </div>
 
-                      <div className="flex justify-end space-x-2 pt-2">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Time Limit (ms)</label>
+                          <input
+                            type="number"
+                            value={newProb.time_limit_ms}
+                            onChange={(e) => setNewProb({ ...newProb, time_limit_ms: Number(e.target.value) })}
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Memory Limit (MB)</label>
+                          <input
+                            type="number"
+                            value={newProb.memory_limit_mb}
+                            onChange={(e) => setNewProb({ ...newProb, memory_limit_mb: Number(e.target.value) })}
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end space-x-2 pt-3 border-t border-[#DBD7C9]">
                         <button
                           type="button"
                           onClick={() => setShowAddProbModal(false)}
-                          className="px-3 py-1 border border-[#C6C1B0] rounded"
+                          className="px-3.5 py-1.5 border border-[#C6C1B0] rounded text-xs hover:bg-[#F6F6F2]"
                         >
                           Cancel
                         </button>
                         <button
                           type="submit"
-                          className="px-3 py-1 bg-[#16233F] text-white rounded font-semibold"
+                          className="px-4 py-1.5 bg-[#16233F] text-white rounded text-xs font-semibold hover:bg-[#25355B]"
                         >
                           Create Problem
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Add Test Case Modal */}
+              {showAddTestCaseModal && selectedProblemForTestCase && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                  <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-6 max-w-lg w-full text-xs space-y-4 shadow-xl animate-in fade-in zoom-in-95">
+                    <div className="border-b border-[#DBD7C9] pb-2">
+                      <div className="text-[10.5px] font-mono uppercase font-bold text-[#1E7E34]">
+                        P{selectedProblemForTestCase.order_num}: {selectedProblemForTestCase.title}
+                      </div>
+                      <h3 className="text-sm font-bold text-[#16233F]">Add Test Case</h3>
+                    </div>
+
+                    <form onSubmit={handleAddTestCase} className="space-y-3">
+                      <div>
+                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">
+                          Standard Input (stdin)
+                        </label>
+                        <textarea
+                          rows={4}
+                          value={newTestCase.input_data}
+                          onChange={(e) => setNewTestCase({ ...newTestCase, input_data: e.target.value })}
+                          placeholder="e.g. 2,7,11,15|9"
+                          className="w-full border border-[#C6C1B0] p-2 rounded font-mono text-xs focus:outline-none focus:border-[#16233F]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">
+                          Expected Output (stdout)
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={newTestCase.expected_output}
+                          onChange={(e) => setNewTestCase({ ...newTestCase, expected_output: e.target.value })}
+                          placeholder="e.g. 0,1"
+                          required
+                          className="w-full border border-[#C6C1B0] p-2 rounded font-mono text-xs focus:outline-none focus:border-[#16233F]"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Order #</label>
+                          <input
+                            type="number"
+                            value={newTestCase.order_num}
+                            onChange={(e) => setNewTestCase({ ...newTestCase, order_num: Number(e.target.value) })}
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded font-mono"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Visibility Type</label>
+                          <div className="flex items-center space-x-4 pt-1">
+                            <label className="flex items-center space-x-1.5 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="is_hidden"
+                                checked={!newTestCase.is_hidden}
+                                onChange={() => setNewTestCase({ ...newTestCase, is_hidden: false })}
+                              />
+                              <span className="font-semibold text-[#1E7A46]">Public Sample</span>
+                            </label>
+                            <label className="flex items-center space-x-1.5 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="is_hidden"
+                                checked={newTestCase.is_hidden}
+                                onChange={() => setNewTestCase({ ...newTestCase, is_hidden: true })}
+                              />
+                              <span className="font-semibold text-[#C0392B]">Hidden Case</span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end space-x-2 pt-3 border-t border-[#DBD7C9]">
+                        <button
+                          type="button"
+                          onClick={() => setShowAddTestCaseModal(false)}
+                          className="px-3.5 py-1.5 border border-[#C6C1B0] rounded text-xs hover:bg-[#F6F6F2]"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="px-4 py-1.5 bg-[#1E7E34] text-white rounded text-xs font-semibold hover:bg-[#166027] disabled:opacity-50"
+                        >
+                          {loading ? 'Saving…' : 'Save Test Case'}
                         </button>
                       </div>
                     </form>
