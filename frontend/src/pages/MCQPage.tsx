@@ -47,12 +47,43 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
   const [isFullscreen, setIsFullscreen] = useState<boolean>(!!document.fullscreenElement);
   const attemptIdRef = useRef<string>('');
   const saveTimeoutRef = useRef<number | null>(null);
+  const pendingSaveRef = useRef<{ attempt_id: string; question_id: string; option: string } | null>(null);
+  const debounceTimerRef = useRef<number | null>(null);
 
   const showToast = (msg: string) => {
     setSecurityToast(msg);
     setTimeout(() => setSecurityToast(null), 3500);
     if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {});
+    }
+  };
+
+  const flushPendingSave = async () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (pendingSaveRef.current) {
+      const payload = pendingSaveRef.current;
+      pendingSaveRef.current = null;
+      try {
+        await apiFetch('/api/mcq/answer', {
+          method: 'POST',
+          body: JSON.stringify({
+            attempt_id: payload.attempt_id,
+            question_id: payload.question_id,
+            selected_option: payload.option,
+          }),
+        });
+        setAutosaveState('saved');
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = window.setTimeout(() => {
+          setAutosaveState('idle');
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to save answer:', err);
+        setAutosaveState('error');
+      }
     }
   };
 
@@ -176,53 +207,51 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
 
   const currentQ = questions[currentIndex];
 
-  // 2. Autosave answer selection
-  const handleSelectOption = async (option: 'A' | 'B' | 'C' | 'D') => {
+  // 2. Debounced Autosave answer selection
+  const handleSelectOption = (option: 'A' | 'B' | 'C' | 'D') => {
     if (!currentQ || isSubmitted) return;
 
-    // Optimistic update
+    // 1. Instant optimistic UI update
     const updated = [...questions];
     updated[currentIndex] = { ...currentQ, selected_option: option };
     setQuestions(updated);
-
     setAutosaveState('saving');
-    try {
-      await apiFetch('/api/mcq/answer', {
-        method: 'POST',
-        body: JSON.stringify({
-          attempt_id: attemptId,
-          question_id: currentQ.question_id,
-          selected_option: option,
-        }),
-      });
 
-      setAutosaveState('saved');
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = window.setTimeout(() => {
-        setAutosaveState('idle');
-      }, 2000);
-    } catch (err) {
-      console.error('Failed to save answer:', err);
-      setAutosaveState('error');
+    // 2. Buffer pending payload
+    pendingSaveRef.current = {
+      attempt_id: attemptId || attemptIdRef.current,
+      question_id: currentQ.question_id,
+      option,
+    };
+
+    // 3. Debounce network dispatch by 400ms
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
+    debounceTimerRef.current = window.setTimeout(async () => {
+      await flushPendingSave();
+    }, 400);
   };
 
-  // 3. Navigation
-  const handleNext = () => {
+  // 3. Navigation (flushes any pending debounced save first)
+  const handleNext = async () => {
+    await flushPendingSave();
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(currentIndex + 1);
       setAutosaveState('idle');
     }
   };
 
-  const handlePrev = () => {
+  const handlePrev = async () => {
+    await flushPendingSave();
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
       setAutosaveState('idle');
     }
   };
 
-  const handleJumpToQuestion = (idx: number) => {
+  const handleJumpToQuestion = async (idx: number) => {
+    await flushPendingSave();
     setCurrentIndex(idx);
     setShowReviewModal(false);
     setDrawerOpen(false);
@@ -231,11 +260,12 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
 
   // 4. Submission
   const handleFinalSubmit = async () => {
+    await flushPendingSave();
     setIsSubmitting(true);
     try {
       const res = await apiFetch<any>('/api/mcq/submit', {
         method: 'POST',
-        body: JSON.stringify({ attempt_id: attemptId }),
+        body: JSON.stringify({ attempt_id: attemptId || attemptIdRef.current }),
       });
       setIsSubmitted(true);
       setShowReviewModal(false);
