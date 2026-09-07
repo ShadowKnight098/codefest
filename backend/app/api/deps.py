@@ -93,6 +93,10 @@ async def get_current_admin(
         )
 
     admin_id = payload["sub"]
+    cached_admin = memory_cache.get(f"admin:{admin_id}")
+    if cached_admin is not None:
+        return cached_admin
+
     result = await db.execute(select(AdminUser).where(AdminUser.id == admin_id))
     admin = result.scalar_one_or_none()
 
@@ -102,6 +106,7 @@ async def get_current_admin(
             detail="Admin user not found."
         )
 
+    memory_cache.set(f"admin:{admin_id}", admin, ttl_seconds=20.0)
     return admin
 
 

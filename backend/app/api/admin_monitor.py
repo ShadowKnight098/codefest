@@ -1,5 +1,6 @@
 import csv
 import io
+import asyncio
 from typing import List
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,7 @@ from app.db.models import (
 )
 from app.schemas.admin import LiveStats, LeaderboardEntry
 from app.api.deps import get_current_admin
+from app.core.cache import memory_cache
 
 router = APIRouter(prefix="/admin/monitor", tags=["Admin Live Monitor"])
 
@@ -18,39 +20,49 @@ async def get_live_stats(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_admin)
 ):
-    total_parts = (await db.execute(select(func.count(Participant.id)))).scalar() or 0
-    enabled_parts = (await db.execute(select(func.count(Participant.id)).where(Participant.is_enabled == True))).scalar() or 0
+    cached = memory_cache.get("admin_live_stats")
+    if cached is not None:
+        return cached
 
-    active_mcq = (await db.execute(select(func.count(MCQAttempt.id)).where(MCQAttempt.status == "IN_PROGRESS"))).scalar() or 0
-    submitted_mcq = (await db.execute(select(func.count(MCQAttempt.id)).where(MCQAttempt.status == "SUBMITTED"))).scalar() or 0
+    # Fast parallel execution of summary statistics
+    tasks = [
+        db.execute(select(func.count(Participant.id))),
+        db.execute(select(func.count(Participant.id)).where(Participant.is_enabled == True)),
+        db.execute(select(func.count(MCQAttempt.id)).where(MCQAttempt.status == "IN_PROGRESS")),
+        db.execute(select(func.count(MCQAttempt.id)).where(MCQAttempt.status == "SUBMITTED")),
+        db.execute(select(func.count(CodingAttempt.id)).where(CodingAttempt.status == "IN_PROGRESS")),
+        db.execute(select(func.count(CodingAttempt.id)).where(CodingAttempt.status == "SUBMITTED")),
+        db.execute(select(func.count(distinct(MCQAttempt.participant_id))).where(MCQAttempt.status == "TERMINATED")),
+        db.execute(select(func.count(SecurityEvent.id))),
+        db.execute(select(func.count(RoundResult.id)).where(RoundResult.is_qualified == True)),
+        db.execute(select(func.count(RoundResult.id)).where(RoundResult.is_qualified == False))
+    ]
+    results = await asyncio.gather(*tasks)
 
-    active_coding = (await db.execute(select(func.count(CodingAttempt.id)).where(CodingAttempt.status == "IN_PROGRESS"))).scalar() or 0
-    submitted_coding = (await db.execute(select(func.count(CodingAttempt.id)).where(CodingAttempt.status == "SUBMITTED"))).scalar() or 0
-
-    terminated_mcq = (await db.execute(select(func.count(distinct(MCQAttempt.participant_id))).where(MCQAttempt.status == "TERMINATED"))).scalar() or 0
-    total_violations = (await db.execute(select(func.count(SecurityEvent.id)))).scalar() or 0
-
-    qualified = (await db.execute(select(func.count(RoundResult.id)).where(RoundResult.is_qualified == True))).scalar() or 0
-    not_qualified = (await db.execute(select(func.count(RoundResult.id)).where(RoundResult.is_qualified == False))).scalar() or 0
-
-    return LiveStats(
-        total_participants=total_parts,
-        enabled_participants=enabled_parts,
-        active_mcq_attempts=active_mcq,
-        submitted_mcq_attempts=submitted_mcq,
-        active_coding_attempts=active_coding,
-        submitted_coding_attempts=submitted_coding,
-        terminated_count=terminated_mcq,
-        total_violations=total_violations,
-        qualified_count=qualified,
-        not_qualified_count=not_qualified
+    stats = LiveStats(
+        total_participants=results[0].scalar() or 0,
+        enabled_participants=results[1].scalar() or 0,
+        active_mcq_attempts=results[2].scalar() or 0,
+        submitted_mcq_attempts=results[3].scalar() or 0,
+        active_coding_attempts=results[4].scalar() or 0,
+        submitted_coding_attempts=results[5].scalar() or 0,
+        terminated_count=results[6].scalar() or 0,
+        total_violations=results[7].scalar() or 0,
+        qualified_count=results[8].scalar() or 0,
+        not_qualified_count=results[9].scalar() or 0
     )
+    memory_cache.set("admin_live_stats", stats, ttl_seconds=3.0)
+    return stats
 
 @router.get("/leaderboard", response_model=List[LeaderboardEntry])
 async def get_leaderboard(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_admin)
 ):
+    cached = memory_cache.get("admin_leaderboard")
+    if cached is not None:
+        return cached
+
     # Fetch participants and results
     parts = (await db.execute(select(Participant).order_by(Participant.roll_number.asc()))).scalars().all()
     results = (await db.execute(select(RoundResult))).scalars().all()
@@ -61,7 +73,6 @@ async def get_leaderboard(
     viol_map = {row[0]: row[1] for row in violations}
 
     # Map results by (participant_id, round_number)
-    # Get round 1 and round 2 IDs
     rounds = (await db.execute(select(Round))).scalars().all()
     round_map = {r.id: r.round_number for r in rounds}
     
@@ -99,7 +110,9 @@ async def get_leaderboard(
     for rank, entry in enumerate(leaderboard, 1):
         entry["rank"] = rank
 
-    return [LeaderboardEntry(**entry) for entry in leaderboard]
+    output = [LeaderboardEntry(**entry) for entry in leaderboard]
+    memory_cache.set("admin_leaderboard", output, ttl_seconds=3.0)
+    return output
 
 @router.get("/export/csv")
 async def export_results_csv(
