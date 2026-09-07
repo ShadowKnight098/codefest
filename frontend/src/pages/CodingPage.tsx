@@ -4,17 +4,15 @@ import { apiFetch, ApiError } from '../api/client';
 import { AssessmentHeader } from '../components/AssessmentHeader';
 
 const STARTER_TEMPLATES: Record<string, string> = {
-  python: `# Write your solution inside the function below.
-# Arguments from test cases are dynamically parsed and passed to the function.
-# Return your result directly from the function.
-
-def solve(a, b):
-    return a + b
+  python: `def solve(a, b):
+    # Write your solution here
+    pass
 `,
   c: `#include <stdio.h>
 
 int solve(int a, int b) {
-    return a + b;
+    // Write your solution here
+    return 0;
 }
 
 int main() {
@@ -26,14 +24,12 @@ int main() {
 }
 `,
   cpp: `#include <iostream>
-#include <vector>
-#include <string>
-#include <algorithm>
 
 using namespace std;
 
 int solve(int a, int b) {
-    return a + b;
+    // Write your solution here
+    return 0;
 }
 
 int main() {
@@ -46,11 +42,12 @@ int main() {
     return 0;
 }
 `,
-  java: `import java.util.*;
+  java: `import java.util.Scanner;
 
 public class Main {
     public static int solve(int a, int b) {
-        return a + b;
+        // Write your solution here
+        return 0;
     }
 
     public static void main(String[] args) {
@@ -81,13 +78,10 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
   const [isFullscreen, setIsFullscreen] = useState<boolean>(!!document.fullscreenElement);
   const attemptIdRef = useRef<string>('');
 
-  // Terminal Console state
-  const [terminalTab, setTerminalTab] = useState<'console' | 'testcases' | 'custom' | 'submission'>('console');
-  const [terminalOutput, setTerminalOutput] = useState<string>(
-    `fest@sandbox:~$ ready\nEnvironment initialized for Level 2 (Coding Assessment).\nSelect a problem, write your solution, and click "Run Code" or "Submit Solution".\n`
-  );
+  // Test & Evaluation state
+  const [activeTab, setActiveTab] = useState<'testcases' | 'custom' | 'submission'>('testcases');
   const [customInput, setCustomInput] = useState<string>('');
-  const [isTerminalExpanded, setIsTerminalExpanded] = useState<boolean>(false);
+  const [isPanelExpanded, setIsPanelExpanded] = useState<boolean>(false);
   const [activeTestCaseIdx, setActiveTestCaseIdx] = useState<number>(0);
 
   const [problemScores, setProblemScores] = useState<Record<string, number>>({});
@@ -259,8 +253,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
   const handleRunCode = async () => {
     if (!attempt || !currentProblem) return;
     setExecuting(true);
-    setTerminalTab('console');
-    setTerminalOutput((prev) => prev + `\n$ run solution.${language} (Executing against sample test cases...)\n`);
+    setActiveTab('testcases');
 
     try {
       const res = await apiFetch<any>('/coding/run', {
@@ -272,10 +265,22 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
         }),
       });
       setRunResults(res);
-      setTerminalOutput((prev) => prev + `\n${res.terminal_output}\n`);
     } catch (err: any) {
       const msg = err?.message || err?.detail || 'Execution failed.';
-      setTerminalOutput((prev) => prev + `\n[ERROR]: ${msg}\n`);
+      setRunResults({
+        all_passed: false,
+        total_cases: 1,
+        passed_cases: 0,
+        results: [{
+          test_case_id: 'err',
+          input_data: 'N/A',
+          expected_output: 'N/A',
+          actual_output: 'Error',
+          passed: false,
+          status: 'Runtime Error',
+          error_message: msg,
+        }]
+      });
     } finally {
       setExecuting(false);
     }
@@ -285,8 +290,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
   const handleRunCustomInput = async () => {
     if (!attempt || !currentProblem) return;
     setExecuting(true);
-    setTerminalTab('console');
-    setTerminalOutput((prev) => prev + `\n$ run --custom-input solution.${language}\n`);
+    setActiveTab('custom');
 
     try {
       const res = await apiFetch<any>('/coding/run', {
@@ -299,10 +303,22 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
         }),
       });
       setRunResults(res);
-      setTerminalOutput((prev) => prev + `\n${res.terminal_output}\n`);
     } catch (err: any) {
       const msg = err?.message || err?.detail || 'Execution failed.';
-      setTerminalOutput((prev) => prev + `\n[ERROR]: ${msg}\n`);
+      setRunResults({
+        all_passed: false,
+        total_cases: 1,
+        passed_cases: 0,
+        results: [{
+          test_case_id: 'err',
+          input_data: customInput,
+          expected_output: 'N/A',
+          actual_output: 'Error',
+          passed: false,
+          status: 'Runtime Error',
+          error_message: msg,
+        }]
+      });
     } finally {
       setExecuting(false);
     }
@@ -314,8 +330,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
     if (!confirm(`Submit solution for "${currentProblem.title}" (${currentProblem.marks} Marks)? This will evaluate against all hidden test cases.`)) return;
 
     setExecuting(true);
-    setTerminalTab('submission');
-    setTerminalOutput((prev) => prev + `\n$ submit solution.${language} --problem P${currentProblem.order_num}\nEvaluating submission...\n`);
+    setActiveTab('submission');
 
     try {
       const res = await apiFetch<any>('/coding/submit', {
@@ -332,10 +347,16 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
         ...prev,
         [currentProblem.id]: Math.max(prev[currentProblem.id] || 0, res.score),
       }));
-      setTerminalOutput((prev) => prev + `\n${res.terminal_output}\n`);
     } catch (err: any) {
       const msg = err?.message || err?.detail || 'Submission evaluation failed.';
-      setTerminalOutput((prev) => prev + `\n[SUBMISSION ERROR]: ${msg}\n`);
+      setSubmitResult({
+        submission_id: 'err',
+        verdict: 'FAILED',
+        score: 0,
+        test_cases_passed: 0,
+        total_test_cases: 1,
+        terminal_output: msg,
+      });
     } finally {
       setExecuting(false);
     }
@@ -616,7 +637,8 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
           </div>
 
           {/* Monaco Editor Container */}
-          <div className={`overflow-hidden transition-all ${isTerminalExpanded ? 'h-0 hidden' : 'flex-1'}`}>
+          {/* Monaco Editor Container */}
+          <div className={`overflow-hidden transition-all ${isPanelExpanded ? 'h-0 hidden' : 'flex-1'}`}>
             <Editor
               height="100%"
               language={language === 'c' || language === 'cpp' ? 'cpp' : language}
@@ -636,58 +658,48 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
             />
           </div>
 
-          {/* Collapsible / Expandable Terminal Console (Architecture §8) */}
-          <div className={`border-t border-[#16233F] bg-[#0D1117] text-[#C9D1D9] flex flex-col font-mono text-xs transition-all duration-200 ${
-            isTerminalExpanded ? 'flex-1 h-full' : 'h-[250px]'
+          {/* Clean Test Evaluation & Results Panel (No Terminal) */}
+          <div className={`border-t border-[#DBD7C9] bg-white flex flex-col font-sans text-xs transition-all duration-200 ${
+            isPanelExpanded ? 'flex-1 h-full' : 'h-[250px]'
           }`}>
-            {/* Terminal Header Bar */}
-            <div className="bg-[#161B22] border-b border-white/10 px-4 py-1.5 flex items-center justify-between select-none">
-              <div className="flex items-center space-x-1">
+            {/* Panel Tab Navigation Bar */}
+            <div className="bg-[#F6F6F2] border-b border-[#DBD7C9] px-4 py-1.5 flex items-center justify-between select-none">
+              <div className="flex items-center space-x-1.5">
                 <button
-                  onClick={() => setTerminalTab('console')}
-                  className={`px-3 py-1 text-[11px] rounded-[3px] transition-colors ${
-                    terminalTab === 'console'
-                      ? 'bg-[#21262D] text-white font-bold'
-                      : 'text-[#8B949E] hover:text-white'
+                  onClick={() => setActiveTab('testcases')}
+                  className={`px-3 py-1 text-[11px] font-semibold rounded-[3px] transition-colors flex items-center space-x-1.5 ${
+                    activeTab === 'testcases'
+                      ? 'bg-[#16233F] text-white'
+                      : 'text-[#59626F] hover:bg-[#EEF1F6] hover:text-[#1B2029]'
                   }`}
                 >
-                  Terminal Log
-                </button>
-                <button
-                  onClick={() => setTerminalTab('testcases')}
-                  className={`px-3 py-1 text-[11px] rounded-[3px] transition-colors flex items-center space-x-1 ${
-                    terminalTab === 'testcases'
-                      ? 'bg-[#21262D] text-white font-bold'
-                      : 'text-[#8B949E] hover:text-white'
-                  }`}
-                >
-                  <span>Test Results</span>
+                  <span>Sample Test Cases</span>
                   {runResults && (
-                    <span className={`w-2 h-2 rounded-full ${runResults.all_passed ? 'bg-[#3FB950]' : 'bg-[#F85149]'}`} />
+                    <span className={`w-2 h-2 rounded-full ${runResults.all_passed ? 'bg-[#1E7A46]' : 'bg-[#C0392B]'}`} />
                   )}
                 </button>
                 <button
-                  onClick={() => setTerminalTab('custom')}
-                  className={`px-3 py-1 text-[11px] rounded-[3px] transition-colors ${
-                    terminalTab === 'custom'
-                      ? 'bg-[#21262D] text-white font-bold'
-                      : 'text-[#8B949E] hover:text-white'
+                  onClick={() => setActiveTab('custom')}
+                  className={`px-3 py-1 text-[11px] font-semibold rounded-[3px] transition-colors ${
+                    activeTab === 'custom'
+                      ? 'bg-[#16233F] text-white'
+                      : 'text-[#59626F] hover:bg-[#EEF1F6] hover:text-[#1B2029]'
                   }`}
                 >
-                  Custom Input
+                  Custom Testcase
                 </button>
                 {submitResult && (
                   <button
-                    onClick={() => setTerminalTab('submission')}
-                    className={`px-3 py-1 text-[11px] rounded-[3px] transition-colors flex items-center space-x-1 ${
-                      terminalTab === 'submission'
-                        ? 'bg-[#21262D] text-white font-bold'
-                        : 'text-[#8B949E] hover:text-white'
+                    onClick={() => setActiveTab('submission')}
+                    className={`px-3 py-1 text-[11px] font-semibold rounded-[3px] transition-colors flex items-center space-x-1.5 ${
+                      activeTab === 'submission'
+                        ? 'bg-[#16233F] text-white'
+                        : 'text-[#59626F] hover:bg-[#EEF1F6] hover:text-[#1B2029]'
                     }`}
                   >
-                    <span>Verdict</span>
-                    <span className={`text-[10px] px-1 py-0.2 rounded font-bold ${
-                      submitResult.verdict === 'ACCEPTED' ? 'bg-[#3FB950]/20 text-[#3FB950]' : 'bg-[#F85149]/20 text-[#F85149]'
+                    <span>Submission Result</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold font-mono ${
+                      submitResult.verdict === 'ACCEPTED' ? 'bg-[#E8F3EC] text-[#1E7A46]' : 'bg-[#FDEDEC] text-[#C0392B]'
                     }`}>
                       {submitResult.score}/{currentProblem?.marks}
                     </span>
@@ -695,45 +707,35 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
                 )}
               </div>
 
-              <div className="flex items-center space-x-2 text-[#8B949E]">
+              <div className="flex items-center space-x-2 text-[#59626F]">
                 <button
-                  onClick={() => setIsTerminalExpanded(!isTerminalExpanded)}
-                  className="hover:text-white text-[11px] px-2 py-0.5 rounded hover:bg-[#21262D]"
-                  title={isTerminalExpanded ? "Restore Editor View" : "Maximize Terminal"}
+                  onClick={() => setIsPanelExpanded(!isPanelExpanded)}
+                  className="hover:text-[#1B2029] text-[11px] px-2 py-0.5 rounded hover:bg-[#EEF1F6] font-mono"
+                  title={isPanelExpanded ? "Restore Editor View" : "Maximize Panel"}
                 >
-                  {isTerminalExpanded ? '↙ Minimize' : '↗ Maximize'}
+                  {isPanelExpanded ? '↙ Minimize' : '↗ Maximize'}
                 </button>
               </div>
             </div>
 
-            {/* Terminal Tab Contents */}
-            <div className="flex-1 p-3 overflow-y-auto font-mono text-[11.5px] leading-relaxed">
-              {/* TAB 1: Raw Sandbox Log */}
-              {terminalTab === 'console' && (
-                <pre className="whitespace-pre-wrap text-[#E6EDF3] font-mono selection:bg-[#388BFD]/30">
-                  {terminalOutput}
-                </pre>
-              )}
-
-              {/* TAB 2: Structured Test Results */}
-              {terminalTab === 'testcases' && (
+            {/* Panel Tab Contents */}
+            <div className="flex-1 p-4 overflow-y-auto text-xs leading-relaxed bg-[#FAFAF8]">
+              {/* TAB 1: Structured Test Results */}
+              {activeTab === 'testcases' && (
                 <div className="space-y-3">
                   {runResults ? (
                     <>
-                      <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                      <div className="flex items-center justify-between border-b border-[#DBD7C9] pb-2">
                         <div className="flex items-center space-x-2">
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                            runResults.all_passed ? 'bg-[#3FB950]/20 text-[#3FB950]' : 'bg-[#F85149]/20 text-[#F85149]'
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded font-mono ${
+                            runResults.all_passed ? 'bg-[#E8F3EC] text-[#1E7A46]' : 'bg-[#FDEDEC] text-[#C0392B]'
                           }`}>
-                            {runResults.all_passed ? 'ALL SAMPLES PASSED' : 'SAMPLE TESTS FAILED'}
+                            {runResults.all_passed ? '✓ ALL SAMPLE TESTS PASSED' : '✗ SAMPLE TESTS FAILED'}
                           </span>
-                          <span className="text-[#8B949E] text-xs">
+                          <span className="text-[#59626F] text-xs font-mono font-semibold">
                             {runResults.passed_cases} / {runResults.total_cases} Passed
                           </span>
                         </div>
-                        <span className="text-[#8B949E] text-xs font-mono">
-                          Engine: {runResults.judge_endpoint || 'local sandbox'}
-                        </span>
                       </div>
 
                       {/* Test Case Selectors */}
@@ -742,14 +744,14 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
                           <button
                             key={idx}
                             onClick={() => setActiveTestCaseIdx(idx)}
-                            className={`px-3 py-1 rounded text-xs font-mono flex items-center space-x-1.5 ${
+                            className={`px-3 py-1 rounded text-xs font-mono flex items-center space-x-1.5 border transition-all ${
                               activeTestCaseIdx === idx
-                                ? 'bg-[#21262D] text-white font-bold border border-white/20'
-                                : 'bg-[#161B22] text-[#8B949E] hover:text-white'
+                                ? 'bg-white text-[#16233F] font-bold border-[#16233F] shadow-sm'
+                                : 'bg-[#F6F6F2] text-[#59626F] border-[#DBD7C9] hover:border-[#16233F]'
                             }`}
                           >
                             <span>Case {idx + 1}</span>
-                            <span className={res.passed ? 'text-[#3FB950]' : 'text-[#F85149]'}>
+                            <span className={`font-bold ${res.passed ? 'text-[#1E7A46]' : 'text-[#C0392B]'}`}>
                               {res.passed ? '✓' : '✗'}
                             </span>
                           </button>
@@ -758,24 +760,26 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
 
                       {/* Active Test Case Detail */}
                       {runResults.results?.[activeTestCaseIdx] && (
-                        <div className="bg-[#161B22] p-3 rounded border border-white/10 space-y-2 text-xs">
+                        <div className="bg-white p-3.5 rounded-[4px] border border-[#DBD7C9] space-y-3 text-xs">
                           <div>
-                            <span className="text-[#8B949E] block mb-0.5">Input:</span>
-                            <pre className="bg-[#0D1117] p-2 rounded text-white overflow-x-auto">
+                            <span className="text-[#59626F] font-mono font-semibold block mb-1">Input:</span>
+                            <pre className="bg-[#F6F6F2] p-2 rounded-[3px] text-[#1B2029] font-mono text-[12px] border border-[#DBD7C9]/60 overflow-x-auto">
                               {runResults.results[activeTestCaseIdx].input_data}
                             </pre>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <span className="text-[#8B949E] block mb-0.5">Expected Output:</span>
-                              <pre className="bg-[#0D1117] p-2 rounded text-[#3FB950] overflow-x-auto">
+                              <span className="text-[#59626F] font-mono font-semibold block mb-1">Expected Output:</span>
+                              <pre className="bg-[#E8F3EC] p-2 rounded-[3px] text-[#1E7A46] font-mono text-[12px] font-bold border border-[#BEDFCB] overflow-x-auto">
                                 {runResults.results[activeTestCaseIdx].expected_output}
                               </pre>
                             </div>
                             <div>
-                              <span className="text-[#8B949E] block mb-0.5">Actual Output:</span>
-                              <pre className={`bg-[#0D1117] p-2 rounded overflow-x-auto ${
-                                runResults.results[activeTestCaseIdx].passed ? 'text-[#3FB950]' : 'text-[#F85149]'
+                              <span className="text-[#59626F] font-mono font-semibold block mb-1">Your Output:</span>
+                              <pre className={`p-2 rounded-[3px] font-mono text-[12px] font-bold border overflow-x-auto ${
+                                runResults.results[activeTestCaseIdx].passed
+                                  ? 'bg-[#E8F3EC] text-[#1E7A46] border-[#BEDFCB]'
+                                  : 'bg-[#FDEDEC] text-[#C0392B] border-[#F5C2C7]'
                               }`}>
                                 {runResults.results[activeTestCaseIdx].actual_output || '(no output)'}
                               </pre>
@@ -783,8 +787,8 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
                           </div>
                           {runResults.results[activeTestCaseIdx].error_message && (
                             <div>
-                              <span className="text-[#F85149] block mb-0.5">Error / Stderr:</span>
-                              <pre className="bg-[#0D1117] p-2 rounded text-[#F85149] overflow-x-auto">
+                              <span className="text-[#C0392B] font-mono font-semibold block mb-1">Error Details:</span>
+                              <pre className="bg-[#FDEDEC] p-2.5 rounded-[3px] text-[#C0392B] font-mono text-[11px] border border-[#F5C2C7] overflow-x-auto whitespace-pre-wrap">
                                 {runResults.results[activeTestCaseIdx].error_message}
                               </pre>
                             </div>
@@ -793,67 +797,75 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
                       )}
                     </>
                   ) : (
-                    <div className="text-[#8B949E] italic text-center py-6">
-                      Click "Run Code" to evaluate your solution against public sample test cases.
+                    <div className="text-[#59626F] italic text-center py-8">
+                      Click <strong className="text-[#16233F]">"Run Code"</strong> above to test your solution against public sample test cases.
                     </div>
                   )}
                 </div>
               )}
 
-              {/* TAB 3: Custom Input Console */}
-              {terminalTab === 'custom' && (
+              {/* TAB 2: Custom Input */}
+              {activeTab === 'custom' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#8B949E]">
-                      Provide custom input lines to standard input (stdin):
+                    <span className="text-xs text-[#59626F] font-semibold">
+                      Custom Test Input (stdin arguments):
                     </span>
                     <button
                       disabled={executing}
                       onClick={handleRunCustomInput}
-                      className="px-3 py-1 bg-[#238636] text-white text-xs font-bold rounded hover:bg-[#2ea043] disabled:opacity-50"
+                      className="px-3 py-1 bg-[#1E7E34] text-white text-xs font-bold rounded-[3px] hover:bg-[#166027] disabled:opacity-50 transition-colors flex items-center space-x-1 shadow-sm"
                     >
-                      {executing ? 'Executing…' : '▶ Run with Custom Input'}
+                      <span>{executing ? 'Executing…' : '▶ Run Custom Input'}</span>
                     </button>
                   </div>
                   <textarea
                     value={customInput}
                     onChange={(e) => setCustomInput(e.target.value)}
-                    rows={6}
+                    rows={4}
                     data-allow-paste="true"
-                    placeholder="Enter input data here..."
-                    className="w-full bg-[#161B22] border border-white/10 rounded-[4px] p-2.5 text-white font-mono text-xs focus:outline-none focus:border-[#388BFD]"
+                    placeholder="Enter custom input arguments here..."
+                    className="w-full bg-white border border-[#DBD7C9] rounded-[4px] p-2.5 text-[#1B2029] font-mono text-xs focus:outline-none focus:border-[#16233F]"
                   />
+                  {runResults && (
+                    <div className="bg-white p-3 rounded-[4px] border border-[#DBD7C9] text-xs space-y-1">
+                      <span className="text-[#59626F] font-mono font-semibold block">Execution Output:</span>
+                      <pre className="bg-[#F6F6F2] p-2 rounded-[3px] font-mono text-[12px] text-[#1B2029] overflow-x-auto border border-[#DBD7C9]/60">
+                        {runResults.results?.[0]?.actual_output || '(no output)'}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* TAB 4: Submission Summary */}
-              {terminalTab === 'submission' && submitResult && (
-                <div className="p-4 bg-[#161B22] border border-white/10 rounded-[6px] space-y-3">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              {/* TAB 3: Submission Summary */}
+              {activeTab === 'submission' && submitResult && (
+                <div className="p-4 bg-white border border-[#DBD7C9] rounded-[4px] space-y-4 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-[#DBD7C9] pb-3">
                     <div>
-                      <div className={`text-lg font-bold ${
-                        submitResult.verdict === 'ACCEPTED' ? 'text-[#3FB950]' : 'text-[#F85149]'
+                      <div className={`text-base font-bold font-mono ${
+                        submitResult.verdict === 'ACCEPTED' ? 'text-[#1E7A46]' : 'text-[#C0392B]'
                       }`}>
                         {submitResult.verdict === 'ACCEPTED' ? '✓ ACCEPTED' : `✗ ${submitResult.verdict}`}
                       </div>
-                      <div className="text-xs text-[#8B949E] mt-0.5">
-                        Submission ID: #{submitResult.submission_id.slice(0, 8)} · Problem: {currentProblem?.title}
+                      <div className="text-xs text-[#59626F] mt-0.5">
+                        Problem: {currentProblem?.title} · Status: {submitResult.status}
                       </div>
                     </div>
 
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-white font-mono">
-                        {submitResult.score} <span className="text-sm text-[#8B949E]">/ {currentProblem?.marks} Marks</span>
+                      <div className="text-2xl font-bold text-[#16233F] font-mono">
+                        {submitResult.score} <span className="text-xs text-[#59626F] font-normal">/ {currentProblem?.marks} Marks</span>
                       </div>
-                      <div className="text-xs text-[#3FB950]">
+                      <div className="text-xs text-[#1E7A46] font-semibold font-mono">
                         {submitResult.test_cases_passed} of {submitResult.total_test_cases} Test Cases Passed
                       </div>
                     </div>
                   </div>
 
-                  <pre className="text-xs text-[#E6EDF3] bg-[#0D1117] p-3 rounded font-mono overflow-x-auto">
-                    {submitResult.terminal_output}
-                  </pre>
+                  <div className="text-xs text-[#59626F]">
+                    Your best score for this problem has been saved and factored into your total Level 2 ranking score.
+                  </div>
                 </div>
               )}
             </div>
