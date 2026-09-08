@@ -54,22 +54,22 @@ const PRESET_STATES: Record<string, DisplayStateConfig> = {
   },
   'NOT_QUALIFIED': {
     r1: { status: 'Completed', sub: 'Assessment submitted' },
-    r2: { status: 'Locked', sub: 'Shortlisted candidates will be notified via email' },
-    r3: { status: 'Locked', sub: 'Shortlisted candidates will be notified via email' },
+    r2: { status: 'Locked', sub: 'Shortlisted candidates will be notified via email or official group' },
+    r3: { status: 'Locked', sub: 'Shortlisted candidates will be notified via email or official group' },
     panel: {
       type: 'default',
       title: 'Assessment submitted',
-      message: 'Your responses have been recorded. Shortlisted candidates who qualify for the next round will receive official notifications on their registered email address.'
+      message: 'Your responses have been recorded. Shortlisted candidates will be notified regarding qualification and next steps via registered email or the official group.'
     }
   },
   'WAITING_FOR_LEVEL2': {
     r1: { status: 'Completed', sub: 'Assessment submitted' },
-    r2: { status: 'Locked', sub: 'Shortlisted candidates will be notified via email' },
+    r2: { status: 'Locked', sub: 'Shortlisted candidates will be notified via email or official group' },
     r3: { status: 'Locked', sub: 'Evaluated manually' },
     panel: {
       type: 'default',
       title: 'Assessment submitted',
-      message: 'Your responses have been recorded. Shortlisted candidates who qualify for the next round will receive official notifications on their registered email address.'
+      message: 'Your responses have been recorded. Shortlisted candidates will be notified regarding qualification and next steps via registered email or the official group.'
     }
   },
   'LEVEL2_AVAILABLE': {
@@ -95,11 +95,11 @@ const PRESET_STATES: Record<string, DisplayStateConfig> = {
   'COMPLETED': {
     r1: { status: 'Completed', sub: 'Assessment submitted' },
     r2: { status: 'Completed', sub: 'Assessment submitted' },
-    r3: { status: 'Locked', sub: 'Shortlisted finalists will be notified via email' },
+    r3: { status: 'Locked', sub: 'Shortlisted candidates will be notified via email or official group' },
     panel: {
       type: 'success',
       title: 'Assessments submitted',
-      message: 'You have submitted your assessments. Shortlisted candidates who qualify for the next round will receive official notifications on their registered email address.'
+      message: 'You have submitted your assessments. Shortlisted candidates will be notified regarding qualification and next steps via registered email or the official group.'
     }
   },
   'TERMINATED': {

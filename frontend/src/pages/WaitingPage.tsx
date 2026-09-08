@@ -66,7 +66,7 @@ export const WaitingPage: React.FC<WaitingPageProps> = ({
 
       {/* Under-card text */}
       <p className="text-[12.5px] text-[#59626F] mt-5 max-w-sm">
-        Shortlisted candidates who qualify for the next round will receive official notifications on their registered email address. This page updates automatically once Level 2 begins.
+        Shortlisted candidates will be notified regarding qualification and next steps via registered email or the official group. This page updates automatically once Level 2 begins.
       </p>
 
       {/* Return to Dashboard */}

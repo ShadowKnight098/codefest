@@ -345,9 +345,20 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
               Level 01 Already Submitted
             </h3>
             <p className="text-xs text-[#59626F] mt-2 leading-relaxed">
-              Your Level 1 MCQ assessment has been finalized and evaluated server-side. You cannot resume or re-enter this assessment.
+              Your Level 1 MCQ assessment has been finalized and recorded. You cannot resume or re-enter this assessment.
             </p>
           </div>
+
+          <div className="bg-[#F6F6F2] p-4 rounded-[4px] border border-[#DBD7C9] text-left">
+            <div className="flex items-start space-x-3">
+              <span className="text-xl">📢</span>
+              <div className="text-xs text-[#1B2029] leading-relaxed">
+                <strong className="block text-[#16233F] mb-0.5">Evaluation in Progress:</strong>
+                Shortlisted candidates will be notified regarding qualification and next round schedule via registered email or the official group.
+              </div>
+            </div>
+          </div>
+
           <button
             type="button"
             onClick={() => onComplete(false)}
@@ -700,7 +711,7 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
             {/* Confirmation step */}
             {confirmSubmitStep ? (
               <div className="p-3 bg-[#FBEAE8] border border-[#EFC5BF] rounded-[3px] mb-5 text-[12.5px] text-[#AE2E22] leading-relaxed">
-                This cannot be undone. Once submitted, your answers will be locked and scored against the qualifying cutoff.
+                This cannot be undone. Once submitted, your answers will be locked and finalized.
               </div>
             ) : null}
 
@@ -763,13 +774,13 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
               </p>
             </div>
 
-            {/* Email Notification Notice Card */}
+            {/* Email / Group Notification Notice Card */}
             <div className="p-4 rounded-[4px] border bg-[#F6F6F2] border-[#DBD7C9] text-left">
               <div className="flex items-start space-x-3">
-                <span className="text-xl">📧</span>
+                <span className="text-xl">📢</span>
                 <div className="text-xs text-[#1B2029] leading-relaxed">
-                  <strong className="block text-[#16233F] mb-0.5">Next Round Notifications:</strong>
-                  Shortlisted candidates who qualify for the next round will receive official instructions and schedule on their registered email address.
+                  <strong className="block text-[#16233F] mb-0.5">Evaluation in Progress:</strong>
+                  Shortlisted candidates will be notified regarding qualification and next round schedule via registered email or the official group.
                 </div>
               </div>
             </div>

@@ -478,10 +478,10 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
 
           <div className="bg-[#F6F6F2] p-4 rounded-[4px] border border-[#DBD7C9] text-left">
             <div className="flex items-start space-x-3">
-              <span className="text-xl">📧</span>
+              <span className="text-xl">📢</span>
               <div className="text-xs text-[#1B2029] leading-relaxed">
                 <strong className="block text-[#16233F] mb-0.5">Evaluation in Progress:</strong>
-                Shortlisted candidates who qualify for Level 3 (Presentation &amp; Viva) will receive official notifications and schedule on their registered email address.
+                Shortlisted candidates will be notified regarding qualification and next round schedule via registered email or the official group.
               </div>
             </div>
           </div>
@@ -1080,13 +1080,13 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
               </p>
             </div>
 
-            {/* Email Notification Notice Card */}
+            {/* Email / Group Notification Notice Card */}
             <div className="p-4 rounded-[4px] border bg-[#F6F6F2] border-[#DBD7C9] text-left">
               <div className="flex items-start space-x-3">
-                <span className="text-xl">📧</span>
+                <span className="text-xl">📢</span>
                 <div className="text-xs text-[#1B2029] leading-relaxed">
-                  <strong className="block text-[#16233F] mb-0.5">Next Round Notifications:</strong>
-                  Shortlisted candidates who qualify for Level 3 (Presentation &amp; Viva) will receive official instructions and schedule on their registered email address.
+                  <strong className="block text-[#16233F] mb-0.5">Evaluation in Progress:</strong>
+                  Shortlisted candidates will be notified regarding qualification and next round schedule via registered email or the official group.
                 </div>
               </div>
             </div>
