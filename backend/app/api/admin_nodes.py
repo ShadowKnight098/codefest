@@ -18,10 +18,15 @@ from app.core.config import settings
 
 router = APIRouter(prefix="/admin/nodes", tags=["Admin Connected Devices & Judge0 Nodes"])
 
+from urllib.parse import urlparse
+
 def normalize_node_url(url: str) -> str:
     cleaned = url.strip().rstrip("/")
     if not cleaned.startswith("http://") and not cleaned.startswith("https://"):
         cleaned = f"http://{cleaned}"
+    parsed = urlparse(cleaned)
+    if not parsed.port:
+        cleaned = f"{parsed.scheme}://{parsed.netloc}:2358"
     return cleaned
 
 async def _ensure_initial_nodes(db: AsyncSession) -> List[Judge0Node]:

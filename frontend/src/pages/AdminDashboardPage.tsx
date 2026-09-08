@@ -3463,12 +3463,18 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   {testNodeResult.is_online ? (
                     <div>
                       ✅ <strong>Node Reachable!</strong> Latency: {testNodeResult.latency_ms} ms (Judge0 v{testNodeResult.version || '1.13.1'})
+                      <div className="text-[10px] mt-0.5 text-[#1E7E34]">
+                        Endpoint verified: <code className="font-bold">{testNodeResult.endpoint_url}</code>
+                      </div>
                     </div>
                   ) : (
                     <div>
                       ❌ <strong>Connection Failed:</strong> {testNodeResult.error || 'Timed out / connection refused'}
-                      <div className="text-[10px] mt-0.5 text-[#59626F]">
-                        Verify that Docker container is running and Windows Firewall allows inbound TCP port 2358.
+                      <div className="text-[10.5px] mt-1 text-[#16233F]">
+                        Tested endpoint: <code className="bg-white/80 px-1 py-0.5 rounded font-bold">{testNodeResult.endpoint_url}</code>
+                      </div>
+                      <div className="text-[10px] mt-1 text-[#59626F] leading-tight">
+                        Checklist: (1) Did you include port <strong>:2358</strong>? (2) Is <strong>Docker</strong> running Judge0 on the node? (3) Are <strong>both</strong> this server PC and the node logged into Tailscale?
                       </div>
                     </div>
                   )}

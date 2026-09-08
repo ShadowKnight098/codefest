@@ -359,13 +359,27 @@ class Judge0LoadBalancer:
         t0 = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                res = await client.get(f"{ep}/about", headers=self.get_headers())
+                res = None
+                try:
+                    res = await client.get(f"{ep}/about", headers=self.get_headers())
+                except Exception:
+                    pass
+
+                # Fallback to /languages if /about didn't return 200
+                if res is None or res.status_code != 200:
+                    try:
+                        res = await client.get(f"{ep}/languages", headers=self.get_headers())
+                    except Exception:
+                        pass
+
                 latency_ms = round((time.perf_counter() - t0) * 1000, 1)
-                if res.status_code == 200:
+
+                if res is not None and res.status_code == 200:
                     version = "1.13.1"
                     try:
                         data = res.json()
-                        version = data.get("version", "1.13.1")
+                        if isinstance(data, dict):
+                            version = data.get("version", "1.13.1")
                     except Exception:
                         pass
                     if ep in self._offline_until:
@@ -379,21 +393,23 @@ class Judge0LoadBalancer:
                     }
                 else:
                     self._offline_until[ep] = time.time() + 60.0
+                    status_str = f"HTTP {res.status_code}" if res else "No response / connection refused"
                     return {
                         "endpoint": ep,
                         "is_online": False,
-                        "latency_ms": latency_ms,
+                        "latency_ms": latency_ms if res else None,
                         "version": None,
-                        "error": f"HTTP {res.status_code}"
+                        "error": status_str
                     }
         except Exception as e:
             self._offline_until[ep] = time.time() + 60.0
+            err_msg = str(e).strip() or f"{type(e).__name__}: Connection timed out or unreachable"
             return {
                 "endpoint": ep,
                 "is_online": False,
                 "latency_ms": None,
                 "version": None,
-                "error": str(e)
+                "error": err_msg
             }
 
     async def check_health(self) -> Dict[str, bool]:
