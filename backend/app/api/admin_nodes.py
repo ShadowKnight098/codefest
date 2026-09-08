@@ -23,10 +23,29 @@ from urllib.parse import urlparse
 def normalize_node_url(url: str) -> str:
     cleaned = url.strip().rstrip("/")
     if not cleaned.startswith("http://") and not cleaned.startswith("https://"):
-        cleaned = f"http://{cleaned}"
+        if any(t in cleaned.lower() for t in ["trycloudflare.com", "cloudflare", "ngrok", "loca.lt"]):
+            cleaned = f"https://{cleaned}"
+        else:
+            cleaned = f"http://{cleaned}"
+
     parsed = urlparse(cleaned)
-    if not parsed.port:
-        cleaned = f"{parsed.scheme}://{parsed.netloc}:2358"
+    hostname = (parsed.hostname or "").lower()
+
+    # If the user explicitly provided a port, preserve it
+    if parsed.port:
+        return cleaned
+
+    # Check if host is a raw IP address (100.x.y.z, 192.168.x.x, 10.x.x.x) or localhost
+    is_ip = bool(re.match(r"^(\d{1,3}\.){3}\d{1,3}$", hostname)) or hostname in ("localhost", "127.0.0.1")
+
+    if is_ip:
+        # Raw IPs hosting Judge0 listen on port 2358
+        cleaned = f"{parsed.scheme}://{hostname}:2358"
+    else:
+        # Cloudflare Tunnels, Ngrok, Localtunnel, and standard domain names operate on standard 443/80
+        # Do NOT append :2358 as Cloudflare edge servers do not accept port 2358!
+        cleaned = f"{parsed.scheme}://{parsed.netloc}"
+
     return cleaned
 
 async def _ensure_initial_nodes(db: AsyncSession) -> List[Judge0Node]:

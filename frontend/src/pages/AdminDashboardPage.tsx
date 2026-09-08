@@ -3143,8 +3143,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     <p className="text-[#59626F] text-[11.5px] leading-relaxed">
                       Install <strong>Docker Desktop</strong> on Windows/Mac, or Docker CE on Linux.
                     </p>
-                    <div className="p-2 bg-[#EEF1F6] rounded border border-[#C6C1B0] text-[11px] text-[#16233F]">
-                      🛡️ <strong>Tailscale (Recommended):</strong> Install Tailscale on the node. It unifies all PCs into one virtual mesh, hides real IPs, and provides a static <code className="font-bold">100.x.y.z</code> address without college WiFi isolation issues!
+                    <div className="p-2 bg-[#EEF1F6] rounded border border-[#C6C1B0] text-[11px] text-[#16233F] space-y-1">
+                      <div>☁️ <strong>Cloudflare Tunnel (Best for Render Cloud):</strong> Download <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/" target="_blank" rel="noreferrer" className="underline font-bold text-[#16233F]">cloudflared</a> on the PC running Judge0. It creates a secure, public HTTPS link that Render can reach instantly!</div>
+                      <div>🛡️ <strong>Tailscale (For Local Servers):</strong> If running CodeFest on a local PC, Tailscale unifies all PCs into one private mesh.</div>
                     </div>
                   </div>
 
@@ -3169,13 +3170,16 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   <div className="bg-[#F6F6F2] p-3.5 rounded border border-[#DBD7C9] space-y-2">
                     <div className="font-bold text-[#16233F] flex items-center space-x-1.5">
                       <span className="w-5 h-5 rounded-full bg-[#16233F] text-white text-[10px] inline-flex items-center justify-center font-bold">3</span>
-                      <span>Connect to CodeFest</span>
+                      <span>Expose &amp; Connect to CodeFest</span>
                     </div>
                     <p className="text-[#59626F] text-[11.5px] leading-relaxed">
-                      Copy the node's <strong>Tailscale IP</strong> (<code className="font-mono text-[#16233F] font-bold">100.x.y.z</code>) or local LAN IP (<code className="font-mono text-[#16233F] font-bold">192.168.x.x</code>).
+                      <strong>If backend is on Render:</strong> Run <code className="p-1 bg-[#EEF1F6] text-[#16233F] rounded font-bold font-mono">cloudflared tunnel --url http://localhost:2358</code> and copy the <code className="font-bold">https://xxx.trycloudflare.com</code> URL.
+                    </p>
+                    <p className="text-[#59626F] text-[11.5px]">
+                      <strong>If backend is Local:</strong> Copy the Tailscale IP (<code className="font-mono font-bold">http://100.x.y.z:2358</code>).
                     </p>
                     <p className="text-[#59626F] text-[11px]">
-                      Click <strong>"Connect New Device"</strong> above, enter <code className="font-mono text-[#1E7E34] font-bold">http://100.x.y.z:2358</code>, test ping, and save!
+                      Click <strong>"Connect New Device"</strong> above, paste the URL, test ping, and save!
                     </p>
                   </div>
                 </div>
@@ -3425,13 +3429,13 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
 
               <div>
                 <label className="block text-xs font-semibold text-[#16233F] mb-1">
-                  Judge0 Endpoint URL (Tailscale IP or Local LAN IP):
+                  Judge0 Endpoint URL (Cloudflare Tunnel, Tailscale, or LAN IP):
                 </label>
                 <div className="flex space-x-2">
                   <input
                     type="text"
                     required
-                    placeholder="http://100.x.y.z:2358 or http://192.168.1.105:2358"
+                    placeholder="https://xxx.trycloudflare.com or http://100.x.y.z:2358"
                     value={newNodeForm.endpoint_url}
                     onChange={(e) => {
                       setNewNodeForm({ ...newNodeForm, endpoint_url: e.target.value });
@@ -3448,8 +3452,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     {isTestingNode ? 'Testing…' : 'Test Ping'}
                   </button>
                 </div>
-                <p className="text-[10.5px] text-[#59626F] mt-1">
-                  💡 <strong>Tailscale (100.x.y.z:2358)</strong> is recommended because it bypasses college WiFi restrictions and never changes IP.
+                <p className="text-[10.5px] text-[#59626F] mt-1.5 leading-relaxed">
+                  ☁️ <strong>Cloudflare Tunnel (https://xxx.trycloudflare.com)</strong> is best when using Render cloud backend.<br />
+                  💡 <strong>Tailscale (http://100.x.y.z:2358)</strong> works when both the server and worker node share a virtual network.
                 </p>
               </div>
 
@@ -3473,8 +3478,11 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <div className="text-[10.5px] mt-1 text-[#16233F]">
                         Tested endpoint: <code className="bg-white/80 px-1 py-0.5 rounded font-bold">{testNodeResult.endpoint_url}</code>
                       </div>
-                      <div className="text-[10px] mt-1 text-[#59626F] leading-tight">
-                        Checklist: (1) Did you include port <strong>:2358</strong>? (2) Is <strong>Docker</strong> running Judge0 on the node? (3) Are <strong>both</strong> this server PC and the node logged into Tailscale?
+                      <div className="text-[10px] mt-1.5 text-[#59626F] leading-tight space-y-0.5">
+                        <div>Checklist:</div>
+                        <div>• <strong>Cloudflare:</strong> Run <code className="bg-black/5 px-1 rounded">cloudflared tunnel --url http://localhost:2358</code> on the lab PC.</div>
+                        <div>• <strong>Tailscale/IP:</strong> Ensure port <code className="bg-black/5 px-1 rounded">:2358</code> is open and Docker is running.</div>
+                        <div>• <strong>Docker:</strong> Run <code className="bg-black/5 px-1 rounded">docker ps</code> to confirm judge0-server is UP.</div>
                       </div>
                     </div>
                   )}
