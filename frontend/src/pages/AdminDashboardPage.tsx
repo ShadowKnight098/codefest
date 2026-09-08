@@ -3138,11 +3138,14 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   <div className="bg-[#F6F6F2] p-3.5 rounded border border-[#DBD7C9] space-y-2">
                     <div className="font-bold text-[#16233F] flex items-center space-x-1.5">
                       <span className="w-5 h-5 rounded-full bg-[#16233F] text-white text-[10px] inline-flex items-center justify-center font-bold">1</span>
-                      <span>Prerequisites</span>
+                      <span>Prerequisites &amp; Network</span>
                     </div>
                     <p className="text-[#59626F] text-[11.5px] leading-relaxed">
-                      Install <strong>Docker Desktop</strong> on Windows/Mac, or standard Docker CE on Ubuntu Linux. Ensure Docker is running.
+                      Install <strong>Docker Desktop</strong> on Windows/Mac, or Docker CE on Linux.
                     </p>
+                    <div className="p-2 bg-[#EEF1F6] rounded border border-[#C6C1B0] text-[11px] text-[#16233F]">
+                      🛡️ <strong>Tailscale (Recommended):</strong> Install Tailscale on the node. It unifies all PCs into one virtual mesh, hides real IPs, and provides a static <code className="font-bold">100.x.y.z</code> address without college WiFi isolation issues!
+                    </div>
                   </div>
 
                   {/* Step 2 */}
@@ -3152,13 +3155,13 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <span>Start Judge0 Container</span>
                     </div>
                     <p className="text-[#59626F] text-[11.5px] leading-relaxed">
-                      Open PowerShell or Terminal and run:
+                      Open PowerShell or Terminal on that machine and run:
                     </p>
                     <pre className="p-2 bg-[#16233F] text-[#E8F3EC] rounded text-[10px] font-mono overflow-x-auto select-all">
                       docker run -d -p 2358:2358 judge0/judge0:v1.13.1
                     </pre>
-                    <p className="text-[10px] text-[#59626F]">
-                      (Or run judge0 docker-compose with DB &amp; Redis)
+                    <p className="text-[10.5px] text-[#59626F]">
+                      (Port 2358 will now be listening for code evaluation requests)
                     </p>
                   </div>
 
@@ -3166,13 +3169,13 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   <div className="bg-[#F6F6F2] p-3.5 rounded border border-[#DBD7C9] space-y-2">
                     <div className="font-bold text-[#16233F] flex items-center space-x-1.5">
                       <span className="w-5 h-5 rounded-full bg-[#16233F] text-white text-[10px] inline-flex items-center justify-center font-bold">3</span>
-                      <span>Find IP &amp; Connect</span>
+                      <span>Connect to CodeFest</span>
                     </div>
                     <p className="text-[#59626F] text-[11.5px] leading-relaxed">
-                      Run <code className="bg-white px-1 rounded font-mono text-[11px]">ipconfig</code> (Windows) or <code className="bg-white px-1 rounded font-mono text-[11px]">hostname -I</code> (Linux) to find the LAN IP (e.g. <code className="text-[#16233F] font-bold">192.168.1.105</code>).
+                      Copy the node's <strong>Tailscale IP</strong> (<code className="font-mono text-[#16233F] font-bold">100.x.y.z</code>) or local LAN IP (<code className="font-mono text-[#16233F] font-bold">192.168.x.x</code>).
                     </p>
                     <p className="text-[#59626F] text-[11px]">
-                      Click <strong>"Connect New Device"</strong> above, enter <code className="font-mono text-[#1E7E34]">http://&lt;IP&gt;:2358</code>, and hit Save!
+                      Click <strong>"Connect New Device"</strong> above, enter <code className="font-mono text-[#1E7E34] font-bold">http://100.x.y.z:2358</code>, test ping, and save!
                     </p>
                   </div>
                 </div>
@@ -3422,13 +3425,13 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
 
               <div>
                 <label className="block text-xs font-semibold text-[#16233F] mb-1">
-                  Judge0 Endpoint URL (LAN IP &amp; Port):
+                  Judge0 Endpoint URL (Tailscale IP or Local LAN IP):
                 </label>
                 <div className="flex space-x-2">
                   <input
                     type="text"
                     required
-                    placeholder="http://192.168.1.105:2358"
+                    placeholder="http://100.x.y.z:2358 or http://192.168.1.105:2358"
                     value={newNodeForm.endpoint_url}
                     onChange={(e) => {
                       setNewNodeForm({ ...newNodeForm, endpoint_url: e.target.value });
@@ -3445,8 +3448,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     {isTestingNode ? 'Testing…' : 'Test Ping'}
                   </button>
                 </div>
-                <p className="text-[10.5px] text-[#8B93A0] mt-1">
-                  Must be reachable on the local WiFi / Ethernet network on port 2358.
+                <p className="text-[10.5px] text-[#59626F] mt-1">
+                  💡 <strong>Tailscale (100.x.y.z:2358)</strong> is recommended because it bypasses college WiFi restrictions and never changes IP.
                 </p>
               </div>
 
