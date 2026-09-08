@@ -1,0 +1,137 @@
+===============================================================================
+CODEFEST 2026 — TAILSCALE + JUDGE0 DISTRIBUTED CLUSTER SETUP GUIDE
+===============================================================================
+
+This guide explains how to connect multiple student/faculty laptops or lab PCs 
+into a high-performance distributed code execution cluster using Tailscale and Judge0 CE.
+
+-------------------------------------------------------------------------------
+1. WHY USE TAILSCALE INSTEAD OF NORMAL COLLEGE WIFI?
+-------------------------------------------------------------------------------
+* Bypasses College AP / Client Isolation:
+  Most college WiFi routers block laptops from talking to each other directly on 
+  192.168.x.x subnets. Tailscale creates a secure peer-to-peer WireGuard mesh.
+
+* Static Virtual IPs (100.x.y.z):
+  College DHCP leases change your 192.168.x.x IP every time a laptop sleeps or 
+  reconnects. Tailscale IPs NEVER change during the entire event.
+
+* Multi-Room & Multi-Lab Support:
+  One worker can be on Lab 1 Ethernet, another on College WiFi in Lab 2, and another 
+  on mobile hotspot. Tailscale makes them all act as if they are plugged into the 
+  exact same physical switch!
+
+* Security & IP Masking:
+  Your physical public and LAN IP addresses are completely hidden behind encrypted 
+  mesh tunnels.
+
+-------------------------------------------------------------------------------
+2. PREREQUISITES
+-------------------------------------------------------------------------------
+On each laptop / PC that will act as a Judge0 worker node:
+1. Install Docker Desktop (Windows / Mac) or Docker CE (Linux):
+   https://www.docker.com/products/docker-desktop/
+   (Make sure Docker Desktop is started and running).
+
+2. Install Tailscale:
+   https://tailscale.com/download
+   Log in with the SAME Google or GitHub account on all machines.
+
+-------------------------------------------------------------------------------
+3. STEP-BY-STEP WORKER NODE SETUP (RUN ON EACH LAPTOP)
+-------------------------------------------------------------------------------
+
+STEP 3.1: Start Judge0 Container
+Open PowerShell (Windows) or Terminal (Mac/Linux) and run:
+
+    docker run -d --name judge0-node --restart always -p 2358:2358 judge0/judge0:v1.13.1
+
+(This runs the lightweight Judge0 CE container and binds it to port 2358).
+
+Optional Production Compose Setup (for 100+ concurrent users):
+If you want to use the full official stack with dedicated Redis and Postgres:
+    curl -sSL https://github.com/judge0/judge0/releases/download/v1.13.1/judge0-v1.13.1.zip -o judge0.zip
+    tar -xf judge0.zip
+    cd judge0-v1.13.1
+    docker compose up -d db redis
+    # Wait 10 seconds, then start Judge0:
+    docker compose up -d
+
+STEP 3.2: Allow Port 2358 in Windows Firewall (Windows Only)
+Open PowerShell as Administrator and run:
+
+    netsh advfirewall firewall add rule name="Judge0 Port 2358" dir=in action=allow protocol=TCP localport=2358
+
+STEP 3.3: Get the Node's Tailscale IP
+Open the Tailscale application on that machine or run:
+
+    tailscale ip -4
+
+You will see an IP starting with 100.x.y.z (for example: 100.85.120.44).
+
+STEP 3.4: Quick Health Verification
+On the main CodeFest server (or another laptop in the Tailscale network), test:
+
+    curl http://100.85.120.44:2358/about
+
+You will receive a JSON response confirming the node is live:
+    {"version":"1.13.1","homepage":"https://judge0.com"}
+
+-------------------------------------------------------------------------------
+4. REGISTERING NODES IN CODEFEST
+-------------------------------------------------------------------------------
+1. Log in to the CodeFest Admin Portal:
+   URL: http://localhost:5173/#admin (or your production URL /admin)
+   Role: SuperAdmin or Organizer
+
+2. Click on the sidebar tab: "🖥️ Connected Devices"
+
+3. Click "➕ Connect New Device"
+
+4. Fill in:
+   - Device Name: e.g., "Lab PC 204" or "Faculty Laptop - Rohan"
+   - Endpoint URL: http://100.x.y.z:2358 (using your Tailscale IP)
+
+5. Click "Test Ping":
+   - You will see live ping latency (usually 8ms - 18ms over Tailscale mesh).
+
+6. Click "Save & Register Node".
+
+Repeat this for as many laptops as you have! (e.g., 3 to 5 laptops).
+
+-------------------------------------------------------------------------------
+5. HOW CODEFEST RUNS SUBMISSIONS DURING LEVEL 2 CODING
+-------------------------------------------------------------------------------
+* Round-Robin Load Balancing:
+  When 400 students submit code simultaneously, CodeFest spreads the jobs evenly:
+  Submission 1 -> Node 1 (100.85.120.44:2358)
+  Submission 2 -> Node 2 (100.85.120.45:2358)
+  Submission 3 -> Node 3 (100.85.120.46:2358)
+  Submission 4 -> Node 1 ... and so on.
+
+* 60-Second Circuit Breaker:
+  If a laptop's battery dies, lid closes, or connection drops, CodeFest 
+  automatically flags that endpoint offline for 60 seconds and seamlessly routes 
+  code to the remaining live nodes without failing any student submissions.
+
+* Zero-Downtime Built-in Local Sandbox Fallback:
+  Even if ALL external laptops are disconnected simultaneously, CodeFest 
+  instantly executes the code inside its built-in server runner with ZERO disruption.
+
+-------------------------------------------------------------------------------
+6. TROUBLESHOOTING & TIPS
+-------------------------------------------------------------------------------
+Q1: "Test Ping" says "Connection refused" or times out:
+    -> Check if Docker is running (open Docker Desktop).
+    -> Check if the container is running: `docker ps`.
+    -> Ensure Tailscale is "Connected" on both the server and the node.
+    -> Verify Windows Defender Firewall rule on the node (port 2358).
+
+Q2: How to temporarily stop a laptop from receiving submissions?
+    -> Go to "🖥️ Connected Devices" in the admin dashboard.
+    -> Click the "Active" button next to that node to switch it to "Standby".
+    -> The load balancer will bypass it until you toggle it back to "Active".
+
+Q3: Prevent laptops from going to sleep:
+    -> In Windows Settings -> Power & battery: set "When plugged in, put my device to sleep after" to "Never".
+===============================================================================
