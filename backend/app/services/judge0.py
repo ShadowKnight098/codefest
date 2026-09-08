@@ -324,7 +324,13 @@ class Judge0LoadBalancer:
         return None
 
     def get_headers(self) -> Dict[str, str]:
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "Bypass-Tunnel-Reminder": "true",
+            "bypass-tunnel-reminder": "true",
+            "ngrok-skip-browser-warning": "true",
+            "User-Agent": "CodeFest-Judge0-Client/1.0"
+        }
         if settings.JUDGE0_AUTH_TOKEN:
             headers["X-Auth-Token"] = settings.JUDGE0_AUTH_TOKEN
         return headers
