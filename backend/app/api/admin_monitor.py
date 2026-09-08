@@ -103,6 +103,7 @@ async def get_leaderboard(
     for p in parts:
         mcq_data = score_map.get((p.id, 1))
         coding_data = score_map.get((p.id, 2))
+        pres_data = score_map.get((p.id, 3))
         
         mcq_s = mcq_data[0] if mcq_data else None
         mcq_q = mcq_data[1] if mcq_data else None
@@ -117,7 +118,9 @@ async def get_leaderboard(
         else:
             code_s = None
         
-        total = (mcq_s or 0) + (code_s or 0)
+        pres_s = pres_data[0] if pres_data else None
+        
+        total = (mcq_s or 0) + (code_s or 0) + (pres_s or 0)
         viols = viol_map.get(p.id, 0)
 
         leaderboard.append({
@@ -128,6 +131,7 @@ async def get_leaderboard(
             "mcq_score": mcq_s,
             "mcq_qualified": mcq_q,
             "coding_score": code_s,
+            "presentation_score": pres_s,
             "total_score": total,
             "violations": viols
         })
@@ -149,7 +153,7 @@ async def export_results_csv(
     entries = await get_leaderboard(db=db, _=None)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Rank", "Roll Number", "Name", "Year", "MCQ Score", "Qualified", "Coding Score", "Total Score", "Violations"])
+    writer.writerow(["Rank", "Roll Number", "Name", "Year", "MCQ Score (/25)", "Qualified L2", "Coding Score (/60)", "Presentation Score (/50)", "Total Score", "Violations"])
     for e in entries:
         writer.writerow([
             e.rank,
@@ -159,6 +163,7 @@ async def export_results_csv(
             e.mcq_score if e.mcq_score is not None else "N/A",
             "Yes" if e.mcq_qualified else "No",
             e.coding_score if e.coding_score is not None else "N/A",
+            e.presentation_score if e.presentation_score is not None else "N/A",
             e.total_score,
             e.violations
         ])

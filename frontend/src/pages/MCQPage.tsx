@@ -741,76 +741,46 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
         </div>
       )}
 
-      {/* POST-SUBMISSION SCORE & ACCURACY SUMMARY MODAL */}
+      {/* POST-SUBMISSION CONFIRMATION MODAL */}
       {submitResult && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#DBD7C9] rounded-[6px] max-w-[460px] w-full p-6 sm:p-8 shadow-2xl text-center">
-            <div className="inline-block px-2.5 py-0.5 bg-[#EEF1F6] text-[#16233F] text-[11px] font-mono tracking-wider uppercase rounded-[2px] mb-3">
-              Assessment Results
+          <div className="bg-white border border-[#DBD7C9] rounded-[6px] max-w-[460px] w-full p-6 sm:p-8 shadow-2xl text-center space-y-4">
+            <div className="w-14 h-14 bg-[#E8F3EC] text-[#1E7A46] rounded-full flex items-center justify-center mx-auto text-2xl font-bold border border-[#BEDFCB]">
+              ✓
             </div>
 
-            <h3 className="font-serif text-[24px] font-bold text-[#1B2029]">
-              {submitResult.is_qualified ? 'Congratulations! You Qualified' : 'Assessment Submitted'}
-            </h3>
+            <div>
+              <div className="inline-block px-2.5 py-0.5 bg-[#EEF1F6] text-[#16233F] text-[11px] font-mono tracking-wider uppercase rounded-[2px] mb-2">
+                Level 01 Complete
+              </div>
 
-            <p className="text-[13px] text-[#59626F] mt-1 mb-6">
-              Your Level 1 assessment has been evaluated server-side against the official answer key.
-            </p>
+              <h3 className="font-serif text-[24px] font-bold text-[#1B2029]">
+                Assessment Submitted Successfully
+              </h3>
 
-            {/* Score Highlight Box */}
-            <div className={`p-5 rounded-[4px] border mb-6 ${
-              submitResult.is_qualified ? 'bg-[#E8F3EC] border-[#BEDFCB]' : 'bg-[#F6F6F2] border-[#DBD7C9]'
-            }`}>
-              <div className="text-[11.5px] font-bold tracking-[0.06em] text-[#59626F] uppercase font-mono">
-                Total Score Awarded
-              </div>
-              <div className="font-serif text-[38px] font-bold leading-tight mt-1 text-[#16233F]">
-                {submitResult.score} <span className="text-[20px] font-normal text-[#59626F]">/ {submitResult.total_marks}</span>
-              </div>
-              <div className={`text-[12.5px] font-semibold mt-1 ${
-                submitResult.is_qualified ? 'text-[#1E7A46]' : 'text-[#8A5A00]'
-              }`}>
-                {submitResult.is_qualified ? '● Qualified for Level 2 (Coding)' : '○ Cutoff: 18 / 25 Marks'}
-              </div>
+              <p className="text-[13px] text-[#59626F] mt-2 leading-relaxed">
+                Your responses for Level 1 (MCQ Assessment) have been securely recorded.
+              </p>
             </div>
 
-            {/* Breakdown Grid: Correct / Incorrect / Unanswered */}
-            <div className="grid grid-cols-3 gap-2 text-left mb-6">
-              <div className="p-3 bg-[#F6F6F2] border border-[#DBD7C9] rounded-[4px]">
-                <div className="text-[10.5px] font-bold uppercase tracking-wider text-[#1E7A46] font-mono">
-                  Correct
-                </div>
-                <div className="text-[20px] font-mono font-bold text-[#1E7A46] mt-0.5">
-                  {submitResult.correct_count}
-                </div>
-              </div>
-
-              <div className="p-3 bg-[#F6F6F2] border border-[#DBD7C9] rounded-[4px]">
-                <div className="text-[10.5px] font-bold uppercase tracking-wider text-[#AE2E22] font-mono">
-                  Incorrect
-                </div>
-                <div className="text-[20px] font-mono font-bold text-[#AE2E22] mt-0.5">
-                  {submitResult.incorrect_count}
-                </div>
-              </div>
-
-              <div className="p-3 bg-[#F6F6F2] border border-[#DBD7C9] rounded-[4px]">
-                <div className="text-[10.5px] font-bold uppercase tracking-wider text-[#8B93A0] font-mono">
-                  Skipped
-                </div>
-                <div className="text-[20px] font-mono font-bold text-[#8B93A0] mt-0.5">
-                  {submitResult.unanswered_count}
+            {/* Email Notification Notice Card */}
+            <div className="p-4 rounded-[4px] border bg-[#F6F6F2] border-[#DBD7C9] text-left">
+              <div className="flex items-start space-x-3">
+                <span className="text-xl">📧</span>
+                <div className="text-xs text-[#1B2029] leading-relaxed">
+                  <strong className="block text-[#16233F] mb-0.5">Next Round Notifications:</strong>
+                  Shortlisted candidates who qualify for the next round will receive official instructions and schedule on their registered email address.
                 </div>
               </div>
             </div>
 
             {/* Action Button */}
             <button
-              onClick={() => onComplete(!!submitResult.is_qualified)}
+              onClick={() => onComplete(false)}
               className="w-full btn-primary h-[42px] text-[14px] font-semibold flex items-center justify-center space-x-2"
               type="button"
             >
-              <span>{submitResult.is_qualified ? 'Proceed to Waiting Room →' : 'Return to Dashboard →'}</span>
+              <span>Return to Dashboard →</span>
             </button>
           </div>
         </div>

@@ -17,6 +17,7 @@ from app.api.admin_coding import router as admin_coding_router
 from app.api.admin_monitor import router as admin_monitor_router
 from app.api.admin_settings import router as admin_settings_router
 from app.api.admin_organizers import router as admin_organizers_router
+from app.api.admin_presentation import router as admin_presentation_router
 from app.api.coding import router as coding_router
 from app.api.security import router as security_router
 
@@ -91,6 +92,7 @@ app.include_router(admin_coding_router, prefix="/api")
 app.include_router(admin_monitor_router, prefix="/api")
 app.include_router(admin_settings_router, prefix="/api")
 app.include_router(admin_organizers_router, prefix="/api")
+app.include_router(admin_presentation_router, prefix="/api")
 
 # Assessment Execution & Security
 app.include_router(coding_router, prefix="/api")

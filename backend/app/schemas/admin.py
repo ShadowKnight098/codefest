@@ -274,5 +274,6 @@ class LeaderboardEntry(BaseModel):
     mcq_score: Optional[int] = None
     mcq_qualified: Optional[bool] = None
     coding_score: Optional[int] = None
+    presentation_score: Optional[int] = None
     total_score: int
     violations: int

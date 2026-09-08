@@ -260,3 +260,26 @@ class AuditLog(Base):
     action = Column(String(100), nullable=False)
     details = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class PresentationEvaluation(Base):
+    __tablename__ = "presentation_evaluations"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    participant_id = Column(String(36), ForeignKey("participants.id", ondelete="CASCADE"), nullable=False, unique=True)
+    round_id = Column(String(36), ForeignKey("rounds.id", ondelete="CASCADE"), nullable=False)
+    evaluator_id = Column(String(36), ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True)
+    evaluator_name = Column(String(100), nullable=True)
+
+    presentation_score = Column(Integer, default=0, nullable=False) # e.g. /15
+    technical_score = Column(Integer, default=0, nullable=False)    # e.g. /20
+    viva_score = Column(Integer, default=0, nullable=False)         # e.g. /15
+    total_score = Column(Integer, default=0, nullable=False)        # /50
+
+    remarks = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    participant = relationship("Participant")
+    round = relationship("Round")
+    evaluator = relationship("AdminUser")
+

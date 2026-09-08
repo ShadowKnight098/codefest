@@ -34,7 +34,7 @@ interface DisplayStateConfig {
 const PRESET_STATES: Record<string, DisplayStateConfig> = {
   'LEVEL1_AVAILABLE': {
     r1: { status: 'Available', sub: '25 questions · 30 minutes', action: 'Enter Assessment' },
-    r2: { status: 'Locked', sub: 'Opens after Level 1 results' },
+    r2: { status: 'Locked', sub: 'Opens after Level 1 evaluation' },
     r3: { status: 'Locked', sub: 'Evaluated manually' },
     panel: {
       type: 'default',
@@ -43,8 +43,8 @@ const PRESET_STATES: Record<string, DisplayStateConfig> = {
     }
   },
   'LEVEL1_IN_PROGRESS': {
-    r1: { status: 'In Progress', sub: '12 of 25 answered', action: 'Resume' },
-    r2: { status: 'Locked', sub: 'Opens after Level 1 results' },
+    r1: { status: 'In Progress', sub: 'Attempt in progress', action: 'Resume' },
+    r2: { status: 'Locked', sub: 'Opens after Level 1 evaluation' },
     r3: { status: 'Locked', sub: 'Evaluated manually' },
     panel: {
       type: 'warn',
@@ -53,27 +53,27 @@ const PRESET_STATES: Record<string, DisplayStateConfig> = {
     }
   },
   'NOT_QUALIFIED': {
-    r1: { status: 'Completed', sub: 'Score: 14 / 25' },
-    r2: { status: 'Locked', sub: 'Not qualified' },
-    r3: { status: 'Locked', sub: 'Not qualified' },
+    r1: { status: 'Completed', sub: 'Assessment submitted' },
+    r2: { status: 'Locked', sub: 'Shortlisted candidates will be notified via email' },
+    r3: { status: 'Locked', sub: 'Shortlisted candidates will be notified via email' },
     panel: {
-      type: 'error',
-      title: 'Not qualified',
-      message: 'You scored 14 / 25 on Level 1. The qualifying score for Level 2 was 18 / 25. Thank you for participating in CodeFest 2026.'
+      type: 'default',
+      title: 'Assessment submitted',
+      message: 'Your responses have been recorded. Shortlisted candidates who qualify for the next round will receive official notifications on their registered email address.'
     }
   },
   'WAITING_FOR_LEVEL2': {
-    r1: { status: 'Completed', sub: 'Score: 20 / 25 · Qualified' },
-    r2: { status: 'Locked', sub: 'Not yet opened' },
+    r1: { status: 'Completed', sub: 'Assessment submitted' },
+    r2: { status: 'Locked', sub: 'Shortlisted candidates will be notified via email' },
     r3: { status: 'Locked', sub: 'Evaluated manually' },
     panel: {
       type: 'default',
-      title: 'Qualified — waiting for Level 2',
-      message: 'You qualified for Level 2 with a score of 20 / 25. The coding round has not been opened yet. This page will update automatically once your organizer starts it.'
+      title: 'Assessment submitted',
+      message: 'Your responses have been recorded. Shortlisted candidates who qualify for the next round will receive official notifications on their registered email address.'
     }
   },
   'LEVEL2_AVAILABLE': {
-    r1: { status: 'Completed', sub: 'Score: 20 / 25 · Qualified' },
+    r1: { status: 'Completed', sub: 'Assessment submitted' },
     r2: { status: 'Available', sub: '2 problems · 50 minutes total', action: 'Enter Assessment' },
     r3: { status: 'Locked', sub: 'Evaluated manually' },
     panel: {
@@ -83,7 +83,7 @@ const PRESET_STATES: Record<string, DisplayStateConfig> = {
     }
   },
   'LEVEL2_IN_PROGRESS': {
-    r1: { status: 'Completed', sub: 'Score: 20 / 25 · Qualified' },
+    r1: { status: 'Completed', sub: 'Assessment submitted' },
     r2: { status: 'In Progress', sub: 'Problem 1 of 2', action: 'Resume' },
     r3: { status: 'Locked', sub: 'Evaluated manually' },
     panel: {
@@ -93,23 +93,23 @@ const PRESET_STATES: Record<string, DisplayStateConfig> = {
     }
   },
   'COMPLETED': {
-    r1: { status: 'Completed', sub: 'Score: 20 / 25 · Qualified' },
-    r2: { status: 'Completed', sub: 'Submitted · 32 / 40' },
-    r3: { status: 'Locked', sub: 'Manually evaluated' },
+    r1: { status: 'Completed', sub: 'Assessment submitted' },
+    r2: { status: 'Completed', sub: 'Assessment submitted' },
+    r3: { status: 'Locked', sub: 'Shortlisted finalists will be notified via email' },
     panel: {
       type: 'success',
-      title: 'Both rounds completed',
-      message: 'You have completed Level 1 and Level 2. Level 3 (Presentation) is evaluated manually — your coordinator will share scheduling details separately.'
+      title: 'Assessments submitted',
+      message: 'You have submitted your assessments. Shortlisted candidates who qualify for the next round will receive official notifications on their registered email address.'
     }
   },
   'TERMINATED': {
-    r1: { status: 'Completed', sub: 'Score: 20 / 25 · Qualified' },
+    r1: { status: 'Completed', sub: 'Assessment submitted' },
     r2: { status: 'Terminated', sub: 'Violations exceeded' },
     r3: { status: 'Locked', sub: 'Not applicable' },
     panel: {
       type: 'error',
       title: 'Attempt terminated',
-      message: 'Your Level 2 attempt was terminated due to repeated tab-switch violations. Contact your event coordinator if you believe this is an error.'
+      message: 'Your assessment session was terminated due to security policy violations. Contact your event coordinator if you believe this is an error.'
     }
   }
 };
@@ -258,7 +258,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                   </div>
                   <div className="text-[12.5px] text-[#59626F] mt-0.5">
                     {backendState?.level1_result
-                      ? `Score: ${backendState.level1_result.score} / ${backendState.level1_result.total_marks} · ${backendState.level1_result.is_qualified ? 'Qualified' : 'Not Qualified'}`
+                      ? 'Assessment Submitted · Shortlisted candidates will be notified via email'
                       : displayConfig.r1.sub}
                   </div>
                 </div>
@@ -296,7 +296,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                   </div>
                   <div className="text-[12.5px] text-[#59626F] mt-0.5">
                     {backendState?.level2_result
-                      ? `Score: ${backendState.level2_result.score} / ${backendState.level2_result.total_marks} · ${backendState.level2_result.is_qualified ? 'Completed' : 'Submitted'}`
+                      ? 'Assessment Submitted · Shortlisted candidates will be notified via email'
                       : displayConfig.r2.sub}
                   </div>
                 </div>
@@ -330,10 +330,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                 </div>
                 <div>
                   <div className="text-[15px] font-semibold text-[#1B2029]">
-                    Presentation
+                    Presentation &amp; Viva
                   </div>
                   <div className="text-[12.5px] text-[#59626F] mt-0.5">
-                    {displayConfig.r3.sub}
+                    Presentation &amp; Viva · Shortlisted finalists will receive schedule via email
                   </div>
                 </div>
               </div>

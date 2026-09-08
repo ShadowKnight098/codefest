@@ -42,7 +42,7 @@ export const WaitingPage: React.FC<WaitingPageProps> = ({
 
         {/* Headline */}
         <h2 className="font-serif text-[20px] font-semibold text-[#1B2029] mt-2 mb-6">
-          You have qualified for the next round.
+          Assessment Submitted Successfully
         </h2>
 
         {/* 44px Divider Rule */}
@@ -66,7 +66,7 @@ export const WaitingPage: React.FC<WaitingPageProps> = ({
 
       {/* Under-card text */}
       <p className="text-[12.5px] text-[#59626F] mt-5 max-w-sm">
-        This page updates automatically once Level 2 opens — no need to refresh.
+        Shortlisted candidates who qualify for the next round will receive official notifications on their registered email address. This page updates automatically once Level 2 begins.
       </p>
 
       {/* Return to Dashboard */}

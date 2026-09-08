@@ -134,20 +134,21 @@ async def get_dashboard_state(
                 await db.commit()
                 await db.refresh(r2_result)
 
+    # Participant-facing summary: do not expose raw marks or qualification status
     l1_summary = ResultSummary(
         round_number=1,
-        score=r1_result.score,
+        score=0,
         total_marks=25,
-        is_qualified=r1_result.is_qualified,
-        status_label="Qualified" if r1_result.is_qualified else "Not Qualified"
+        is_qualified=False,
+        status_label="Submitted"
     ) if r1_result else None
 
     l2_summary = ResultSummary(
         round_number=2,
-        score=r2_result.score if r2_result else coding_score_live,
-        total_marks=60, # 2 problems: 20 + 40 marks
-        is_qualified=r2_result.is_qualified if r2_result else (coding_attempt and coding_attempt.status == "SUBMITTED"),
-        status_label="Completed" if (coding_attempt and coding_attempt.status == "SUBMITTED") else ("In Progress" if coding_attempt else "Locked")
+        score=0,
+        total_marks=60,
+        is_qualified=False,
+        status_label="Submitted" if (coding_attempt and coding_attempt.status == "SUBMITTED") else ("In Progress" if coding_attempt else "Locked")
     ) if (r2_result or coding_attempt) else None
 
     # 6. Evaluate State Machine (per architecture.md §4)
@@ -187,8 +188,8 @@ async def get_dashboard_state(
                 academic_year=current_participant.academic_year,
                 email=current_participant.email,
                 state=ParticipantState.COMPLETED,
-                state_headline="Competition Completed",
-                state_description="You have successfully submitted both Level 1 and Level 2 assessments. Results will be published by organizers.",
+                state_headline="Assessments Submitted",
+                state_description="You have submitted your assessments. Shortlisted candidates who qualify for the next round will receive official notifications on their registered email address.",
                 can_start_level1=False,
                 can_resume_level1=False,
                 can_start_level2=False,
@@ -255,8 +256,8 @@ async def get_dashboard_state(
                         academic_year=current_participant.academic_year,
                         email=current_participant.email,
                         state=ParticipantState.LEVEL2_AVAILABLE,
-                        state_headline="Level 2 Ready to Begin",
-                        state_description="Congratulations! You have qualified for Level 2 (Coding Assessment). The round is now open.",
+                        state_headline="Level 2 Assessment Available",
+                        state_description="Level 2 (Coding Assessment) is now open. Click below to begin your assessment session.",
                         can_start_level1=False,
                         can_resume_level1=False,
                         can_start_level2=True,
@@ -274,8 +275,8 @@ async def get_dashboard_state(
                         academic_year=current_participant.academic_year,
                         email=current_participant.email,
                         state=ParticipantState.WAITING_FOR_LEVEL2,
-                        state_headline="Qualified for Level 2",
-                        state_description="You have passed Level 1. Level 2 (Coding Assessment) will start once activated by the organizer.",
+                        state_headline="Assessment Submitted",
+                        state_description="Your Level 1 assessment has been submitted successfully. Shortlisted candidates who qualify for the next round will receive official notifications on their registered email address.",
                         can_start_level1=False,
                         can_resume_level1=False,
                         can_start_level2=False,
@@ -294,8 +295,8 @@ async def get_dashboard_state(
                     academic_year=current_participant.academic_year,
                     email=current_participant.email,
                     state=ParticipantState.NOT_QUALIFIED,
-                    state_headline="Level 1 Completed",
-                    state_description="You have completed Level 1. Unfortunately, you did not meet the qualifying score threshold for Level 2.",
+                    state_headline="Assessment Submitted",
+                    state_description="Your Level 1 assessment has been submitted successfully. Shortlisted candidates who qualify for the next round will receive official notifications on their registered email address.",
                     can_start_level1=False,
                     can_resume_level1=False,
                     can_start_level2=False,

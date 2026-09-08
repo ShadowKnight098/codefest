@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { apiFetch } from '../api/client';
 
-type Tab = 'overview' | 'participants' | 'mcq' | 'coding' | 'settings' | 'export' | 'organizers' | 'winners1' | 'winners2';
+type Tab = 'overview' | 'participants' | 'mcq' | 'coding' | 'settings' | 'export' | 'organizers' | 'winners1' | 'winners2' | 'presentation';
 
 export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const { admin, logout } = useAdminAuth();
@@ -107,15 +107,37 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   const [r1Filter, setR1Filter] = useState<'ALL' | 'QUALIFIED' | 'DISQUALIFIED'>('ALL');
   const [r1YearFilter, setR1YearFilter] = useState<number | ''>('');
   const [r1Search, setR1Search] = useState<string>('');
+  const [r1TopLimit, setR1TopLimit] = useState<number | ''>('');
 
   // Round 2 Filter state
   const [r2YearFilter, setR2YearFilter] = useState<number | ''>('');
   const [r2Search, setR2Search] = useState<string>('');
+  const [r2TopLimit, setR2TopLimit] = useState<number | ''>('');
 
   // Leaderboard Filter state
   const [lbFilter, setLbFilter] = useState<'ALL' | 'QUALIFIED' | 'DISQUALIFIED'>('ALL');
   const [lbYearFilter, setLbYearFilter] = useState<number | ''>('');
   const [lbSearch, setLbSearch] = useState<string>('');
+  const [lbTopLimit, setLbTopLimit] = useState<number | ''>('');
+
+  // Presentation (Level 3) state
+  const [finalists, setFinalists] = useState<any[]>([]);
+  const [presFilter, setPresFilter] = useState<'ALL' | 'EVALUATED' | 'PENDING'>('ALL');
+  const [presYearFilter, setPresYearFilter] = useState<number | ''>('');
+  const [presSearch, setPresSearch] = useState<string>('');
+  const [presTopLimit, setPresTopLimit] = useState<number | ''>('');
+  const [selectedFinalistForGrade, setSelectedFinalistForGrade] = useState<any | null>(null);
+  const [gradeForm, setGradeForm] = useState({
+    presentation_score: 0,
+    technical_score: 0,
+    viva_score: 0,
+    remarks: '',
+  });
+  const [isGradingSubmitting, setIsGradingSubmitting] = useState<boolean>(false);
+  const [showPromoteModal, setShowPromoteModal] = useState<boolean>(false);
+  const [promoteTopN, setPromoteTopN] = useState<number>(10);
+  const [promoteCutoff, setPromoteCutoff] = useState<number>(20);
+  const [isPromoting, setIsPromoting] = useState<boolean>(false);
 
   const fetchOverview = async () => {
     try {
@@ -216,6 +238,16 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     }
   };
 
+  const fetchFinalists = async () => {
+    try {
+      const data = await apiFetch<any[]>('/admin/presentation/finalists');
+      setFinalists(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error(e);
+      setFinalists([]);
+    }
+  };
+
   const refreshActiveTab = async () => {
     setIsRefreshing(true);
     try {
@@ -228,6 +260,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
       else if (activeTab === 'export') await fetchLeaderboard();
       else if (activeTab === 'winners1') await fetchWinners1();
       else if (activeTab === 'winners2') await fetchWinners2();
+      else if (activeTab === 'presentation') await fetchFinalists();
       setLastSynced(new Date());
     } catch (e) {
       console.error('Refresh failed', e);
@@ -262,7 +295,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   };
 
   useEffect(() => {
-    if (!isSuperAdmin && activeTab !== 'export' && activeTab !== 'winners1' && activeTab !== 'winners2') {
+    if (!isSuperAdmin && activeTab !== 'export' && activeTab !== 'winners1' && activeTab !== 'winners2' && activeTab !== 'presentation') {
       setActiveTab('export');
       return;
     }
@@ -278,45 +311,131 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     return () => clearInterval(interval);
   }, [autoSync, activeTab, yearFilter, search, qYearFilter, isSuperAdmin]);
 
-  const filteredWinners1 = winners1.filter((w) => {
-    if (r1Filter === 'QUALIFIED' && !w.mcq_qualified) return false;
-    if (r1Filter === 'DISQUALIFIED' && w.mcq_qualified) return false;
-    if (r1YearFilter && w.academic_year !== r1YearFilter) return false;
-    if (r1Search) {
-      const s = r1Search.toLowerCase();
-      return (
-        w.roll_number?.toLowerCase().includes(s) ||
-        w.name?.toLowerCase().includes(s)
-      );
-    }
-    return true;
-  });
+  const filteredWinners1 = winners1
+    .filter((w) => {
+      if (r1Filter === 'QUALIFIED' && !w.mcq_qualified) return false;
+      if (r1Filter === 'DISQUALIFIED' && w.mcq_qualified) return false;
+      if (r1YearFilter && w.academic_year !== r1YearFilter) return false;
+      if (r1Search) {
+        const s = r1Search.toLowerCase();
+        return (
+          w.roll_number?.toLowerCase().includes(s) ||
+          w.name?.toLowerCase().includes(s)
+        );
+      }
+      return true;
+    })
+    .slice(0, r1TopLimit ? Number(r1TopLimit) : undefined);
 
-  const filteredWinners2 = winners2.filter((w) => {
-    if (r2YearFilter && w.academic_year !== r2YearFilter) return false;
-    if (r2Search) {
-      const s = r2Search.toLowerCase();
-      return (
-        w.roll_number?.toLowerCase().includes(s) ||
-        w.name?.toLowerCase().includes(s)
-      );
-    }
-    return true;
-  });
+  const filteredWinners2 = winners2
+    .filter((w) => {
+      if (r2YearFilter && w.academic_year !== r2YearFilter) return false;
+      if (r2Search) {
+        const s = r2Search.toLowerCase();
+        return (
+          w.roll_number?.toLowerCase().includes(s) ||
+          w.name?.toLowerCase().includes(s)
+        );
+      }
+      return true;
+    })
+    .slice(0, r2TopLimit ? Number(r2TopLimit) : undefined);
 
-  const filteredLeaderboard = leaderboard.filter((w) => {
-    if (lbFilter === 'QUALIFIED' && !w.mcq_qualified) return false;
-    if (lbFilter === 'DISQUALIFIED' && w.mcq_qualified) return false;
-    if (lbYearFilter && w.academic_year !== lbYearFilter) return false;
-    if (lbSearch) {
-      const s = lbSearch.toLowerCase();
-      return (
-        w.roll_number?.toLowerCase().includes(s) ||
-        w.name?.toLowerCase().includes(s)
-      );
+  const filteredLeaderboard = leaderboard
+    .filter((w) => {
+      if (lbFilter === 'QUALIFIED' && !w.mcq_qualified) return false;
+      if (lbFilter === 'DISQUALIFIED' && w.mcq_qualified) return false;
+      if (lbYearFilter && w.academic_year !== lbYearFilter) return false;
+      if (lbSearch) {
+        const s = lbSearch.toLowerCase();
+        return (
+          w.roll_number?.toLowerCase().includes(s) ||
+          w.name?.toLowerCase().includes(s)
+        );
+      }
+      return true;
+    })
+    .slice(0, lbTopLimit ? Number(lbTopLimit) : undefined);
+
+  const filteredFinalists = finalists
+    .filter((f) => {
+      if (presFilter === 'EVALUATED' && f.status !== 'EVALUATED') return false;
+      if (presFilter === 'PENDING' && f.status !== 'PENDING') return false;
+      if (presYearFilter && f.academic_year !== presYearFilter) return false;
+      if (presSearch) {
+        const s = presSearch.toLowerCase();
+        return (
+          f.roll_number?.toLowerCase().includes(s) ||
+          f.name?.toLowerCase().includes(s)
+        );
+      }
+      return true;
+    })
+    .slice(0, presTopLimit ? Number(presTopLimit) : undefined);
+
+  const handleSaveEvaluation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFinalistForGrade) return;
+    setIsGradingSubmitting(true);
+    try {
+      await apiFetch('/admin/presentation/evaluate', {
+        method: 'POST',
+        body: JSON.stringify({
+          participant_id: selectedFinalistForGrade.participant_id,
+          presentation_score: Number(gradeForm.presentation_score || 0),
+          technical_score: Number(gradeForm.technical_score || 0),
+          viva_score: Number(gradeForm.viva_score || 0),
+          remarks: gradeForm.remarks || '',
+        }),
+      });
+      setMessage(`Marks assigned successfully for ${selectedFinalistForGrade.roll_number} (${selectedFinalistForGrade.name}).`);
+      setSelectedFinalistForGrade(null);
+      await fetchFinalists();
+      await fetchLeaderboard();
+    } catch (err: any) {
+      alert(`Evaluation failed: ${err?.detail || err?.message || 'Server error'}`);
+    } finally {
+      setIsGradingSubmitting(false);
     }
-    return true;
-  });
+  };
+
+  const handlePromoteByCutoff = async () => {
+    if (!promoteCutoff) return;
+    setIsPromoting(true);
+    try {
+      const res = await apiFetch<any>('/admin/presentation/promote-l2-finalists', {
+        method: 'POST',
+        body: JSON.stringify({ min_coding_score: Number(promoteCutoff) }),
+      });
+      setMessage(res.message || 'Participants promoted to Level 3 successfully.');
+      setShowPromoteModal(false);
+      await fetchFinalists();
+    } catch (err: any) {
+      alert(`Promotion failed: ${err?.detail || err?.message || 'Server error'}`);
+    } finally {
+      setIsPromoting(false);
+    }
+  };
+
+  const handlePromoteTopN = async () => {
+    if (!promoteTopN) return;
+    setIsPromoting(true);
+    try {
+      // Find top N from winners2
+      const topParts = winners2.slice(0, Number(promoteTopN)).map((w: any) => w.participant_id);
+      const res = await apiFetch<any>('/admin/presentation/promote-l2-finalists', {
+        method: 'POST',
+        body: JSON.stringify({ participant_ids: topParts }),
+      });
+      setMessage(res.message || `Promoted top ${promoteTopN} participants to Level 3.`);
+      setShowPromoteModal(false);
+      await fetchFinalists();
+    } catch (err: any) {
+      alert(`Promotion failed: ${err?.detail || err?.message || 'Server error'}`);
+    } finally {
+      setIsPromoting(false);
+    }
+  };
 
   const toggleRound = async (roundId: string, currentStatus: boolean) => {
     // 1. Instant Optimistic State Update
@@ -636,6 +755,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         { id: 'export' as Tab, label: '📊 Live Leaderboard' },
         { id: 'winners1' as Tab, label: '🥇 Round 1 Results' },
         { id: 'winners2' as Tab, label: '🏆 Round 2 Results' },
+        { id: 'presentation' as Tab, label: '🎤 Level 3 Evaluation' },
         { id: 'participants' as Tab, label: 'Participants' },
         { id: 'mcq' as Tab, label: 'MCQ Bank Manager' },
         { id: 'coding' as Tab, label: 'Coding Problems' },
@@ -646,6 +766,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         { id: 'export' as Tab, label: '📊 Live Leaderboard' },
         { id: 'winners1' as Tab, label: '🥇 Round 1 Results' },
         { id: 'winners2' as Tab, label: '🏆 Round 2 Results' },
+        { id: 'presentation' as Tab, label: '🎤 Level 3 Evaluation' },
       ];
 
   return (
@@ -2051,9 +2172,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   <button
                     onClick={() => downloadCSV(
                       filteredLeaderboard,
-                      `leaderboard_${lbFilter.toLowerCase()}${lbYearFilter ? `_y${lbYearFilter}` : ''}.csv`,
-                      ['Rank','Roll Number','Name','Year','MCQ Score','Qualified','Coding Score','Total Score','Violations'],
-                      ['rank','roll_number','name','academic_year','mcq_score','mcq_qualified','coding_score','total_score','violations']
+                      `leaderboard_${lbFilter.toLowerCase()}${lbYearFilter ? `_y${lbYearFilter}` : ''}${lbTopLimit ? `_top${lbTopLimit}` : ''}.csv`,
+                      ['Rank','Roll Number','Name','Year','MCQ Score (/25)','Qualified L2','Coding Score (/60)','Presentation (/50)','Total Score','Violations'],
+                      ['rank','roll_number','name','academic_year','mcq_score','mcq_qualified','coding_score','presentation_score','total_score','violations']
                     )}
                     className="px-4 py-2 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] transition-colors flex items-center space-x-1.5"
                   >
@@ -2092,6 +2213,21 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   </select>
                 </div>
 
+                <div className="flex items-center space-x-1.5 text-xs">
+                  <span className="font-semibold text-[#59626F]">Top Rank:</span>
+                  <select
+                    value={lbTopLimit}
+                    onChange={(e) => setLbTopLimit(e.target.value ? Number(e.target.value) : '')}
+                    className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
+                  >
+                    <option value="">All Records</option>
+                    <option value="10">Top 10</option>
+                    <option value="25">Top 25</option>
+                    <option value="50">Top 50</option>
+                    <option value="100">Top 100</option>
+                  </select>
+                </div>
+
                 <div className="flex-1 min-w-[200px]">
                   <input
                     type="text"
@@ -2117,6 +2253,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <th className="py-2.5 px-3 text-center">Year</th>
                       <th className="py-2.5 px-3 text-center">MCQ Score</th>
                       <th className="py-2.5 px-3 text-center">Coding Score</th>
+                      <th className="py-2.5 px-3 text-center">Presentation (/50)</th>
                       <th className="py-2.5 px-3 text-center font-bold">Total Score</th>
                       <th className="py-2.5 px-3 text-center">Violations</th>
                     </tr>
@@ -2135,6 +2272,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         </td>
                         <td className="py-2.5 px-3 text-center font-mono">
                           {e.coding_score !== null ? `${e.coding_score}` : '—'}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-mono font-semibold text-[#16233F]">
+                          {e.presentation_score !== null ? `${e.presentation_score}` : '—'}
                         </td>
                         <td className="py-2.5 px-3 text-center font-mono font-bold text-[#1E7E34]">
                           {e.total_score}
@@ -2175,7 +2315,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   <button
                     onClick={() => downloadCSV(
                       filteredWinners1,
-                      `round1_mcq_results_${r1Filter.toLowerCase()}${r1YearFilter ? `_y${r1YearFilter}` : ''}.csv`,
+                      `round1_mcq_results_${r1Filter.toLowerCase()}${r1YearFilter ? `_y${r1YearFilter}` : ''}${r1TopLimit ? `_top${r1TopLimit}` : ''}.csv`,
                       ['Rank','Roll Number','Name','Year','MCQ Score (/ 25)','Qualified for Round 2','Violations'],
                       ['r1_rank','roll_number','name','academic_year','mcq_score','mcq_qualified','violations']
                     )}
@@ -2213,6 +2353,21 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     <option value="2">Year 2</option>
                     <option value="3">Year 3</option>
                     <option value="4">Year 4</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center space-x-1.5 text-xs">
+                  <span className="font-semibold text-[#59626F]">Top Rank:</span>
+                  <select
+                    value={r1TopLimit}
+                    onChange={(e) => setR1TopLimit(e.target.value ? Number(e.target.value) : '')}
+                    className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
+                  >
+                    <option value="">All Records</option>
+                    <option value="10">Top 10</option>
+                    <option value="25">Top 25</option>
+                    <option value="50">Top 50</option>
+                    <option value="100">Top 100</option>
                   </select>
                 </div>
 
@@ -2313,8 +2468,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   <button
                     onClick={() => downloadCSV(
                       filteredWinners2,
-                      `round2_coding_results${r2YearFilter ? `_y${r2YearFilter}` : ''}.csv`,
-                      ['Rank','Roll Number','Name','Year','MCQ Score','Coding Score','Total Score','Violations'],
+                      `round2_coding_results${r2YearFilter ? `_y${r2YearFilter}` : ''}${r2TopLimit ? `_top${r2TopLimit}` : ''}.csv`,
+                      ['Rank','Roll Number','Name','Year','MCQ Score (/25)','Coding Score (/60)','Total Score','Violations'],
                       ['r2_rank','roll_number','name','academic_year','mcq_score','coding_score','total_score','violations']
                     )}
                     className="px-4 py-2 bg-[#C0392B] text-white text-xs font-bold rounded-[3px] hover:bg-[#A82A2A] transition-colors flex items-center space-x-1.5"
@@ -2338,6 +2493,21 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     <option value="2">Year 2</option>
                     <option value="3">Year 3</option>
                     <option value="4">Year 4</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center space-x-1.5 text-xs">
+                  <span className="font-semibold text-[#59626F]">Top Rank:</span>
+                  <select
+                    value={r2TopLimit}
+                    onChange={(e) => setR2TopLimit(e.target.value ? Number(e.target.value) : '')}
+                    className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
+                  >
+                    <option value="">All Records</option>
+                    <option value="10">Top 10</option>
+                    <option value="25">Top 25</option>
+                    <option value="50">Top 50</option>
+                    <option value="100">Top 100</option>
                   </select>
                 </div>
 
@@ -2382,8 +2552,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <th className="py-2.5 px-3 font-mono">Roll Number</th>
                       <th className="py-2.5 px-3">Name</th>
                       <th className="py-2.5 px-3 text-center">Year</th>
-                      <th className="py-2.5 px-3 text-center">MCQ</th>
-                      <th className="py-2.5 px-3 text-center">Coding</th>
+                      <th className="py-2.5 px-3 text-center">MCQ (/25)</th>
+                      <th className="py-2.5 px-3 text-center">Coding (/60)</th>
                       <th className="py-2.5 px-3 text-center font-bold">Total</th>
                       <th className="py-2.5 px-3 text-center">Violations</th>
                     </tr>
@@ -2413,6 +2583,430 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
               </div>
             </div>
           )}
+
+          {/* TAB 9: LEVEL 3 EVALUATION (PRESENTATION & VIVA) */}
+          {activeTab === 'presentation' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-[#16233F]">🎤 Level 3 — Presentation &amp; Viva Evaluation</h2>
+                  <p className="text-xs text-[#59626F]">Faculty manual grading interface. Assign marks out of 50 (Presentation 15, Technical 20, Viva 15).</p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => refreshActiveTab()}
+                    disabled={isRefreshing}
+                    className="px-3 py-1.5 border border-[#DBD7C9] text-[#16233F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2] flex items-center space-x-1"
+                  >
+                    <span className={isRefreshing ? 'animate-spin' : ''}>↺</span>
+                    <span>{isRefreshing ? 'Refreshing…' : 'Refresh'}</span>
+                  </button>
+                  <button
+                    onClick={() => setShowPromoteModal(true)}
+                    className="px-3 py-1.5 bg-[#8A5A00] text-white text-xs font-bold rounded-[3px] hover:bg-[#6D4700] transition-colors flex items-center space-x-1"
+                  >
+                    <span>⚡ Promote Finalists</span>
+                  </button>
+                  <button
+                    onClick={() => downloadCSV(
+                      filteredFinalists.map((f, idx) => ({
+                        rank: idx + 1,
+                        roll_number: f.roll_number,
+                        name: f.name,
+                        email: f.email,
+                        academic_year: f.academic_year,
+                        mcq_score: f.mcq_score ?? 'N/A',
+                        coding_score: f.coding_score ?? 'N/A',
+                        total_previous_score: f.total_previous_score,
+                        presentation_score: f.evaluation?.presentation_score ?? 'N/A',
+                        technical_score: f.evaluation?.technical_score ?? 'N/A',
+                        viva_score: f.evaluation?.viva_score ?? 'N/A',
+                        level3_total: f.evaluation?.total_score ?? 'N/A',
+                        grand_total_score: f.grand_total_score,
+                        status: f.status,
+                        evaluator: f.evaluation?.evaluator_name ?? 'N/A',
+                        remarks: f.evaluation?.remarks ?? ''
+                      })),
+                      `level3_presentation_evaluations${presTopLimit ? `_top${presTopLimit}` : ''}.csv`,
+                      ['Rank','Roll Number','Name','Email','Year','MCQ (/25)','Coding (/60)','Prev Total (/85)','Presentation (/15)','Technical (/20)','Viva (/15)','Level 3 Total (/50)','Grand Total (/135)','Status','Evaluator','Remarks'],
+                      ['rank','roll_number','name','email','academic_year','mcq_score','coding_score','total_previous_score','presentation_score','technical_score','viva_score','level3_total','grand_total_score','status','evaluator','remarks']
+                    )}
+                    className="px-4 py-2 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] transition-colors flex items-center space-x-1.5"
+                  >
+                    <span>⬇ Download Level 3 CSV ({filteredFinalists.length})</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter Controls Strip */}
+              <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-[4px] border border-[#DBD7C9]">
+                <div className="flex items-center space-x-1.5 text-xs">
+                  <span className="font-semibold text-[#59626F]">Evaluation:</span>
+                  <select
+                    value={presFilter}
+                    onChange={(e) => setPresFilter(e.target.value as any)}
+                    className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
+                  >
+                    <option value="ALL">All Finalists ({finalists.length})</option>
+                    <option value="EVALUATED">✓ Evaluated ({finalists.filter(f => f.status === 'EVALUATED').length})</option>
+                    <option value="PENDING">⏳ Pending Evaluation ({finalists.filter(f => f.status === 'PENDING').length})</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center space-x-1.5 text-xs">
+                  <span className="font-semibold text-[#59626F]">Academic Year:</span>
+                  <select
+                    value={presYearFilter}
+                    onChange={(e) => setPresYearFilter(e.target.value ? Number(e.target.value) : '')}
+                    className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
+                  >
+                    <option value="">All Years (1–4)</option>
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3">Year 3</option>
+                    <option value="4">Year 4</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center space-x-1.5 text-xs">
+                  <span className="font-semibold text-[#59626F]">Top Rank:</span>
+                  <select
+                    value={presTopLimit}
+                    onChange={(e) => setPresTopLimit(e.target.value ? Number(e.target.value) : '')}
+                    className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
+                  >
+                    <option value="">All Records</option>
+                    <option value="10">Top 10</option>
+                    <option value="25">Top 25</option>
+                    <option value="50">Top 50</option>
+                    <option value="100">Top 100</option>
+                  </select>
+                </div>
+
+                <div className="flex-1 min-w-[200px]">
+                  <input
+                    type="text"
+                    value={presSearch}
+                    onChange={(e) => setPresSearch(e.target.value)}
+                    placeholder="Search finalist by Roll Number or Name…"
+                    className="h-8 px-3 text-xs border border-[#C6C1B0] rounded-[3px] w-full"
+                  />
+                </div>
+
+                <div className="text-xs text-[#8B93A0] font-mono">
+                  Showing <strong>{filteredFinalists.length}</strong> of {finalists.length} finalists
+                </div>
+              </div>
+
+              {/* Top 3 Finalists Podium (if available) */}
+              {filteredFinalists.filter(f => f.status === 'EVALUATED').length >= 3 && (
+                <div className="grid grid-cols-3 gap-3">
+                  {[filteredFinalists[1], filteredFinalists[0], filteredFinalists[2]].map((w, i) => (
+                    <div key={w?.participant_id} className={`rounded-[6px] p-4 border-2 text-center ${
+                      i === 1 ? 'border-[#E3B341] bg-[#FFFBEB]' : i === 0 ? 'border-[#8B93A0] bg-[#F6F6F2]' : 'border-[#CD7F32] bg-[#FFF5EE]'
+                    }`}>
+                      <div className="text-3xl mb-1">{i === 1 ? '🥇' : i === 0 ? '🥈' : '🥉'}</div>
+                      <div className="font-bold text-[#16233F] text-sm">{w?.name}</div>
+                      <div className="text-[11px] text-[#59626F] font-mono">{w?.roll_number}</div>
+                      <div className="text-xl font-bold font-mono text-[#1E7A46] mt-2">
+                        {w?.grand_total_score}<span className="text-xs text-[#8B93A0]"> / 135 pts</span>
+                      </div>
+                      <div className="text-[10px] text-[#59626F] mt-0.5">
+                        L3: {w?.evaluation?.total_score || 0}/50 · Prev: {w?.total_previous_score}/85
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Finalists Table */}
+              <div className="bg-white border border-[#DBD7C9] rounded-[4px] overflow-hidden shadow-sm">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[#F6F6F2] border-b border-[#DBD7C9] font-semibold text-[#16233F]">
+                      <th className="py-2.5 px-3 text-center font-mono">#</th>
+                      <th className="py-2.5 px-3 font-mono">Roll Number</th>
+                      <th className="py-2.5 px-3">Candidate</th>
+                      <th className="py-2.5 px-3 text-center">Year</th>
+                      <th className="py-2.5 px-3 text-center">MCQ (/25)</th>
+                      <th className="py-2.5 px-3 text-center">Code (/60)</th>
+                      <th className="py-2.5 px-3 text-center">Pres. (/15)</th>
+                      <th className="py-2.5 px-3 text-center">Tech. (/20)</th>
+                      <th className="py-2.5 px-3 text-center">Viva (/15)</th>
+                      <th className="py-2.5 px-3 text-center font-bold text-[#16233F]">L3 Total (/50)</th>
+                      <th className="py-2.5 px-3 text-center font-bold text-[#1E7A46]">Grand Total (/135)</th>
+                      <th className="py-2.5 px-3 text-center">Status</th>
+                      <th className="py-2.5 px-3 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#DBD7C9]">
+                    {filteredFinalists.map((f, idx) => (
+                      <tr key={f.participant_id} className={`hover:bg-[#F6F6F2]/70 ${f.status === 'EVALUATED' ? 'bg-[#F0FBF4]/40' : ''}`}>
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-[#16233F]">
+                          {idx + 1}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-[#16233F]">{f.roll_number}</td>
+                        <td className="py-2.5 px-3">
+                          <div className="font-semibold text-[#16233F]">{f.name}</div>
+                          <div className="text-[11px] text-[#59626F] font-mono">{f.email}</div>
+                        </td>
+                        <td className="py-2.5 px-3 text-center">{f.academic_year}</td>
+                        <td className="py-2.5 px-3 text-center font-mono">{f.mcq_score ?? '—'}</td>
+                        <td className="py-2.5 px-3 text-center font-mono">{f.coding_score ?? '—'}</td>
+                        <td className="py-2.5 px-3 text-center font-mono">{f.evaluation?.presentation_score ?? '—'}</td>
+                        <td className="py-2.5 px-3 text-center font-mono">{f.evaluation?.technical_score ?? '—'}</td>
+                        <td className="py-2.5 px-3 text-center font-mono">{f.evaluation?.viva_score ?? '—'}</td>
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-[#16233F]">
+                          {f.evaluation ? `${f.evaluation.total_score} / 50` : '—'}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-[#1E7A46] text-sm">
+                          {f.grand_total_score}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-[2px] text-[10px] font-bold ${
+                            f.status === 'EVALUATED'
+                              ? 'bg-[#E8F3EC] text-[#1E7A46]'
+                              : 'bg-[#FFF3CD] text-[#8A5A00]'
+                          }`}>
+                            {f.status === 'EVALUATED' ? '✓ EVALUATED' : '⏳ PENDING'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedFinalistForGrade(f);
+                              setGradeForm({
+                                presentation_score: f.evaluation?.presentation_score || 0,
+                                technical_score: f.evaluation?.technical_score || 0,
+                                viva_score: f.evaluation?.viva_score || 0,
+                                remarks: f.evaluation?.remarks || '',
+                              });
+                            }}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-[3px] transition-colors border ${
+                              f.status === 'EVALUATED'
+                                ? 'bg-white border-[#DBD7C9] text-[#16233F] hover:bg-[#F6F6F2]'
+                                : 'bg-[#16233F] border-[#16233F] text-white hover:bg-[#25355B]'
+                            }`}
+                          >
+                            {f.status === 'EVALUATED' ? '✏ Edit Marks' : 'Assign Marks'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filteredFinalists.length === 0 && (
+                  <p className="text-xs text-[#8B93A0] text-center py-8">
+                    No Level 3 finalists found. You can promote finalists from Level 2 using the "Promote Finalists" button above.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+      {/* FACULTY LEVEL 3 GRADING MODAL */}
+      {selectedFinalistForGrade && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-[#DBD7C9] rounded-[6px] max-w-lg w-full p-6 shadow-2xl space-y-5">
+            <div className="border-b border-[#DBD7C9] pb-3 flex items-start justify-between">
+              <div>
+                <div className="text-[11px] font-mono uppercase tracking-wider text-[#1E7A46] font-bold">
+                  Faculty Manual Evaluation · Level 03
+                </div>
+                <h3 className="font-serif text-[20px] font-bold text-[#1B2029] mt-0.5">
+                  {selectedFinalistForGrade.name}
+                </h3>
+                <p className="text-xs text-[#59626F] font-mono mt-0.5">
+                  Roll: {selectedFinalistForGrade.roll_number} · Year {selectedFinalistForGrade.academic_year} · L1: {selectedFinalistForGrade.mcq_score ?? 0}/25 · L2: {selectedFinalistForGrade.coding_score ?? 0}/60
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedFinalistForGrade(null)}
+                className="text-lg font-bold text-[#8B93A0] hover:text-[#1B2029]"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEvaluation} className="space-y-4 text-xs">
+              {/* Rubric Breakdown Grid */}
+              <div className="space-y-3 bg-[#F6F6F2] p-4 rounded-[4px] border border-[#DBD7C9]">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-semibold text-[#16233F]">1. Presentation &amp; Communication Skills (0 – 15):</label>
+                    <span className="font-mono font-bold text-[#16233F]">{gradeForm.presentation_score} / 15</span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    max="15"
+                    required
+                    value={gradeForm.presentation_score}
+                    onChange={(e) => setGradeForm({ ...gradeForm, presentation_score: Math.min(15, Math.max(0, Number(e.target.value) || 0)) })}
+                    className="w-full h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-mono"
+                  />
+                  <p className="text-[10.5px] text-[#59626F] mt-0.5">Clarity of explanation, slide deck / demo flow, articulation.</p>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-semibold text-[#16233F]">2. Technical Architecture &amp; Code Defense (0 – 20):</label>
+                    <span className="font-mono font-bold text-[#16233F]">{gradeForm.technical_score} / 20</span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    max="20"
+                    required
+                    value={gradeForm.technical_score}
+                    onChange={(e) => setGradeForm({ ...gradeForm, technical_score: Math.min(20, Math.max(0, Number(e.target.value) || 0)) })}
+                    className="w-full h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-mono"
+                  />
+                  <p className="text-[10.5px] text-[#59626F] mt-0.5">Algorithm explanation, time/space complexity analysis, code robustness.</p>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-semibold text-[#16233F]">3. Viva Q&amp;A &amp; Conceptual Depth (0 – 15):</label>
+                    <span className="font-mono font-bold text-[#16233F]">{gradeForm.viva_score} / 15</span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    max="15"
+                    required
+                    value={gradeForm.viva_score}
+                    onChange={(e) => setGradeForm({ ...gradeForm, viva_score: Math.min(15, Math.max(0, Number(e.target.value) || 0)) })}
+                    className="w-full h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-mono"
+                  />
+                  <p className="text-[10.5px] text-[#59626F] mt-0.5">Response to impromptu faculty questions, CS fundamentals, problem-solving depth.</p>
+                </div>
+
+                {/* Total Live Calculator */}
+                <div className="pt-2 border-t border-[#DBD7C9] flex items-center justify-between font-bold text-sm">
+                  <span className="text-[#16233F]">Level 3 Awarded Total:</span>
+                  <span className="font-mono text-[#1E7A46] text-base">
+                    {Number(gradeForm.presentation_score || 0) + Number(gradeForm.technical_score || 0) + Number(gradeForm.viva_score || 0)} / 50 Marks
+                  </span>
+                </div>
+              </div>
+
+              {/* Remarks Area */}
+              <div>
+                <label className="block font-semibold text-[#16233F] mb-1">Faculty Remarks &amp; Feedback:</label>
+                <textarea
+                  rows={3}
+                  value={gradeForm.remarks}
+                  onChange={(e) => setGradeForm({ ...gradeForm, remarks: e.target.value })}
+                  placeholder="E.g., Excellent defense of recursive time complexity; strong viva answers..."
+                  className="w-full p-2 text-xs border border-[#C6C1B0] rounded-[3px] bg-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isGradingSubmitting}
+                  onClick={() => setSelectedFinalistForGrade(null)}
+                  className="px-4 py-2 bg-white border border-[#DBD7C9] text-[#59626F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isGradingSubmitting}
+                  className="px-5 py-2 bg-[#1E7E34] text-white text-xs font-bold rounded-[3px] hover:bg-[#166027] transition-colors flex items-center space-x-2"
+                >
+                  {isGradingSubmitting ? 'Saving Marks…' : 'Save Marks & Publish'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* PROMOTE LEVEL 2 FINALISTS MODAL */}
+      {showPromoteModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-[#DBD7C9] rounded-[6px] max-w-md w-full p-6 shadow-2xl space-y-4 text-xs">
+            <div className="border-b border-[#DBD7C9] pb-3 flex items-start justify-between">
+              <div>
+                <h3 className="font-serif text-[18px] font-bold text-[#16233F]">
+                  Promote Finalists to Level 3
+                </h3>
+                <p className="text-xs text-[#59626F] mt-0.5">
+                  Select candidates from Level 2 (Coding) to qualify for Level 3 Presentation.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPromoteModal(false)}
+                className="text-lg font-bold text-[#8B93A0] hover:text-[#1B2029]"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Option A: Promote Top N */}
+            <div className="p-3 bg-[#F6F6F2] rounded-[4px] border border-[#DBD7C9] space-y-2">
+              <div className="font-semibold text-[#16233F]">Option A: Promote Top N Coding Finalists</div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={promoteTopN}
+                  onChange={(e) => setPromoteTopN(Number(e.target.value))}
+                  className="w-24 h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-mono"
+                />
+                <button
+                  type="button"
+                  disabled={isPromoting}
+                  onClick={handlePromoteTopN}
+                  className="px-3 py-1.5 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B]"
+                >
+                  {isPromoting ? 'Promoting…' : `Promote Top ${promoteTopN}`}
+                </button>
+              </div>
+            </div>
+
+            {/* Option B: Promote by Minimum Coding Score Cutoff */}
+            <div className="p-3 bg-[#F6F6F2] rounded-[4px] border border-[#DBD7C9] space-y-2">
+              <div className="font-semibold text-[#16233F]">Option B: Cutoff Promotion (Score Threshold)</div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="number"
+                  min="0"
+                  max="60"
+                  value={promoteCutoff}
+                  onChange={(e) => setPromoteCutoff(Number(e.target.value))}
+                  className="w-24 h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-mono"
+                />
+                <button
+                  type="button"
+                  disabled={isPromoting}
+                  onClick={handlePromoteByCutoff}
+                  className="px-3 py-1.5 bg-[#8A5A00] text-white text-xs font-bold rounded-[3px] hover:bg-[#6D4700]"
+                >
+                  {isPromoting ? 'Promoting…' : `Promote Score >= ${promoteCutoff}`}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setShowPromoteModal(false)}
+                className="px-4 py-2 bg-white border border-[#DBD7C9] text-[#59626F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
         </main>
       </div>
     </div>

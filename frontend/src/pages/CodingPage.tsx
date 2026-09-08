@@ -100,7 +100,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
   const [problemScores, setProblemScores] = useState<Record<string, number>>({});
   const [showFinalSubmitModal, setShowFinalSubmitModal] = useState(false);
   const [isFinalSubmitting, setIsFinalSubmitting] = useState(false);
-  const [finalResult, setFinalResult] = useState<any>(null);
+  const [_finalResult, setFinalResult] = useState<any>(null);
   const [showCompletedModal, setShowCompletedModal] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(3600);
 
@@ -475,20 +475,13 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
             </p>
           </div>
 
-          <div className="bg-[#F6F6F2] p-4 rounded-[4px] border border-[#DBD7C9] text-left space-y-2 text-xs">
-            {attempt?.problems?.map((p: any, idx: number) => (
-              <div key={p.id} className="flex justify-between items-center py-1.5 border-b border-[#DBD7C9]/60">
-                <span className="text-[#59626F] font-medium">Problem {idx + 1} ({p.title}):</span>
-                <span className="font-mono font-bold text-[#16233F]">
-                  {problemScores[p.id] || 0} / {p.marks} Marks
-                </span>
+          <div className="bg-[#F6F6F2] p-4 rounded-[4px] border border-[#DBD7C9] text-left">
+            <div className="flex items-start space-x-3">
+              <span className="text-xl">📧</span>
+              <div className="text-xs text-[#1B2029] leading-relaxed">
+                <strong className="block text-[#16233F] mb-0.5">Evaluation in Progress:</strong>
+                Shortlisted candidates who qualify for Level 3 (Presentation &amp; Viva) will receive official notifications and schedule on their registered email address.
               </div>
-            ))}
-            <div className="flex justify-between items-center pt-2 font-bold text-sm">
-              <span>Total Score Achieved:</span>
-              <span className="font-mono text-[#1E7A46]">
-                {attempt?.problems?.reduce((acc: number, p: any) => acc + (problemScores[p.id] || 0), 0) || 0} Marks
-              </span>
             </div>
           </div>
 
@@ -557,7 +550,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
             <div className="flex items-center space-x-2">
               {attempt?.problems?.map((p: any, idx: number) => {
                 const isSelected = selectedProblemIndex === idx;
-                const difficultyBadge = idx === 0 ? 'EASY · 20M' : 'HARD · 40M';
+                const difficultyBadge = idx === 0 ? 'EASY' : 'HARD';
                 const scoreForProb = problemScores[p.id] ?? 0;
                 return (
                   <button
@@ -577,15 +570,11 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
                     }`}>
                       {difficultyBadge}
                     </span>
-                    <span className={`text-[10px] font-mono font-bold ${
-                      scoreForProb === p.marks
-                        ? 'text-[#3FB950]'
-                        : scoreForProb > 0
-                        ? 'text-[#E3B341]'
-                        : isSelected ? 'text-white/60' : 'text-[#8B93A0]'
-                    }`}>
-                      [{scoreForProb}/{p.marks}]
-                    </span>
+                    {scoreForProb > 0 && (
+                      <span className="text-[11px] font-mono font-bold text-[#3FB950]" title="Test cases passed">
+                        ✓
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -957,11 +946,11 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
                     </div>
 
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-[#16233F] font-mono">
-                        {submitResult.score} <span className="text-xs text-[#59626F] font-normal">/ {currentProblem?.marks} Marks</span>
-                      </div>
-                      <div className="text-xs text-[#1E7A46] font-semibold font-mono">
+                      <div className="text-base font-bold text-[#1E7A46] font-mono">
                         {submitResult.test_cases_passed} of {submitResult.total_test_cases} Test Cases Passed
+                      </div>
+                      <div className="text-xs text-[#59626F] font-mono">
+                        Status: Evaluated
                       </div>
                     </div>
                   </div>
@@ -1009,7 +998,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
                   )}
 
                   <div className="text-xs text-[#59626F] pt-1">
-                    Your best score for this problem has been saved and factored into your total Level 2 ranking score.
+                    Your solution for this problem has been evaluated against the test suite.
                   </div>
                 </div>
               )}
@@ -1032,34 +1021,17 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
             </div>
 
             <div className="space-y-3 bg-[#F6F6F2] p-4 rounded-[4px] border border-[#DBD7C9]/70 text-xs">
-              <div className="font-semibold text-[#59626F] uppercase tracking-wider text-[10.5px]">
-                Current Score Summary:
+              <div className="font-semibold text-[#16233F] text-sm">
+                Ready to finalize your assessment?
               </div>
-              {attempt?.problems?.map((p: any, idx: number) => {
-                const s = problemScores[p.id] ?? 0;
-                return (
-                  <div key={p.id} className="flex items-center justify-between py-1 border-b border-[#DBD7C9]/40 last:border-0">
-                    <span className="font-mono">
-                      P{idx + 1}: {p.title} ({idx === 0 ? 'Easy' : 'Hard'})
-                    </span>
-                    <span className={`font-mono font-bold ${s === p.marks ? 'text-[#1E7A46]' : (s > 0 ? 'text-[#8A5A00]' : 'text-[#AE2E22]')}`}>
-                      {s} / {p.marks} Marks
-                    </span>
-                  </div>
-                );
-              })}
-
-              <div className="flex items-center justify-between pt-2 border-t border-[#DBD7C9] font-bold text-sm">
-                <span>Total Level 2 Score:</span>
-                <span className="font-mono text-[#16233F]">
-                  {attempt?.problems?.reduce((acc: number, p: any) => acc + (problemScores[p.id] || 0), 0) || 0} / 60 Marks
-                </span>
+              <p className="text-[#59626F] leading-relaxed">
+                Submitting now will finalize your Level 2 Coding Assessment attempt and lock your solutions. You will not be able to return or make further edits.
+              </p>
+              <div className="flex items-start space-x-2 pt-1 text-[#8A5A00]">
+                <span>⚠️</span>
+                <span>Make sure you have tested and submitted your solutions for all problems before confirming.</span>
               </div>
             </div>
-
-            <p className="text-xs text-[#59626F] leading-relaxed">
-              Submitting now will finalize your Level 2 Coding Assessment attempt and lock your results for the leaderboard.
-            </p>
 
             <div className="flex items-center justify-end space-x-3 pt-2">
               <button
@@ -1100,30 +1072,21 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
                 Assessment Completed
               </div>
               <h3 className="font-serif text-[24px] font-bold text-[#1B2029] mt-1">
-                Level 02 Submitted!
+                Level 02 Submitted Successfully!
               </h3>
-              <p className="text-xs text-[#59626F] mt-1">
-                Your coding solutions have been evaluated and recorded.
+              <p className="text-xs text-[#59626F] mt-1 leading-relaxed">
+                Your coding solutions have been securely finalized and recorded.
               </p>
             </div>
 
-            <div className="bg-[#F6F6F2] p-4 rounded-[4px] border border-[#DBD7C9] text-left space-y-2 text-xs">
-              {attempt?.problems?.map((p: any, idx: number) => {
-                const bScore = finalResult?.problem_scores?.find((ps: any) => ps.problem_id === p.id)?.best_score ?? (problemScores[p.id] || 0);
-                return (
-                  <div key={p.id} className="flex justify-between items-center py-1 border-b border-[#DBD7C9]/50">
-                    <span className="text-[#59626F]">Problem {idx + 1} ({p.title}):</span>
-                    <span className="font-mono font-bold text-[#16233F]">
-                      {bScore} / {p.marks} Marks
-                    </span>
-                  </div>
-                );
-              })}
-              <div className="flex justify-between items-center pt-2 font-bold text-sm">
-                <span>Final Score:</span>
-                <span className="font-mono text-[#1E7A46]">
-                  {finalResult?.total_score ?? (attempt?.problems?.reduce((acc: number, p: any) => acc + (problemScores[p.id] || 0), 0) || 0)} / {attempt?.problems?.reduce((acc: number, p: any) => acc + (p.marks || 0), 0) || 60} Marks
-                </span>
+            {/* Email Notification Notice Card */}
+            <div className="p-4 rounded-[4px] border bg-[#F6F6F2] border-[#DBD7C9] text-left">
+              <div className="flex items-start space-x-3">
+                <span className="text-xl">📧</span>
+                <div className="text-xs text-[#1B2029] leading-relaxed">
+                  <strong className="block text-[#16233F] mb-0.5">Next Round Notifications:</strong>
+                  Shortlisted candidates who qualify for Level 3 (Presentation &amp; Viva) will receive official instructions and schedule on their registered email address.
+                </div>
               </div>
             </div>
 
