@@ -293,6 +293,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
     setSelectedProblemIndex(newIdx);
     setRunResults(null);
     setSubmitResult(null);
+    setActiveTestCaseIdx(0);
     const prob = attempt?.problems?.[newIdx];
     if (prob?.sample_test_cases?.[0]?.input_data) {
       setCustomInput(prob.sample_test_cases[0].input_data);

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -286,6 +287,18 @@ async def run_code(
             detail="Assessment has already been submitted and finalized."
         )
 
+    # Server-side timer enforcement
+    if current_attempt and current_attempt.status == "IN_PROGRESS":
+        started = current_attempt.started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+        if elapsed > current_attempt.duration_seconds + 30:  # 30s grace for network latency
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Timer expired. You can no longer run code."
+            )
+
     prob_res = await db.execute(
         select(CodingProblem)
         .options(selectinload(CodingProblem.test_cases))
@@ -431,6 +444,17 @@ async def submit_code(
     if not attempt or attempt.status != "IN_PROGRESS":
         raise HTTPException(status_code=400, detail="No active attempt found.")
 
+    # Server-side timer enforcement
+    started = attempt.started_at
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+    if elapsed > attempt.duration_seconds + 30:  # 30s grace for network latency
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Timer expired. You can no longer submit code."
+        )
+
     prob_res = await db.execute(
         select(CodingProblem)
         .options(selectinload(CodingProblem.test_cases))
@@ -556,8 +580,8 @@ async def submit_code(
         test_cases=tc_summaries
     )
 
-@router.api_route("/final-submit", methods=["GET", "POST", "PUT"], response_model=FinalSubmitResponse)
-@router.api_route("/final-submit/", methods=["GET", "POST", "PUT"], response_model=FinalSubmitResponse)
+@router.api_route("/final-submit", methods=["POST", "PUT"], response_model=FinalSubmitResponse)
+@router.api_route("/final-submit/", methods=["POST", "PUT"], response_model=FinalSubmitResponse)
 async def final_submit_coding(
     payload: Optional[FinalSubmitRequest] = None,
     attempt_id: Optional[str] = None,
@@ -591,8 +615,13 @@ async def final_submit_coding(
     if not attempt:
         raise HTTPException(status_code=404, detail="Active coding attempt not found.")
 
-    # Fetch all coding problems
-    prob_res = await db.execute(select(CodingProblem).order_by(CodingProblem.order_num.asc()))
+    # Fetch coding problems for this round only
+    round_2 = (await db.execute(select(Round).where(Round.round_number == 2))).scalar_one_or_none()
+    prob_res = await db.execute(
+        select(CodingProblem)
+        .where(CodingProblem.round_id == attempt.round_id)
+        .order_by(CodingProblem.order_num.asc())
+    )
     problems = prob_res.scalars().all()
 
     # Fetch all submissions for this attempt
@@ -628,8 +657,7 @@ async def final_submit_coding(
     attempt.status = "SUBMITTED"
     attempt.submitted_at = datetime.now(timezone.utc)
 
-    # Record in RoundResult for Round 2
-    round_2 = (await db.execute(select(Round).where(Round.round_number == 2))).scalar_one_or_none()
+    # Record in RoundResult for Round 2 (admin decides qualification manually)
     if round_2:
         res_check = await db.execute(
             select(RoundResult).where(
@@ -640,13 +668,12 @@ async def final_submit_coding(
         existing_result = res_check.scalar_one_or_none()
         if existing_result:
             existing_result.score = total_score
-            existing_result.is_qualified = True
         else:
             db.add(RoundResult(
                 participant_id=current_participant.id,
                 round_id=round_2.id,
                 score=total_score,
-                is_qualified=True
+                is_qualified=False
             ))
 
     await db.commit()

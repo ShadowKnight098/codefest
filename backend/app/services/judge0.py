@@ -75,7 +75,7 @@ def _run_fest_harness():
             if isinstance(res, (list, tuple)):
                 print(json.dumps(res) if any(isinstance(x, (list, dict)) for x in res) else str(res).replace("(", "[").replace(")", "]"))
             elif isinstance(res, bool):
-                print(str(res).lower())
+                print(res)
             else:
                 print(res)
     except Exception as e:
@@ -252,10 +252,21 @@ def _execute_sync(
         passed = False
         if status_id == 3:
             if expected_output is not None:
-                # Normalize line breaks and trailing whitespace
-                norm_actual = "\n".join(line.rstrip() for line in stdout_text.strip().splitlines())
-                norm_exp = "\n".join(line.rstrip() for line in expected_output.strip().splitlines())
+                # Clean any BOM / invisible characters
+                clean_actual = stdout_text.replace("\ufeff", "").replace("\r", "")
+                clean_exp = expected_output.replace("\ufeff", "").replace("\r", "")
+
+                # Primary: strip each line fully (leading + trailing whitespace)
+                norm_actual = "\n".join(line.strip() for line in clean_actual.strip().splitlines() if line.strip())
+                norm_exp = "\n".join(line.strip() for line in clean_exp.strip().splitlines() if line.strip())
                 passed = (norm_actual == norm_exp)
+
+                # Relaxed fallback: collapse ALL whitespace and compare
+                if not passed:
+                    collapsed_actual = " ".join(norm_actual.split())
+                    collapsed_exp = " ".join(norm_exp.split())
+                    passed = (collapsed_actual == collapsed_exp)
+
                 if not passed:
                     status_id = 4
                     status_desc = "Wrong Answer"
