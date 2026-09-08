@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { apiFetch } from '../api/client';
 
-type Tab = 'overview' | 'participants' | 'mcq' | 'coding' | 'settings' | 'export' | 'organizers' | 'winners1' | 'winners2' | 'presentation';
+type Tab = 'overview' | 'participants' | 'mcq' | 'coding' | 'settings' | 'export' | 'organizers' | 'winners1' | 'winners2' | 'presentation' | 'devices';
 
 export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const { admin, logout } = useAdminAuth();
@@ -139,6 +139,108 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   const [promoteCutoff, setPromoteCutoff] = useState<number>(20);
   const [isPromoting, setIsPromoting] = useState<boolean>(false);
 
+  // Connected Devices (Judge0 Nodes) state
+  const [nodesData, setNodesData] = useState<any>(null);
+  const [nodesLoading, setNodesLoading] = useState<boolean>(false);
+  const [showAddNodeModal, setShowAddNodeModal] = useState<boolean>(false);
+  const [newNodeForm, setNewNodeForm] = useState({ name: '', endpoint_url: '' });
+  const [isAddingNode, setIsAddingNode] = useState<boolean>(false);
+  const [testNodeResult, setTestNodeResult] = useState<any>(null);
+  const [isTestingNode, setIsTestingNode] = useState<boolean>(false);
+  const [pingingNodeId, setPingingNodeId] = useState<string | null>(null);
+
+  const fetchNodes = async () => {
+    setNodesLoading(true);
+    try {
+      const data = await apiFetch<any>('/admin/nodes');
+      setNodesData(data);
+    } catch (e: any) {
+      console.error('Failed to fetch Judge0 nodes', e);
+      setMessage(`Failed to load connected devices: ${e?.detail || e.message}`);
+    } finally {
+      setNodesLoading(false);
+    }
+  };
+
+  const handleToggleNode = async (nodeId: string) => {
+    try {
+      const updated = await apiFetch<any>(`/admin/nodes/${nodeId}/toggle`, { method: 'PUT' });
+      setMessage(`Node ${updated.name || updated.endpoint_url} is now ${updated.is_active ? 'ACTIVE' : 'MUTED (STANDBY)'}.`);
+      fetchNodes();
+    } catch (e: any) {
+      alert(`Failed to toggle node: ${e?.detail || e.message}`);
+    }
+  };
+
+  const handleDeleteNode = async (nodeId: string, nodeName: string) => {
+    if (!confirm(`Are you sure you want to disconnect and remove node "${nodeName}"?`)) return;
+    try {
+      const res = await apiFetch<any>(`/admin/nodes/${nodeId}`, { method: 'DELETE' });
+      setMessage(res.message || `Node disconnected.`);
+      fetchNodes();
+    } catch (e: any) {
+      alert(`Failed to remove node: ${e?.detail || e.message}`);
+    }
+  };
+
+  const handleTestSpecificNode = async (endpointUrl: string, nodeId?: string) => {
+    if (nodeId) setPingingNodeId(nodeId);
+    try {
+      const res = await apiFetch<any>('/admin/nodes/test', {
+        method: 'POST',
+        body: JSON.stringify({ endpoint_url: endpointUrl })
+      });
+      if (res.is_online) {
+        alert(`✅ Online! Latency: ${res.latency_ms} ms (Judge0 version: ${res.version || 'CE'})`);
+      } else {
+        alert(`❌ Offline: ${res.error || 'Connection timed out'}`);
+      }
+      fetchNodes();
+    } catch (e: any) {
+      alert(`Test ping failed: ${e?.detail || e.message}`);
+    } finally {
+      if (nodeId) setPingingNodeId(null);
+    }
+  };
+
+  const handleTestModalNode = async () => {
+    if (!newNodeForm.endpoint_url.trim()) return;
+    setIsTestingNode(true);
+    setTestNodeResult(null);
+    try {
+      const res = await apiFetch<any>('/admin/nodes/test', {
+        method: 'POST',
+        body: JSON.stringify({ endpoint_url: newNodeForm.endpoint_url })
+      });
+      setTestNodeResult(res);
+    } catch (e: any) {
+      setTestNodeResult({ is_online: false, error: e?.detail || e.message });
+    } finally {
+      setIsTestingNode(false);
+    }
+  };
+
+  const handleAddNode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNodeForm.endpoint_url.trim()) return;
+    setIsAddingNode(true);
+    try {
+      const res = await apiFetch<any>('/admin/nodes', {
+        method: 'POST',
+        body: JSON.stringify(newNodeForm)
+      });
+      setMessage(`Judge0 node "${res.name}" connected successfully.`);
+      setShowAddNodeModal(false);
+      setNewNodeForm({ name: '', endpoint_url: '' });
+      setTestNodeResult(null);
+      fetchNodes();
+    } catch (e: any) {
+      alert(`Failed to register node: ${e?.detail || e.message}`);
+    } finally {
+      setIsAddingNode(false);
+    }
+  };
+
   const fetchOverview = async () => {
     try {
       const statsData = await apiFetch<any>('/admin/monitor/live');
@@ -261,6 +363,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
       else if (activeTab === 'winners1') await fetchWinners1();
       else if (activeTab === 'winners2') await fetchWinners2();
       else if (activeTab === 'presentation') await fetchFinalists();
+      else if (activeTab === 'devices') await fetchNodes();
       setLastSynced(new Date());
     } catch (e) {
       console.error('Refresh failed', e);
@@ -295,7 +398,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   };
 
   useEffect(() => {
-    if (!isSuperAdmin && activeTab !== 'export' && activeTab !== 'winners1' && activeTab !== 'winners2' && activeTab !== 'presentation') {
+    if (!isSuperAdmin && activeTab !== 'export' && activeTab !== 'winners1' && activeTab !== 'winners2' && activeTab !== 'presentation' && activeTab !== 'devices') {
       setActiveTab('export');
       return;
     }
@@ -756,6 +859,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         { id: 'winners1' as Tab, label: '🥇 Round 1 Results' },
         { id: 'winners2' as Tab, label: '🏆 Round 2 Results' },
         { id: 'presentation' as Tab, label: '🎤 Level 3 Evaluation' },
+        { id: 'devices' as Tab, label: '🖥️ Connected Devices' },
         { id: 'participants' as Tab, label: 'Participants' },
         { id: 'mcq' as Tab, label: 'MCQ Bank Manager' },
         { id: 'coding' as Tab, label: 'Coding Problems' },
@@ -767,6 +871,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         { id: 'winners1' as Tab, label: '🥇 Round 1 Results' },
         { id: 'winners2' as Tab, label: '🏆 Round 2 Results' },
         { id: 'presentation' as Tab, label: '🎤 Level 3 Evaluation' },
+        { id: 'devices' as Tab, label: '🖥️ Connected Devices' },
       ];
 
   return (
@@ -2805,6 +2910,276 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
             </div>
           )}
 
+          {/* TAB: CONNECTED DEVICES (JUDGE0 NODES) */}
+          {activeTab === 'devices' && (
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-[#16233F] flex items-center space-x-2">
+                    <span>🖥️ Connected Devices &amp; Judge0 Cluster</span>
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#16233F] text-white">
+                      Distributed Execution
+                    </span>
+                  </h2>
+                  <p className="text-xs text-[#59626F]">
+                    Real-time cluster telemetry, health monitoring, and node pairing for distributed code evaluation.
+                  </p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={fetchNodes}
+                    disabled={nodesLoading}
+                    className="px-3 py-1.5 bg-white border border-[#DBD7C9] text-[#16233F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2] transition-colors flex items-center space-x-1.5 shadow-sm"
+                  >
+                    <span className={nodesLoading ? 'animate-spin inline-block' : ''}>🔄</span>
+                    <span>{nodesLoading ? 'Testing Pings…' : 'Re-scan Nodes'}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTestNodeResult(null);
+                      setNewNodeForm({ name: '', endpoint_url: '' });
+                      setShowAddNodeModal(true);
+                    }}
+                    className="px-3.5 py-1.5 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] transition-colors flex items-center space-x-1.5 shadow-sm"
+                  >
+                    <span>➕</span>
+                    <span>Connect New Device</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Cluster Telemetry Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-white border border-[#DBD7C9] rounded-[4px] p-3.5 shadow-sm">
+                  <div className="text-[10.5px] font-mono uppercase tracking-wider text-[#59626F]">
+                    Total Registered Nodes
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-[#16233F] mt-1">
+                    {nodesData?.summary?.total_nodes ?? (nodesLoading ? '…' : 0)}
+                  </div>
+                  <div className="text-[11px] text-[#59626F] mt-0.5">
+                    Distributed runner endpoints
+                  </div>
+                </div>
+
+                <div className="bg-white border border-[#DBD7C9] rounded-[4px] p-3.5 shadow-sm">
+                  <div className="text-[10.5px] font-mono uppercase tracking-wider text-[#59626F]">
+                    Cluster Health
+                  </div>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className={`w-2.5 h-2.5 rounded-full ${
+                      (nodesData?.summary?.online_nodes || 0) > 0 ? 'bg-[#1E7A46] animate-pulse' : 'bg-[#A82A2A]'
+                    }`} />
+                    <span className="text-2xl font-bold font-mono text-[#16233F]">
+                      {nodesData?.summary?.online_nodes ?? 0} <span className="text-xs text-[#8B93A0]">/ {nodesData?.summary?.total_nodes ?? 0} Online</span>
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-[#59626F] mt-0.5">
+                    {(nodesData?.summary?.online_nodes || 0) > 0 ? 'Cluster dispatch active' : 'All remote nodes offline'}
+                  </div>
+                </div>
+
+                <div className="bg-white border border-[#DBD7C9] rounded-[4px] p-3.5 shadow-sm">
+                  <div className="text-[10.5px] font-mono uppercase tracking-wider text-[#59626F]">
+                    Average Ping
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-[#16233F] mt-1">
+                    {nodesData?.summary?.avg_latency_ms ? `${nodesData.summary.avg_latency_ms} ms` : 'N/A'}
+                  </div>
+                  <div className="text-[11px] text-[#59626F] mt-0.5">
+                    {nodesData?.summary?.avg_latency_ms && nodesData.summary.avg_latency_ms < 50 ? '⚡ Ultra-fast LAN latency' : 'Response roundtrip'}
+                  </div>
+                </div>
+
+                <div className="bg-[#F0FBF4] border border-[#2EA043]/30 rounded-[4px] p-3.5 shadow-sm">
+                  <div className="text-[10.5px] font-mono uppercase tracking-wider text-[#1E7A46] font-bold">
+                    Local Sandbox Engine
+                  </div>
+                  <div className="text-sm font-bold text-[#16233F] mt-1 flex items-center space-x-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#1E7A46]" />
+                    <span>🟢 ALWAYS READY</span>
+                  </div>
+                  <div className="text-[11px] text-[#59626F] mt-0.5">
+                    Zero-downtime local failover
+                  </div>
+                </div>
+              </div>
+
+              {/* Connected Nodes Table */}
+              <div className="bg-white border border-[#DBD7C9] rounded-[4px] overflow-hidden shadow-sm">
+                <div className="p-3 bg-[#F6F6F2] border-b border-[#DBD7C9] flex items-center justify-between">
+                  <div className="font-semibold text-xs text-[#16233F]">
+                    Configured Nodes ({nodesData?.nodes?.length || 0})
+                  </div>
+                  <span className="text-[11px] text-[#59626F] font-mono">
+                    Round-Robin Rotation with 60s Circuit Breaker
+                  </span>
+                </div>
+
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#DBD7C9] bg-[#FAF8F5] text-[#59626F] font-semibold">
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3">Node / Machine</th>
+                      <th className="py-2.5 px-3 font-mono">Endpoint (URL)</th>
+                      <th className="py-2.5 px-3 text-center">Ping (ms)</th>
+                      <th className="py-2.5 px-3 text-center">Engine / Version</th>
+                      <th className="py-2.5 px-3 text-center">Languages</th>
+                      <th className="py-2.5 px-3 text-center">Dispatch State</th>
+                      <th className="py-2.5 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#DBD7C9]">
+                    {nodesData?.nodes?.map((node: any) => (
+                      <tr key={node.id} className="hover:bg-[#F6F6F2]/60 transition-colors">
+                        <td className="py-2.5 px-3">
+                          <span className={`inline-flex items-center space-x-1.5 px-2 py-0.5 rounded text-[10.5px] font-bold font-mono ${
+                            node.is_online
+                              ? 'bg-[#E8F3EC] text-[#1E7E34] border border-[#1E7E34]/30'
+                              : 'bg-[#FCEDEC] text-[#A82A2A] border border-[#A82A2A]/30'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${node.is_online ? 'bg-[#1E7E34] animate-pulse' : 'bg-[#A82A2A]'}`} />
+                            <span>{node.is_online ? 'ONLINE' : 'OFFLINE'}</span>
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <div className="font-semibold text-[#16233F]">{node.name}</div>
+                          {node.error && (
+                            <div className="text-[10px] text-[#A82A2A] font-mono mt-0.5 truncate max-w-[180px]" title={node.error}>
+                              Err: {node.error}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-[#16233F] font-medium">
+                          {node.endpoint_url}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-mono">
+                          {node.is_online && node.latency_ms !== null ? (
+                            <span className="font-bold text-[#1E7E34]">{node.latency_ms} ms</span>
+                          ) : (
+                            <span className="text-[#8B93A0]">—</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-mono text-[11px] text-[#59626F]">
+                          {node.is_online ? `Judge0 v${node.version || '1.13.1'}` : '—'}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className="inline-flex space-x-1 font-mono text-[10px]">
+                            <span className="bg-[#F6F6F2] px-1 py-0.5 rounded text-[#16233F]">Py</span>
+                            <span className="bg-[#F6F6F2] px-1 py-0.5 rounded text-[#16233F]">C</span>
+                            <span className="bg-[#F6F6F2] px-1 py-0.5 rounded text-[#16233F]">C++</span>
+                            <span className="bg-[#F6F6F2] px-1 py-0.5 rounded text-[#16233F]">Java</span>
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            onClick={() => handleToggleNode(node.id)}
+                            className={`px-2 py-0.5 text-[10.5px] font-semibold rounded transition-colors ${
+                              node.is_active
+                                ? 'bg-[#16233F] text-white hover:bg-[#25355B]'
+                                : 'bg-[#E0E0DB] text-[#59626F] hover:bg-[#D0D0CB]'
+                            }`}
+                            title={node.is_active ? 'Click to Mute/Standby' : 'Click to Activate'}
+                          >
+                            {node.is_active ? 'Active' : 'Standby'}
+                          </button>
+                        </td>
+                        <td className="py-2.5 px-3 text-right space-x-2">
+                          <button
+                            onClick={() => handleTestSpecificNode(node.endpoint_url, node.id)}
+                            disabled={pingingNodeId === node.id}
+                            className="px-2 py-1 bg-white border border-[#DBD7C9] text-[#16233F] text-[11px] font-semibold rounded hover:bg-[#F6F6F2] transition-colors"
+                          >
+                            {pingingNodeId === node.id ? 'Pinging…' : 'Ping Test'}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteNode(node.id, node.name)}
+                            className="text-[#A82A2A] hover:underline font-mono text-[11px]"
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {(!nodesData?.nodes || nodesData.nodes.length === 0) && (
+                  <div className="p-8 text-center space-y-3">
+                    <div className="text-3xl">🖥️</div>
+                    <div className="text-xs text-[#59626F]">No Judge0 nodes currently registered.</div>
+                    <button
+                      onClick={() => setShowAddNodeModal(true)}
+                      className="px-3 py-1.5 bg-[#16233F] text-white text-xs font-semibold rounded"
+                    >
+                      Connect First Device
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Step-by-Step Setup Guide Card */}
+              <div className="bg-white border border-[#DBD7C9] rounded-[4px] p-5 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-[#DBD7C9] pb-3">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-lg">⚡</span>
+                    <h3 className="font-serif font-bold text-sm text-[#16233F]">
+                      Simplest Guide: Turn Any Laptop or Lab PC into a Judge0 Node (3 Minutes)
+                    </h3>
+                  </div>
+                  <span className="text-[11px] font-mono text-[#1E7E34] bg-[#E8F3EC] px-2 py-0.5 rounded font-bold">
+                    Plug &amp; Play
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  {/* Step 1 */}
+                  <div className="bg-[#F6F6F2] p-3.5 rounded border border-[#DBD7C9] space-y-2">
+                    <div className="font-bold text-[#16233F] flex items-center space-x-1.5">
+                      <span className="w-5 h-5 rounded-full bg-[#16233F] text-white text-[10px] inline-flex items-center justify-center font-bold">1</span>
+                      <span>Prerequisites</span>
+                    </div>
+                    <p className="text-[#59626F] text-[11.5px] leading-relaxed">
+                      Install <strong>Docker Desktop</strong> on Windows/Mac, or standard Docker CE on Ubuntu Linux. Ensure Docker is running.
+                    </p>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="bg-[#F6F6F2] p-3.5 rounded border border-[#DBD7C9] space-y-2">
+                    <div className="font-bold text-[#16233F] flex items-center space-x-1.5">
+                      <span className="w-5 h-5 rounded-full bg-[#16233F] text-white text-[10px] inline-flex items-center justify-center font-bold">2</span>
+                      <span>Start Judge0 Container</span>
+                    </div>
+                    <p className="text-[#59626F] text-[11.5px] leading-relaxed">
+                      Open PowerShell or Terminal and run:
+                    </p>
+                    <pre className="p-2 bg-[#16233F] text-[#E8F3EC] rounded text-[10px] font-mono overflow-x-auto select-all">
+                      docker run -d -p 2358:2358 judge0/judge0:v1.13.1
+                    </pre>
+                    <p className="text-[10px] text-[#59626F]">
+                      (Or run judge0 docker-compose with DB &amp; Redis)
+                    </p>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className="bg-[#F6F6F2] p-3.5 rounded border border-[#DBD7C9] space-y-2">
+                    <div className="font-bold text-[#16233F] flex items-center space-x-1.5">
+                      <span className="w-5 h-5 rounded-full bg-[#16233F] text-white text-[10px] inline-flex items-center justify-center font-bold">3</span>
+                      <span>Find IP &amp; Connect</span>
+                    </div>
+                    <p className="text-[#59626F] text-[11.5px] leading-relaxed">
+                      Run <code className="bg-white px-1 rounded font-mono text-[11px]">ipconfig</code> (Windows) or <code className="bg-white px-1 rounded font-mono text-[11px]">hostname -I</code> (Linux) to find the LAN IP (e.g. <code className="text-[#16233F] font-bold">192.168.1.105</code>).
+                    </p>
+                    <p className="text-[#59626F] text-[11px]">
+                      Click <strong>"Connect New Device"</strong> above, enter <code className="font-mono text-[#1E7E34]">http://&lt;IP&gt;:2358</code>, and hit Save!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
       {/* FACULTY LEVEL 3 GRADING MODAL */}
       {selectedFinalistForGrade && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -3004,6 +3379,116 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONNECT NEW DEVICE MODAL */}
+      {showAddNodeModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-[#DBD7C9] rounded-[6px] max-w-md w-full p-6 shadow-2xl space-y-4 text-xs">
+            <div className="border-b border-[#DBD7C9] pb-3 flex items-start justify-between">
+              <div>
+                <h3 className="font-serif text-[18px] font-bold text-[#16233F]">
+                  Connect New Judge0 Execution Node
+                </h3>
+                <p className="text-xs text-[#59626F] mt-0.5">
+                  Pair another laptop or lab PC to expand concurrent code execution capacity.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddNodeModal(false)}
+                className="text-lg font-bold text-[#8B93A0] hover:text-[#1B2029]"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleAddNode} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#16233F] mb-1">
+                  Device / Machine Name:
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="E.g., Lab PC 204 or Faculty Laptop - Rohan"
+                  value={newNodeForm.name}
+                  onChange={(e) => setNewNodeForm({ ...newNodeForm, name: e.target.value })}
+                  className="w-full h-8 px-3 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#16233F] mb-1">
+                  Judge0 Endpoint URL (LAN IP &amp; Port):
+                </label>
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="http://192.168.1.105:2358"
+                    value={newNodeForm.endpoint_url}
+                    onChange={(e) => {
+                      setNewNodeForm({ ...newNodeForm, endpoint_url: e.target.value });
+                      setTestNodeResult(null);
+                    }}
+                    className="flex-1 h-8 px-3 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTestModalNode}
+                    disabled={isTestingNode || !newNodeForm.endpoint_url.trim()}
+                    className="px-3 h-8 bg-white border border-[#DBD7C9] text-[#16233F] font-semibold text-xs rounded hover:bg-[#F6F6F2] disabled:opacity-50 shrink-0"
+                  >
+                    {isTestingNode ? 'Testing…' : 'Test Ping'}
+                  </button>
+                </div>
+                <p className="text-[10.5px] text-[#8B93A0] mt-1">
+                  Must be reachable on the local WiFi / Ethernet network on port 2358.
+                </p>
+              </div>
+
+              {/* Test Result Indicator */}
+              {testNodeResult && (
+                <div className={`p-3 rounded border text-xs font-mono ${
+                  testNodeResult.is_online
+                    ? 'bg-[#E8F3EC] border-[#1E7E34]/40 text-[#1E7E34]'
+                    : 'bg-[#FCEDEC] border-[#A82A2A]/40 text-[#A82A2A]'
+                }`}>
+                  {testNodeResult.is_online ? (
+                    <div>
+                      ✅ <strong>Node Reachable!</strong> Latency: {testNodeResult.latency_ms} ms (Judge0 v{testNodeResult.version || '1.13.1'})
+                    </div>
+                  ) : (
+                    <div>
+                      ❌ <strong>Connection Failed:</strong> {testNodeResult.error || 'Timed out / connection refused'}
+                      <div className="text-[10px] mt-0.5 text-[#59626F]">
+                        Verify that Docker container is running and Windows Firewall allows inbound TCP port 2358.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#DBD7C9]">
+                <button
+                  type="button"
+                  onClick={() => setShowAddNodeModal(false)}
+                  className="px-4 py-2 bg-white border border-[#DBD7C9] text-[#59626F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAddingNode}
+                  className="px-5 py-2 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] disabled:opacity-50"
+                >
+                  {isAddingNode ? 'Connecting…' : 'Save & Register Node'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

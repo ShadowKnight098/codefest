@@ -277,3 +277,40 @@ class LeaderboardEntry(BaseModel):
     presentation_score: Optional[int] = None
     total_score: int
     violations: int
+
+
+# ─── Judge0 Nodes Schemas ───
+
+class Judge0NodeCreate(BaseModel):
+    endpoint_url: str = Field(..., min_length=4, max_length=255, description="Node URL, e.g. http://192.168.1.105:2358")
+    name: Optional[str] = Field(default=None, max_length=100, description="Friendly name, e.g. Lab PC 1")
+
+
+class Judge0NodeTestRequest(BaseModel):
+    endpoint_url: str = Field(..., min_length=4, max_length=255)
+
+
+class Judge0NodeItem(BaseModel):
+    id: str
+    name: Optional[str] = None
+    endpoint_url: str
+    is_active: bool
+    is_online: bool
+    latency_ms: Optional[float] = None
+    version: Optional[str] = None
+    error: Optional[str] = None
+    created_at: datetime
+
+
+class Judge0NodesSummary(BaseModel):
+    total_nodes: int
+    online_nodes: int
+    offline_nodes: int
+    avg_latency_ms: Optional[float] = None
+    local_sandbox_active: bool = True
+
+
+class Judge0NodesResponse(BaseModel):
+    nodes: list[Judge0NodeItem]
+    summary: Judge0NodesSummary
+

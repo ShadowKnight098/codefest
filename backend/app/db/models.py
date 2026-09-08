@@ -283,3 +283,14 @@ class PresentationEvaluation(Base):
     round = relationship("Round")
     evaluator = relationship("AdminUser")
 
+
+class Judge0Node(Base):
+    __tablename__ = "judge0_nodes"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    name = Column(String(100), nullable=True) # e.g. "Node 1 (Lab Laptop)", "Server 2"
+    endpoint_url = Column(String(255), unique=True, nullable=False, index=True) # e.g. "http://192.168.1.105:2358"
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+

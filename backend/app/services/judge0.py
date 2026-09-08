@@ -329,6 +329,73 @@ class Judge0LoadBalancer:
             headers["X-Auth-Token"] = settings.JUDGE0_AUTH_TOKEN
         return headers
 
+    def sync_endpoints(self, endpoints: List[str]):
+        """Synchronize active endpoints from database or admin dashboard."""
+        clean = []
+        for e in endpoints:
+            if not e:
+                continue
+            e_str = e.strip().rstrip("/")
+            if e_str and e_str not in clean:
+                clean.append(e_str)
+        self.endpoints = clean
+        self._cycle = itertools.cycle(self.endpoints) if self.endpoints else None
+
+    def add_endpoint(self, endpoint: str):
+        ep = endpoint.strip().rstrip("/")
+        if ep and ep not in self.endpoints:
+            self.endpoints.append(ep)
+            self._cycle = itertools.cycle(self.endpoints)
+
+    def remove_endpoint(self, endpoint: str):
+        ep = endpoint.strip().rstrip("/")
+        if ep in self.endpoints:
+            self.endpoints.remove(ep)
+            self._cycle = itertools.cycle(self.endpoints) if self.endpoints else None
+
+    async def ping_single_node(self, endpoint: str, timeout: float = 2.0) -> Dict[str, Any]:
+        """Pings a single Judge0 node and returns latency and health info."""
+        ep = endpoint.strip().rstrip("/")
+        t0 = time.perf_counter()
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                res = await client.get(f"{ep}/about", headers=self.get_headers())
+                latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+                if res.status_code == 200:
+                    version = "1.13.1"
+                    try:
+                        data = res.json()
+                        version = data.get("version", "1.13.1")
+                    except Exception:
+                        pass
+                    if ep in self._offline_until:
+                        del self._offline_until[ep]
+                    return {
+                        "endpoint": ep,
+                        "is_online": True,
+                        "latency_ms": latency_ms,
+                        "version": version,
+                        "error": None
+                    }
+                else:
+                    self._offline_until[ep] = time.time() + 60.0
+                    return {
+                        "endpoint": ep,
+                        "is_online": False,
+                        "latency_ms": latency_ms,
+                        "version": None,
+                        "error": f"HTTP {res.status_code}"
+                    }
+        except Exception as e:
+            self._offline_until[ep] = time.time() + 60.0
+            return {
+                "endpoint": ep,
+                "is_online": False,
+                "latency_ms": None,
+                "version": None,
+                "error": str(e)
+            }
+
     async def check_health(self) -> Dict[str, bool]:
         """Check health of all configured Judge0 nodes."""
         status_map = {}
@@ -344,6 +411,7 @@ class Judge0LoadBalancer:
                     status_map[ep] = False
                     self._offline_until[ep] = time.time() + 60.0
         return status_map
+
 
     async def execute_code(
         self,
