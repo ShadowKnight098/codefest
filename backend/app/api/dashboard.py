@@ -254,8 +254,8 @@ async def get_dashboard_state(
                 violations_count=violations_count
             )
         else:
-            headline = "Qualified for Level 2"
-            desc = "You have successfully qualified for Level 2 (Debugging Challenge). Please wait for the organizers to open Round 2 to begin."
+            headline = "Assessment Submitted"
+            desc = "Your responses have been recorded. The list of qualified participants for Round 2 will be announced in the official group."
             return DashboardStateResponse(
                 participant_name=current_participant.name,
                 roll_number=current_participant.roll_number,
@@ -306,7 +306,7 @@ async def get_dashboard_state(
                 email=current_participant.email,
                 state=ParticipantState.NOT_QUALIFIED,
                 state_headline="Assessment Submitted",
-                state_description="Your Level 1 assessment has been submitted successfully. Shortlisted candidates will be notified regarding qualification and next steps via registered email or the official group.",
+                state_description="Your responses have been recorded. The list of qualified participants for Round 2 will be announced in the official group.",
                 can_start_level1=False,
                 can_resume_level1=False,
                 can_start_level2=False,

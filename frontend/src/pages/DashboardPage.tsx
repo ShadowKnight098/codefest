@@ -54,22 +54,22 @@ const PRESET_STATES: Record<string, DisplayStateConfig> = {
   },
   'NOT_QUALIFIED': {
     r1: { status: 'Completed', sub: 'Assessment submitted' },
-    r2: { status: 'Locked', sub: 'Shortlisted candidates will be notified via email or official group' },
-    r3: { status: 'Locked', sub: 'Shortlisted candidates will be notified via email or official group' },
+    r2: { status: 'Locked', sub: 'Shortlisted candidates will be announced in the official group' },
+    r3: { status: 'Locked', sub: 'Shortlisted finalists will receive schedule via email' },
     panel: {
       type: 'default',
       title: 'Assessment submitted',
-      message: 'Your responses have been recorded. Shortlisted candidates will be notified regarding qualification and next steps via registered email or the official group.'
+      message: 'Your responses have been recorded. The list of qualified participants for Round 2 will be announced in the official group.'
     }
   },
   'WAITING_FOR_LEVEL2': {
-    r1: { status: 'Completed', sub: 'Assessment submitted · Qualified for Level 2' },
-    r2: { status: 'Qualified', sub: 'Qualified for Level 2 · Round 2 will open shortly' },
-    r3: { status: 'Locked', sub: 'Evaluated manually' },
+    r1: { status: 'Completed', sub: 'Assessment submitted' },
+    r2: { status: 'Locked', sub: 'Shortlisted candidates will be announced in the official group' },
+    r3: { status: 'Locked', sub: 'Shortlisted finalists will receive schedule via email' },
     panel: {
-      type: 'success',
-      title: 'Qualified for Level 2',
-      message: 'You have qualified for Level 2 (Debugging Challenge). Please wait for the organizers to open the round to begin.'
+      type: 'default',
+      title: 'Assessment submitted',
+      message: 'Your responses have been recorded. The list of qualified participants for Round 2 will be announced in the official group.'
     }
   },
   'LEVEL2_AVAILABLE': {
@@ -266,7 +266,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                     {backendState?.level1_result?.status_label === 'Directly Qualified'
                       ? 'Directly Qualified by Admin · Level 1 Exempted'
                       : backendState?.level1_result
-                      ? 'Assessment Submitted · Shortlisted candidates will be notified via email'
+                      ? 'Assessment Submitted · Shortlisted candidates will be announced in the official group'
                       : displayConfig.r1.sub}
                   </div>
                 </div>
@@ -316,7 +316,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                   </div>
                   <div className="text-[12.5px] text-[#59626F] mt-0.5">
                     {backendState?.level2_result
-                      ? 'Assessment Submitted · Shortlisted candidates will be notified via email'
+                      ? 'Assessment Submitted · Shortlisted candidates will be announced in the official group'
                       : backendState?.can_start_level2
                       ? 'Debugging Challenge · 15 Questions · 45 Marks · 60 minutes'
                       : displayConfig.r2.sub}

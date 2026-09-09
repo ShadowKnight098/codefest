@@ -4,7 +4,7 @@ import re
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete, func
 from app.db.session import get_db
 from app.db.models import MCQQuestion
 from app.schemas.admin import (
