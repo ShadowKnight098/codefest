@@ -49,27 +49,32 @@ def normalize_node_url(url: str) -> str:
     return cleaned
 
 async def _ensure_initial_nodes(db: AsyncSession) -> List[Judge0Node]:
-    """Auto-seed default Judge0 nodes from settings if table is empty."""
+    """Auto-seed and sync Judge0 nodes from settings/environment variables into the database."""
     res = await db.execute(select(Judge0Node).order_by(Judge0Node.created_at.asc()))
-    nodes = res.scalars().all()
-    if not nodes:
-        configured = settings.judge0_endpoint_list
-        seeded = []
-        for idx, ep in enumerate(configured, 1):
-            cleaned = normalize_node_url(ep)
+    nodes = list(res.scalars().all())
+    existing_urls = {n.endpoint_url for n in nodes}
+
+    configured = settings.judge0_endpoint_list
+    updated = False
+    for idx, ep in enumerate(configured, 1):
+        cleaned = normalize_node_url(ep)
+        if cleaned and cleaned not in existing_urls:
             node = Judge0Node(
-                name=f"Primary Node {idx}",
+                name=f"Configured Node {idx}",
                 endpoint_url=cleaned,
                 is_active=True
             )
             db.add(node)
-            seeded.append(node)
-        if seeded:
-            await db.commit()
-            for n in seeded:
-                await db.refresh(n)
-            return seeded
-    return list(nodes)
+            nodes.append(node)
+            existing_urls.add(cleaned)
+            updated = True
+
+    if updated:
+        await db.commit()
+        for n in nodes:
+            await db.refresh(n)
+
+    return nodes
 
 @router.get("", response_model=Judge0NodesResponse)
 async def list_connected_nodes(
