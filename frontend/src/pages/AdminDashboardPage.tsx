@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { apiFetch } from '../api/client';
 
-type Tab = 'overview' | 'participants' | 'mcq' | 'coding' | 'settings' | 'export' | 'organizers' | 'winners1' | 'winners2' | 'presentation' | 'devices';
+type Tab = 'overview' | 'participants' | 'mcq' | 'coding' | 'settings' | 'export' | 'organizers' | 'winners1' | 'winners2' | 'presentation';
 
 export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const { admin, logout } = useAdminAuth();
@@ -62,41 +62,37 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     correct_option: 'A'
   });
 
-  // Coding Problems tab state
+  // Level 2 Debugging Bank tab state
   const [problems, setProblems] = useState<any[]>([]);
-  const [showAddProbModal, setShowAddProbModal] = useState(false);
-  const [showEditProbModal, setShowEditProbModal] = useState(false);
+  const [l2PoolStats, setL2PoolStats] = useState<any>(null);
+  const [l2YearFilter, setL2YearFilter] = useState<number | ''>('');
+  const [l2DiffFilter, setL2DiffFilter] = useState<string>('');
+  const [l2Search, setL2Search] = useState<string>('');
+  const [l2ImportFile, setL2ImportFile] = useState<File | null>(null);
+  const [l2UploadMode, setL2UploadMode] = useState<'file' | 'paste'>('file');
+  const [l2PasteText, setL2PasteText] = useState<string>('');
+  const [l2Overwrite, setL2Overwrite] = useState<boolean>(false);
+  const [isL2Dragging, setIsL2Dragging] = useState<boolean>(false);
+  const [l2PreviewData, setL2PreviewData] = useState<any>(null);
+  const [showL2PreviewModal, setShowL2PreviewModal] = useState<boolean>(false);
+  const [showAddProbModal, setShowAddProbModal] = useState<boolean>(false);
+  const [showEditProbModal, setShowEditProbModal] = useState<boolean>(false);
   const [editProbForm, setEditProbForm] = useState<any>(null);
-  const [activeStarterLang, setActiveStarterLang] = useState<'python' | 'c' | 'cpp' | 'java'>('python');
-  const [newProb, setNewProb] = useState({
-    title: '',
-    description: '',
-    constraints: '',
-    time_limit_ms: 2000,
-    memory_limit_mb: 256,
-    marks: 15,
-    difficulty: 'EASY' as 'EASY' | 'HARD',
-    order_num: 1,
-    starter_code: {
-      python: '',
-      c: '',
-      cpp: '',
-      java: ''
-    },
-    test_cases: [
-      { input_data: '', expected_output: '', is_hidden: false, order_num: 1 },
-      { input_data: '', expected_output: '', is_hidden: true, order_num: 2 }
-    ]
-  });
-
-  // Test Case management state
-  const [showAddTestCaseModal, setShowAddTestCaseModal] = useState(false);
-  const [selectedProblemForTestCase, setSelectedProblemForTestCase] = useState<any>(null);
-  const [newTestCase, setNewTestCase] = useState({
-    input_data: '',
-    expected_output: '',
-    is_hidden: false,
-    order_num: 1,
+  const [showL2QuotaModal, setShowL2QuotaModal] = useState<boolean>(false);
+  const [quotaForm, setQuotaForm] = useState({ quota_easy: 3, quota_medium: 3, quota_hard: 2 });
+  const [newL2Question, setNewL2Question] = useState({
+    question_id: '',
+    academic_year: 2,
+    language: 'python',
+    difficulty: 'medium',
+    question: '',
+    code: '',
+    option_a: '',
+    option_b: '',
+    option_c: '',
+    option_d: '',
+    correct_answer: 'a',
+    marks: 1
   });
 
   // Settings tab state
@@ -149,107 +145,6 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   const [promoteCutoff, setPromoteCutoff] = useState<number>(20);
   const [isPromoting, setIsPromoting] = useState<boolean>(false);
 
-  // Connected Devices (Judge0 Nodes) state
-  const [nodesData, setNodesData] = useState<any>(null);
-  const [nodesLoading, setNodesLoading] = useState<boolean>(false);
-  const [showAddNodeModal, setShowAddNodeModal] = useState<boolean>(false);
-  const [newNodeForm, setNewNodeForm] = useState({ name: '', endpoint_url: '' });
-  const [isAddingNode, setIsAddingNode] = useState<boolean>(false);
-  const [testNodeResult, setTestNodeResult] = useState<any>(null);
-  const [isTestingNode, setIsTestingNode] = useState<boolean>(false);
-  const [pingingNodeId, setPingingNodeId] = useState<string | null>(null);
-
-  const fetchNodes = async () => {
-    setNodesLoading(true);
-    try {
-      const data = await apiFetch<any>('/admin/nodes');
-      setNodesData(data);
-    } catch (e: any) {
-      console.error('Failed to fetch Judge0 nodes', e);
-      setMessage(`Failed to load connected devices: ${e?.detail || e.message}`);
-    } finally {
-      setNodesLoading(false);
-    }
-  };
-
-  const handleToggleNode = async (nodeId: string) => {
-    try {
-      const updated = await apiFetch<any>(`/admin/nodes/${nodeId}/toggle`, { method: 'PUT' });
-      setMessage(`Node ${updated.name || updated.endpoint_url} is now ${updated.is_active ? 'ACTIVE' : 'MUTED (STANDBY)'}.`);
-      fetchNodes();
-    } catch (e: any) {
-      alert(`Failed to toggle node: ${e?.detail || e.message}`);
-    }
-  };
-
-  const handleDeleteNode = async (nodeId: string, nodeName: string) => {
-    if (!confirm(`Are you sure you want to disconnect and remove node "${nodeName}"?`)) return;
-    try {
-      const res = await apiFetch<any>(`/admin/nodes/${nodeId}`, { method: 'DELETE' });
-      setMessage(res.message || `Node disconnected.`);
-      fetchNodes();
-    } catch (e: any) {
-      alert(`Failed to remove node: ${e?.detail || e.message}`);
-    }
-  };
-
-  const handleTestSpecificNode = async (endpointUrl: string, nodeId?: string) => {
-    if (nodeId) setPingingNodeId(nodeId);
-    try {
-      const res = await apiFetch<any>('/admin/nodes/test', {
-        method: 'POST',
-        body: JSON.stringify({ endpoint_url: endpointUrl })
-      });
-      if (res.is_online) {
-        alert(`✅ Online! Latency: ${res.latency_ms} ms (Judge0 version: ${res.version || 'CE'})`);
-      } else {
-        alert(`❌ Offline: ${res.error || 'Connection timed out'}`);
-      }
-      fetchNodes();
-    } catch (e: any) {
-      alert(`Test ping failed: ${e?.detail || e.message}`);
-    } finally {
-      if (nodeId) setPingingNodeId(null);
-    }
-  };
-
-  const handleTestModalNode = async () => {
-    if (!newNodeForm.endpoint_url.trim()) return;
-    setIsTestingNode(true);
-    setTestNodeResult(null);
-    try {
-      const res = await apiFetch<any>('/admin/nodes/test', {
-        method: 'POST',
-        body: JSON.stringify({ endpoint_url: newNodeForm.endpoint_url })
-      });
-      setTestNodeResult(res);
-    } catch (e: any) {
-      setTestNodeResult({ is_online: false, error: e?.detail || e.message });
-    } finally {
-      setIsTestingNode(false);
-    }
-  };
-
-  const handleAddNode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNodeForm.endpoint_url.trim()) return;
-    setIsAddingNode(true);
-    try {
-      const res = await apiFetch<any>('/admin/nodes', {
-        method: 'POST',
-        body: JSON.stringify(newNodeForm)
-      });
-      setMessage(`Judge0 node "${res.name}" connected successfully.`);
-      setShowAddNodeModal(false);
-      setNewNodeForm({ name: '', endpoint_url: '' });
-      setTestNodeResult(null);
-      fetchNodes();
-    } catch (e: any) {
-      alert(`Failed to register node: ${e?.detail || e.message}`);
-    } finally {
-      setIsAddingNode(false);
-    }
-  };
 
   const fetchOverview = async () => {
     try {
@@ -292,8 +187,23 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
 
   const fetchProblems = async () => {
     try {
-      const data = await apiFetch<any[]>('/admin/coding-problems');
+      let url = '/admin/coding-problems?limit=500';
+      if (l2YearFilter) url += `&academic_year=${l2YearFilter}`;
+      if (l2DiffFilter) url += `&difficulty=${l2DiffFilter}`;
+      if (l2Search) url += `&search=${encodeURIComponent(l2Search)}`;
+      const data = await apiFetch<any[]>(url);
       setProblems(Array.isArray(data) ? data : []);
+
+      // Also fetch pool stats
+      const stats = await apiFetch<any>('/admin/coding-problems/pool-stats');
+      setL2PoolStats(stats);
+      if (stats?.quotas) {
+        setQuotaForm({
+          quota_easy: stats.quotas.easy,
+          quota_medium: stats.quotas.medium,
+          quota_hard: stats.quotas.hard,
+        });
+      }
     } catch (e) {
       console.error(e);
       setProblems([]);
@@ -373,7 +283,6 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
       else if (activeTab === 'winners1') await fetchWinners1();
       else if (activeTab === 'winners2') await fetchWinners2();
       else if (activeTab === 'presentation') await fetchFinalists();
-      else if (activeTab === 'devices') await fetchNodes();
       setLastSynced(new Date());
     } catch (e) {
       console.error('Refresh failed', e);
@@ -408,12 +317,12 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   };
 
   useEffect(() => {
-    if (!isSuperAdmin && activeTab !== 'export' && activeTab !== 'winners1' && activeTab !== 'winners2' && activeTab !== 'presentation' && activeTab !== 'devices') {
+    if (!isSuperAdmin && activeTab !== 'export' && activeTab !== 'winners1' && activeTab !== 'winners2' && activeTab !== 'presentation') {
       setActiveTab('export');
       return;
     }
     refreshActiveTab();
-  }, [activeTab, yearFilter, search, qYearFilter, isSuperAdmin]);
+  }, [activeTab, yearFilter, search, qYearFilter, l2YearFilter, l2DiffFilter, l2Search, isSuperAdmin]);
 
   // Periodic Live Auto-Sync (10 seconds to optimize server load)
   useEffect(() => {
@@ -422,7 +331,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
       refreshActiveTab();
     }, 10000);
     return () => clearInterval(interval);
-  }, [autoSync, activeTab, yearFilter, search, qYearFilter, isSuperAdmin]);
+  }, [autoSync, activeTab, yearFilter, search, qYearFilter, l2YearFilter, l2DiffFilter, l2Search, isSuperAdmin]);
 
   const filteredWinners1 = winners1
     .filter((w) => {
@@ -638,179 +547,250 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     }
   };
 
-  const handleStarterFileUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const name = file.name.toLowerCase();
-    let detectedLang: 'python' | 'c' | 'cpp' | 'java' = activeStarterLang;
-    if (name.endsWith('.py')) detectedLang = 'python';
-    else if (name.endsWith('.cpp') || name.endsWith('.cc')) detectedLang = 'cpp';
-    else if (name.endsWith('.c')) detectedLang = 'c';
-    else if (name.endsWith('.java')) detectedLang = 'java';
-
-    setActiveStarterLang(detectedLang);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = (event.target?.result as string) || '';
-      if (isEdit) {
-        setEditProbForm((prev: any) => ({
-          ...prev,
-          starter_code: {
-            ...(prev?.starter_code || {}),
-            [detectedLang]: content
-          }
-        }));
+  // Level 2 Debugging Challenge Handlers
+  const handlePreviewL2Upload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      let res: any;
+      if (l2UploadMode === 'file') {
+        if (!l2ImportFile) return;
+        const formData = new FormData();
+        formData.append('file', l2ImportFile);
+        res = await apiFetch<any>(`/admin/coding-problems/preview-csv?overwrite=${l2Overwrite}`, {
+          method: 'POST',
+          body: formData,
+        });
       } else {
-        setNewProb((prev) => ({
-          ...prev,
-          starter_code: {
-            ...prev.starter_code,
-            [detectedLang]: content
-          }
-        }));
+        if (!l2PasteText.trim()) return;
+        res = await apiFetch<any>('/admin/coding-problems/preview-text', {
+          method: 'POST',
+          body: JSON.stringify({ raw_text: l2PasteText, overwrite: l2Overwrite }),
+        });
       }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
-  const handleOpenEditProblem = (p: any) => {
-    let parsedStarter = { python: '', c: '', cpp: '', java: '' };
-    if (p.starter_code) {
-      try {
-        const obj = JSON.parse(p.starter_code);
-        if (typeof obj === 'object' && obj !== null) {
-          parsedStarter = { ...parsedStarter, ...obj };
-        }
-      } catch {
-        parsedStarter.python = p.starter_code;
-      }
+      setL2PreviewData(res);
+      setShowL2PreviewModal(true);
+    } catch (err: any) {
+      alert(`Validation Failed: ${err?.detail || err?.message || 'Parse error'}`);
+    } finally {
+      setLoading(false);
     }
-    const diff = (p.difficulty || (p.marks > 20 ? 'HARD' : 'EASY')) as 'EASY' | 'HARD';
-    setEditProbForm({
-      id: p.id,
-      title: p.title,
-      description: p.description,
-      constraints: p.constraints || '',
-      time_limit_ms: p.time_limit_ms,
-      memory_limit_mb: p.memory_limit_mb,
-      marks: diff === 'EASY' ? 15 : 30,
-      difficulty: diff,
-      order_num: p.order_num,
-      starter_code: parsedStarter
-    });
-    setShowEditProbModal(true);
   };
 
-  const handleUpdateProblem = async (e: React.FormEvent) => {
+  const handleCommitL2Import = async () => {
+    setLoading(true);
+    try {
+      let res: any;
+      if (l2UploadMode === 'file') {
+        if (!l2ImportFile) return;
+        const formData = new FormData();
+        formData.append('file', l2ImportFile);
+        res = await apiFetch<any>(`/admin/coding-problems/import?overwrite=${l2Overwrite}`, {
+          method: 'POST',
+          body: formData,
+        });
+      } else {
+        if (!l2PasteText.trim()) return;
+        res = await apiFetch<any>('/admin/coding-problems/import-text', {
+          method: 'POST',
+          body: JSON.stringify({ raw_text: l2PasteText, overwrite: l2Overwrite }),
+        });
+      }
+      setMessage(res.message || 'Import completed successfully.');
+      setShowL2PreviewModal(false);
+      setL2ImportFile(null);
+      setL2PasteText('');
+      await fetchProblems();
+    } catch (err: any) {
+      alert(`Import Failed: ${err?.detail || err?.message || 'Server error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSeedDemoQuestions = async () => {
+    if (!confirm('This will seed competition-grade debugging questions (5 Easy, 5 Medium, 3 Hard for both Year 2 & Year 3) in Python, C, and Java. Proceed?')) return;
+    setLoading(true);
+    try {
+      const res = await apiFetch<any>('/admin/coding-problems/seed-demo', {
+        method: 'POST'
+      });
+      setMessage(res.message || 'Demo questions seeded successfully.');
+      await fetchProblems();
+    } catch (err: any) {
+      alert(`Seed failed: ${err?.detail || err?.message || 'Server error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearAllL2Questions = async () => {
+    const entered = prompt('⚠️ CAUTION: This will delete all Level 2 Debugging Questions from the database!\nType "DELETE" to confirm:');
+    if (entered !== 'DELETE') return;
+    setLoading(true);
+    try {
+      const res = await apiFetch<any>('/admin/coding-problems?confirm=true', {
+        method: 'DELETE'
+      });
+      setMessage(res.message || 'All Level 2 questions deleted.');
+      await fetchProblems();
+    } catch (err: any) {
+      alert(`Clear failed: ${err?.detail || err?.message || 'Server error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadL2Template = () => {
+    const headers = [
+      'question_id', 'academic_year', 'language', 'difficulty',
+      'question', 'code', 'option_a', 'option_b', 'option_c', 'option_d',
+      'correct_answer', 'marks'
+    ];
+    const sampleRows = [
+      {
+        question_id: 'L2_Y2_001',
+        academic_year: '2',
+        language: 'python',
+        difficulty: 'easy',
+        question: 'Identify the missing line to correctly compute the sum of even numbers.',
+        code: 'def sum_even(nums):\\n    total = 0\\n    for n in nums:\\n        // [ MISSING LINE HERE ]\\n            total += n\\n    return total',
+        option_a: 'if n % 2 == 0:',
+        option_b: 'if n % 2 != 0:',
+        option_c: 'if total % 2 == 0:',
+        option_d: 'if n > 0:',
+        correct_answer: 'a',
+        marks: '1'
+      },
+      {
+        question_id: 'L2_Y2_002',
+        academic_year: '2',
+        language: 'c',
+        difficulty: 'medium',
+        question: 'Supply the missing termination base case for recursive factorial.',
+        code: 'long long factorial(int n) {\\n    // [ MISSING LINE HERE ]\\n        return 1;\\n    return n * factorial(n - 1);\\n}',
+        option_a: 'if (n <= 1)',
+        option_b: 'if (n == 2)',
+        option_c: 'if (n > 1)',
+        option_d: 'if (factorial(n) == 1)',
+        correct_answer: 'a',
+        marks: '2'
+      },
+      {
+        question_id: 'L2_Y3_001',
+        academic_year: '3',
+        language: 'python',
+        difficulty: 'medium',
+        question: 'Complete the binary search algorithm to find the target index.',
+        code: 'def binary_search(arr, target):\\n    low, high = 0, len(arr) - 1\\n    while low <= high:\\n        // [ MISSING LINE HERE ]\\n        if arr[mid] == target:\\n            return mid\\n        elif arr[mid] < target:\\n            low = mid + 1\\n        else:\\n            high = mid - 1\\n    return -1',
+        option_a: 'mid = (low + high) // 2',
+        option_b: 'mid = (low + high) / 2',
+        option_c: 'mid = high - low // 2',
+        option_d: 'mid = (low + high) * 2',
+        correct_answer: 'a',
+        marks: '2'
+      },
+      {
+        question_id: 'L2_Y3_002',
+        academic_year: '3',
+        language: 'java',
+        difficulty: 'hard',
+        question: 'Supply the final pivot positioning swap in Lomuto QuickSort Partition.',
+        code: 'int partition(int[] arr, int low, int high) {\\n    int pivot = arr[high];\\n    int i = low - 1;\\n    for (int j = low; j < high; j++) {\\n        if (arr[j] <= pivot) {\\n            i++;\\n            swap(arr, i, j);\\n        }\\n    }\\n    // [ MISSING LINE HERE ]\\n    return i + 1;\\n}',
+        option_a: 'swap(arr, i + 1, high);',
+        option_b: 'swap(arr, low, high);',
+        option_c: 'swap(arr, i, high);',
+        option_d: 'arr[i + 1] = pivot;',
+        correct_answer: 'a',
+        marks: '3'
+      }
+    ];
+
+    downloadCSV(sampleRows, 'level2_debugging_template.csv', headers, headers);
+  };
+
+  const handleAddL2Question = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await apiFetch('/admin/coding-problems', {
+        method: 'POST',
+        body: JSON.stringify(newL2Question),
+      });
+      setMessage(`Question "${newL2Question.question_id}" created successfully.`);
+      setShowAddProbModal(false);
+      setNewL2Question({
+        question_id: '',
+        academic_year: 2,
+        language: 'python',
+        difficulty: 'medium',
+        question: '',
+        code: '',
+        option_a: '',
+        option_b: '',
+        option_c: '',
+        option_d: '',
+        correct_answer: 'a',
+        marks: 1
+      });
+      fetchProblems();
+    } catch (err: any) {
+      alert(`Failed to add question: ${err?.detail || err?.message || 'Server error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateL2Question = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editProbForm) return;
     setLoading(true);
     try {
-      const diff = ((editProbForm.difficulty || (editProbForm.marks > 20 ? 'HARD' : 'EASY')) as string).toUpperCase();
-      const payload = {
-        title: editProbForm.title,
-        description: editProbForm.description,
-        constraints: editProbForm.constraints,
-        time_limit_ms: editProbForm.time_limit_ms,
-        memory_limit_mb: editProbForm.memory_limit_mb,
-        marks: diff === 'EASY' ? 15 : 30,
-        difficulty: diff,
-        order_num: editProbForm.order_num,
-        starter_code: JSON.stringify(editProbForm.starter_code)
-      };
       await apiFetch(`/admin/coding-problems/${editProbForm.id}`, {
         method: 'PUT',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(editProbForm),
       });
-      setMessage(`Problem "${editProbForm.title}" updated successfully.`);
+      setMessage(`Question "${editProbForm.question_id}" updated successfully.`);
       setShowEditProbModal(false);
       setEditProbForm(null);
       fetchProblems();
-    } catch (e: any) {
-      alert(`Update failed: ${e?.detail || e.message}`);
+    } catch (err: any) {
+      alert(`Update failed: ${err?.detail || err?.message || 'Server error'}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddProblem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const diff = (newProb.difficulty || 'EASY').toUpperCase();
-      const payload = {
-        ...newProb,
-        marks: diff === 'EASY' ? 15 : 30,
-        difficulty: diff,
-        starter_code: JSON.stringify(newProb.starter_code)
-      };
-      await apiFetch('/admin/coding-problems', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      setMessage('Coding problem added successfully.');
-      setShowAddProbModal(false);
-      setNewProb({
-        title: '',
-        description: '',
-        constraints: '',
-        time_limit_ms: 2000,
-        memory_limit_mb: 256,
-        marks: 15,
-        difficulty: 'EASY',
-        order_num: (problems.length || 0) + 1,
-        starter_code: { python: '', c: '', cpp: '', java: '' },
-        test_cases: [
-          { input_data: '', expected_output: '', is_hidden: false, order_num: 1 },
-          { input_data: '', expected_output: '', is_hidden: true, order_num: 2 }
-        ]
-      });
-      fetchProblems();
-    } catch (e: any) {
-      setMessage(`Failed: ${e?.detail || e.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteProblem = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this problem?')) return;
+  const handleDeleteL2Question = async (id: string, qid: string) => {
+    if (!confirm(`Are you sure you want to delete question "${qid}"?`)) return;
     try {
       await apiFetch(`/admin/coding-problems/${id}`, { method: 'DELETE' });
+      setMessage(`Question "${qid}" deleted.`);
       fetchProblems();
-    } catch (e: any) {
-      alert(`Delete failed: ${e?.detail || e.message}`);
+    } catch (err: any) {
+      alert(`Delete failed: ${err?.detail || err?.message || 'Server error'}`);
     }
   };
 
-  const handleAddTestCase = async (e: React.FormEvent) => {
+  const handleUpdateQuotas = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProblemForTestCase) return;
     setLoading(true);
     try {
-      await apiFetch(`/admin/coding-problems/${selectedProblemForTestCase.id}/test-cases`, {
+      const res = await apiFetch<any>('/admin/coding-problems/quotas', {
         method: 'POST',
-        body: JSON.stringify(newTestCase),
+        body: JSON.stringify({
+          quota_easy: Number(quotaForm.quota_easy),
+          quota_medium: Number(quotaForm.quota_medium),
+          quota_hard: Number(quotaForm.quota_hard),
+        }),
       });
-      setMessage(`Test case added to "${selectedProblemForTestCase.title}".`);
-      setShowAddTestCaseModal(false);
-      setNewTestCase({ input_data: '', expected_output: '', is_hidden: false, order_num: 1 });
+      setMessage(res.message || 'Quotas updated successfully.');
+      setShowL2QuotaModal(false);
       fetchProblems();
-    } catch (e: any) {
-      setMessage(`Failed to add test case: ${e?.detail || e.message}`);
+    } catch (err: any) {
+      alert(`Failed to update quotas: ${err?.detail || err?.message || 'Server error'}`);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleDeleteTestCase = async (testCaseId: string, probTitle: string) => {
-    if (!confirm(`Delete test case from "${probTitle}"?`)) return;
-    try {
-      await apiFetch(`/admin/coding-problems/test-cases/${testCaseId}`, { method: 'DELETE' });
-      fetchProblems();
-    } catch (e: any) {
-      alert(`Delete failed: ${e?.detail || e.message}`);
     }
   };
 
@@ -1027,10 +1007,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         { id: 'winners1' as Tab, label: '🥇 Round 1 Results' },
         { id: 'winners2' as Tab, label: '🏆 Round 2 Results' },
         { id: 'presentation' as Tab, label: '🎤 Level 3 Evaluation' },
-        { id: 'devices' as Tab, label: '🖥️ Connected Devices' },
         { id: 'participants' as Tab, label: 'Participants' },
         { id: 'mcq' as Tab, label: 'MCQ Bank Manager' },
-        { id: 'coding' as Tab, label: 'Coding Problems' },
+        { id: 'coding' as Tab, label: 'L2 Debugging Bank' },
         { id: 'organizers' as Tab, label: 'Organizer Team' },
         { id: 'settings' as Tab, label: 'Competition Settings' },
       ]
@@ -1039,7 +1018,6 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         { id: 'winners1' as Tab, label: '🥇 Round 1 Results' },
         { id: 'winners2' as Tab, label: '🏆 Round 2 Results' },
         { id: 'presentation' as Tab, label: '🎤 Level 3 Evaluation' },
-        { id: 'devices' as Tab, label: '🖥️ Connected Devices' },
       ];
 
   return (
@@ -1139,7 +1117,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
               </div>
 
               {/* Round Toggle Cards */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {rounds.map((r) => (
                   <div key={r.id} className="bg-white border border-[#DBD7C9] rounded-[4px] p-5">
                     <div className="flex items-center justify-between mb-2">
@@ -1661,472 +1639,796 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
             </div>
           )}
 
-          {/* TAB 4: CODING PROBLEMS */}
+          {/* TAB 4: LEVEL 2 DEBUGGING QUESTION BANK */}
           {activeTab === 'coding' && isSuperAdmin && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-bold text-[#16233F]">Coding Problem &amp; Test Case Manager</h2>
-                  <p className="text-xs text-[#59626F]">Add, edit, or configure coding challenges, public sample test cases, and authoritative hidden evaluation test cases.</p>
+                  <h2 className="text-lg font-bold text-[#16233F]">Level 2 Debugging Question Bank</h2>
+                  <p className="text-xs text-[#59626F]">
+                    Missing-Line MCQ challenges with read-only code snippets. Exclusively for Academic Years 2 and 3.
+                  </p>
                 </div>
-                <button
-                  onClick={() => setShowAddProbModal(true)}
-                  className="px-3.5 py-1.5 bg-[#16233F] text-white text-xs font-semibold rounded-[3px] hover:bg-[#25355B]"
-                >
-                  + Add New Problem
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={handleDownloadL2Template}
+                    className="px-3 py-1.5 bg-[#EEF1F6] text-[#16233F] border border-[#CBD5E1] text-xs font-semibold rounded-[3px] hover:bg-[#E2E8F0] transition-colors"
+                  >
+                    📥 CSV Template
+                  </button>
+                  <button
+                    onClick={handleSeedDemoQuestions}
+                    disabled={loading}
+                    className="px-3 py-1.5 bg-[#E8F3EC] text-[#1E7A46] border border-[#A9DFBF] text-xs font-semibold rounded-[3px] hover:bg-[#D4EFDF] transition-colors disabled:opacity-50"
+                  >
+                    ⚡ Seed Demo Questions
+                  </button>
+                  <button
+                    onClick={handleClearAllL2Questions}
+                    disabled={loading}
+                    className="px-3 py-1.5 bg-[#FDEDEC] text-[#C0392B] border border-[#F5B7B1] text-xs font-semibold rounded-[3px] hover:bg-[#FADBD8] transition-colors disabled:opacity-50"
+                  >
+                    🗑️ Clear Questions
+                  </button>
+                  <button
+                    onClick={() => setShowL2QuotaModal(true)}
+                    className="px-3 py-1.5 bg-[#EEF1F6] text-[#16233F] border border-[#CBD5E1] text-xs font-semibold rounded-[3px] hover:bg-[#E2E8F0] transition-colors"
+                  >
+                    ⚙ Configure Quotas
+                  </button>
+                  <button
+                    onClick={() => setShowAddProbModal(true)}
+                    className="px-3.5 py-1.5 bg-[#16233F] text-white text-xs font-semibold rounded-[3px] hover:bg-[#25355B] transition-colors"
+                  >
+                    + Add Question
+                  </button>
+                </div>
               </div>
 
-              {/* Random Level 2 Assignment Banner */}
-              <div className="bg-[#EEF1F6] border border-[#CBD5E1] rounded-[6px] p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-sm">
-                <div className="flex items-center space-x-3 text-xs">
-                  <span className="text-2xl">🎲</span>
-                  <div>
-                    <strong className="text-[#16233F] text-sm block font-bold">Random Problem Assignment Active (2 Problems · Total 45 Marks)</strong>
-                    <p className="text-[#475569] text-xs mt-0.5 leading-relaxed">
-                      Every participant gets assigned exactly <strong>2 problems</strong>:
-                      <strong className="ml-1 text-[#1E7A46]">Problem 1 = 1 Random EASY (15 Marks)</strong> and 
-                      <strong className="ml-1 text-[#C0392B]">Problem 2 = 1 Random HARD (30 Marks)</strong>.
-                    </p>
+              {/* Pool Status & Quota Readiness Banner */}
+              <div className="bg-[#EEF1F6] border border-[#CBD5E1] rounded-[6px] p-4 space-y-3 shadow-sm">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 border-b border-[#CBD5E1] pb-3">
+                  <div className="flex items-center space-x-2.5">
+                    <span className="text-xl">🎲</span>
+                    <div>
+                      <strong className="text-[#16233F] text-sm block font-bold">
+                        Assignment Quotas: {l2PoolStats?.quotas?.easy || 3} Easy + {l2PoolStats?.quotas?.medium || 3} Medium + {l2PoolStats?.quotas?.hard || 2} Hard = {l2PoolStats?.quotas?.total || 8} Questions per Candidate
+                      </strong>
+                      <p className="text-[#475569] text-xs mt-0.5">
+                        Sampled randomly without replacement across difficulty buckets and shuffled per candidate.
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2 font-mono text-xs shrink-0">
-                  <span className="px-3 py-1 bg-[#E8F3EC] border border-[#A9DFBF] rounded text-[#1E7A46] font-bold">
-                    🟢 {problems.filter(p => (p.difficulty || (p.marks <= 20 ? 'EASY' : 'HARD')) === 'EASY').length} Easy in Pool
-                  </span>
-                  <span className="px-3 py-1 bg-[#FDEDEC] border border-[#F5B7B1] rounded text-[#C0392B] font-bold">
-                    🔴 {problems.filter(p => (p.difficulty || (p.marks <= 20 ? 'EASY' : 'HARD')) === 'HARD').length} Hard in Pool
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  {/* Year 2 Pool Card */}
+                  <div className="bg-white p-3 rounded border border-[#DBD7C9] space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-xs text-[#16233F]">🎓 Academic Year 2 Pool</span>
+                      <span className={`px-2 py-0.5 rounded font-mono text-[10.5px] font-bold uppercase ${
+                        l2PoolStats?.is_ready_year_2
+                          ? 'bg-[#E8F3EC] text-[#1E7A46] border border-[#A9DFBF]'
+                          : 'bg-[#FDEDEC] text-[#C0392B] border border-[#F5B7B1]'
+                      }`}>
+                        {l2PoolStats?.is_ready_year_2 ? '🟢 Pool Ready' : '🔴 Quota Unmet'}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2 font-mono text-xs">
+                      <span className="px-2 py-0.5 bg-[#F6F6F2] border rounded text-[#16233F]">
+                        Easy: {l2PoolStats?.year_2?.easy || 0} / {l2PoolStats?.quotas?.easy || 3}
+                      </span>
+                      <span className="px-2 py-0.5 bg-[#F6F6F2] border rounded text-[#16233F]">
+                        Medium: {l2PoolStats?.year_2?.medium || 0} / {l2PoolStats?.quotas?.medium || 3}
+                      </span>
+                      <span className="px-2 py-0.5 bg-[#F6F6F2] border rounded text-[#16233F]">
+                        Hard: {l2PoolStats?.year_2?.hard || 0} / {l2PoolStats?.quotas?.hard || 2}
+                      </span>
+                      <span className="font-bold text-[#59626F] text-[11px]">
+                        Total: {l2PoolStats?.year_2?.total || 0}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Year 3 Pool Card */}
+                  <div className="bg-white p-3 rounded border border-[#DBD7C9] space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-xs text-[#16233F]">🎓 Academic Year 3 Pool</span>
+                      <span className={`px-2 py-0.5 rounded font-mono text-[10.5px] font-bold uppercase ${
+                        l2PoolStats?.is_ready_year_3
+                          ? 'bg-[#E8F3EC] text-[#1E7A46] border border-[#A9DFBF]'
+                          : 'bg-[#FDEDEC] text-[#C0392B] border border-[#F5B7B1]'
+                      }`}>
+                        {l2PoolStats?.is_ready_year_3 ? '🟢 Pool Ready' : '🔴 Quota Unmet'}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2 font-mono text-xs">
+                      <span className="px-2 py-0.5 bg-[#F6F6F2] border rounded text-[#16233F]">
+                        Easy: {l2PoolStats?.year_3?.easy || 0} / {l2PoolStats?.quotas?.easy || 3}
+                      </span>
+                      <span className="px-2 py-0.5 bg-[#F6F6F2] border rounded text-[#16233F]">
+                        Medium: {l2PoolStats?.year_3?.medium || 0} / {l2PoolStats?.quotas?.medium || 3}
+                      </span>
+                      <span className="px-2 py-0.5 bg-[#F6F6F2] border rounded text-[#16233F]">
+                        Hard: {l2PoolStats?.year_3?.hard || 0} / {l2PoolStats?.quotas?.hard || 2}
+                      </span>
+                      <span className="font-bold text-[#59626F] text-[11px]">
+                        Total: {l2PoolStats?.year_3?.total || 0}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Question Bank Import Card */}
+              <div className="bg-white border border-[#DBD7C9] p-5 rounded-[6px] space-y-4 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#DBD7C9] pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-[#16233F] flex items-center gap-2">
+                      <span>📤</span>
+                      <span>Import Level 2 Questions</span>
+                    </h3>
+                    <p className="text-xs text-[#59626F] mt-0.5">
+                      Upload a CSV/TSV file or paste rows copied directly from Excel / Google Sheets.
+                    </p>
+                  </div>
+                  {/* Mode switcher */}
+                  <div className="flex items-center bg-[#EEF1F6] p-0.5 rounded-[4px] border border-[#CBD5E1] self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setL2UploadMode('file')}
+                      className={`px-3 py-1 text-xs font-semibold rounded-[3px] transition-colors ${
+                        l2UploadMode === 'file'
+                          ? 'bg-white text-[#16233F] shadow-sm'
+                          : 'text-[#59626F] hover:text-[#16233F]'
+                      }`}
+                    >
+                      📁 Upload File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setL2UploadMode('paste')}
+                      className={`px-3 py-1 text-xs font-semibold rounded-[3px] transition-colors ${
+                        l2UploadMode === 'paste'
+                          ? 'bg-white text-[#16233F] shadow-sm'
+                          : 'text-[#59626F] hover:text-[#16233F]'
+                      }`}
+                    >
+                      📋 Paste Rows
+                    </button>
+                  </div>
+                </div>
+
+                {/* Overwrite & formatting info */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-[#F8F9FA] p-3 rounded border border-[#E2E8F0] text-xs">
+                  <div className="text-[11px] text-[#59626F] flex-1 leading-relaxed">
+                    <span className="font-semibold text-[#16233F]">Expected Columns:</span>{' '}
+                    <code className="bg-[#EEF1F6] text-[#16233F] px-1 py-0.5 rounded">question_id</code>,{' '}
+                    <code className="bg-[#EEF1F6] text-[#16233F] px-1 py-0.5 rounded">academic_year (2 or 3)</code>,{' '}
+                    <code className="bg-[#EEF1F6] text-[#16233F] px-1 py-0.5 rounded">difficulty (easy/med/hard)</code>,{' '}
+                    <code className="bg-[#EEF1F6] text-[#16233F] px-1 py-0.5 rounded">language</code>,{' '}
+                    <code className="bg-[#EEF1F6] text-[#16233F] px-1 py-0.5 rounded">question</code>,{' '}
+                    <code className="bg-[#EEF1F6] text-[#16233F] px-1 py-0.5 rounded">code</code>,{' '}
+                    <code className="bg-[#EEF1F6] text-[#16233F] px-1 py-0.5 rounded">option_a..d</code>,{' '}
+                    <code className="bg-[#EEF1F6] text-[#16233F] px-1 py-0.5 rounded">correct_answer (a/b/c/d)</code>,{' '}
+                    <code className="bg-[#EEF1F6] text-[#16233F] px-1 py-0.5 rounded">marks</code>
+                  </div>
+                  <label className="flex items-center space-x-2 shrink-0 cursor-pointer select-none bg-white px-2.5 py-1 border border-[#CBD5E1] rounded">
+                    <input
+                      type="checkbox"
+                      checked={l2Overwrite}
+                      onChange={(e) => setL2Overwrite(e.target.checked)}
+                      className="rounded text-[#16233F]"
+                    />
+                    <span className="text-[11.5px] font-medium text-[#16233F]">Overwrite existing IDs</span>
+                  </label>
+                </div>
+
+                {/* Mode 1: File Upload with Drag & Drop */}
+                {l2UploadMode === 'file' ? (
+                  <form onSubmit={handlePreviewL2Upload} className="space-y-3">
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setIsL2Dragging(true); }}
+                      onDragLeave={() => setIsL2Dragging(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsL2Dragging(false);
+                        if (e.dataTransfer.files?.[0]) {
+                          setL2ImportFile(e.dataTransfer.files[0]);
+                        }
+                      }}
+                      onClick={() => document.getElementById('l2-file-input')?.click()}
+                      className={`border-2 border-dashed rounded-[6px] p-6 text-center cursor-pointer transition-colors ${
+                        isL2Dragging
+                          ? 'border-[#16233F] bg-[#EEF1F6]'
+                          : l2ImportFile
+                          ? 'border-[#A9DFBF] bg-[#E8F3EC]'
+                          : 'border-[#CBD5E1] bg-[#FAFAFA] hover:bg-[#F1F5F9]'
+                      }`}
+                    >
+                      <input
+                        id="l2-file-input"
+                        type="file"
+                        accept=".csv,.tsv,.txt"
+                        onChange={(e) => setL2ImportFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                      />
+                      {l2ImportFile ? (
+                        <div className="flex flex-col items-center space-y-1">
+                          <span className="text-2xl">📄</span>
+                          <span className="font-bold text-xs text-[#1E7A46]">
+                            {l2ImportFile.name}
+                          </span>
+                          <span className="text-[11px] text-[#59626F]">
+                            {(l2ImportFile.size / 1024).toFixed(1)} KB — Click or drag another file to replace
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center space-y-1">
+                          <span className="text-2xl">📥</span>
+                          <span className="font-semibold text-xs text-[#16233F]">
+                            Drag &amp; drop your CSV or TSV file here, or click to browse
+                          </span>
+                          <span className="text-[11px] text-[#8B93A0]">
+                            Supports .csv and .tsv files (UTF-8 encoded)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      {l2ImportFile ? (
+                        <button
+                          type="button"
+                          onClick={() => setL2ImportFile(null)}
+                          className="text-xs text-[#C0392B] hover:underline"
+                        >
+                          ✕ Remove file
+                        </button>
+                      ) : <span />}
+                      <button
+                        type="submit"
+                        disabled={!l2ImportFile || loading}
+                        className="px-5 py-2 bg-[#16233F] text-white text-xs font-semibold rounded disabled:opacity-50 hover:bg-[#25355B] transition-colors"
+                      >
+                        {loading ? 'Analyzing...' : 'Preview & Validate File'}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  /* Mode 2: Paste Raw Spreadsheet Rows */
+                  <form onSubmit={handlePreviewL2Upload} className="space-y-3">
+                    <div className="space-y-1">
+                      <textarea
+                        rows={7}
+                        value={l2PasteText}
+                        onChange={(e) => setL2PasteText(e.target.value)}
+                        placeholder={`Paste tab-separated rows copied directly from Excel/Google Sheets, or comma-separated CSV lines:\n\nquestion_id\tacademic_year\tlanguage\tdifficulty\tquestion\tcode\toption_a\toption_b\toption_c\toption_d\tcorrect_answer\tmarks\nL2_Y2_001\t2\tpython\teasy\tMissing loop?\tdef f():\\n  pass\topt A\topt B\topt C\topt D\ta\t1`}
+                        className="w-full p-3 font-mono text-xs border border-[#CBD5E1] rounded-[4px] bg-[#FAFAFA] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#16233F]"
+                      />
+                      <div className="flex justify-between items-center text-[11px] text-[#59626F]">
+                        <span>
+                          {l2PasteText.trim() ? `${l2PasteText.trim().split('\n').length} lines entered` : 'Select cells in your spreadsheet, press Ctrl+C, then paste directly here.'}
+                        </span>
+                        {l2PasteText && (
+                          <button
+                            type="button"
+                            onClick={() => setL2PasteText('')}
+                            className="text-[#C0392B] hover:underline"
+                          >
+                            Clear input
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={!l2PasteText.trim() || loading}
+                        className="px-5 py-2 bg-[#16233F] text-white text-xs font-semibold rounded disabled:opacity-50 hover:bg-[#25355B] transition-colors"
+                      >
+                        {loading ? 'Analyzing...' : 'Preview & Validate Pasted Rows'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+
+              {/* Filter & Search Toolbar */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 border border-[#DBD7C9] rounded-[4px]">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs font-semibold text-[#59626F]">Filter Year:</span>
+                  <select
+                    value={l2YearFilter}
+                    onChange={(e) => setL2YearFilter(e.target.value ? Number(e.target.value) : '')}
+                    className="border border-[#C6C1B0] p-1 rounded text-xs bg-white"
+                  >
+                    <option value="">All Eligible (Years 2 &amp; 3)</option>
+                    <option value={2}>Year 2 Only</option>
+                    <option value={3}>Year 3 Only</option>
+                  </select>
+
+                  <span className="text-xs font-semibold text-[#59626F] ml-2">Difficulty:</span>
+                  <select
+                    value={l2DiffFilter}
+                    onChange={(e) => setL2DiffFilter(e.target.value)}
+                    className="border border-[#C6C1B0] p-1 rounded text-xs bg-white"
+                  >
+                    <option value="">All Difficulties</option>
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    placeholder="Search by ID, prompt, or code..."
+                    value={l2Search}
+                    onChange={(e) => setL2Search(e.target.value)}
+                    className="border border-[#C6C1B0] p-1.5 rounded text-xs w-64"
+                  />
+                  {l2Search && (
+                    <button
+                      onClick={() => setL2Search('')}
+                      className="text-xs text-[#59626F] px-1"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  <span className="text-xs font-mono text-[#8B93A0] ml-2">
+                    {problems.length} Questions
                   </span>
                 </div>
               </div>
 
-              <div className="space-y-5">
-                {problems.map((p) => (
-                  <div key={p.id} className="bg-white border border-[#DBD7C9] rounded-[6px] p-5 text-xs space-y-4 shadow-sm">
+              {/* Questions List */}
+              <div className="space-y-4">
+                {problems.map((q) => (
+                  <div key={q.id} className="bg-white border border-[#DBD7C9] rounded-[6px] p-5 text-xs space-y-3.5 shadow-sm">
                     <div className="flex items-center justify-between border-b border-[#DBD7C9] pb-3">
                       <div className="flex items-center space-x-2.5">
-                        <span className="font-mono font-bold text-sm text-[#16233F] bg-[#EEF1F6] px-2 py-0.5 rounded-[3px]">
-                          P{p.order_num}
+                        <span className="font-mono font-bold text-xs text-[#16233F] bg-[#EEF1F6] px-2 py-0.5 rounded-[3px]">
+                          {q.question_id}
                         </span>
-                        <span className="font-serif font-bold text-base text-[#16233F]">{p.title}</span>
-                        <span className={`px-2.5 py-0.5 font-mono rounded text-[10.5px] font-bold uppercase ${
-                          (p.difficulty || (p.marks > 20 ? 'HARD' : 'EASY')) === 'EASY'
+                        <span className="px-2 py-0.5 bg-[#F6F6F2] text-[#16233F] border border-[#DBD7C9] font-mono rounded text-[10.5px] font-bold">
+                          Year {q.academic_year}
+                        </span>
+                        <span className={`px-2 py-0.5 font-mono rounded text-[10.5px] font-bold uppercase ${
+                          q.difficulty.toLowerCase() === 'easy'
                             ? 'bg-[#E8F3EC] text-[#1E7A46] border border-[#A9DFBF]'
-                            : 'bg-[#FDEDEC] text-[#C0392B] border border-[#F5B7B1]'
+                            : q.difficulty.toLowerCase() === 'hard'
+                            ? 'bg-[#FDEDEC] text-[#C0392B] border border-[#F5B7B1]'
+                            : 'bg-[#FEF9E7] text-[#B7950B] border border-[#F9E79F]'
                         }`}>
-                          {(p.difficulty || (p.marks > 20 ? 'HARD' : 'EASY')) === 'EASY'
-                            ? '🟢 EASY · 15 Marks (P1 Pool)'
-                            : '🔴 HARD · 30 Marks (P2 Pool)'}
+                          {q.difficulty} · {q.marks} {q.marks === 1 ? 'Mark' : 'Marks'}
                         </span>
-                        {p.starter_code && (
-                          <span className="px-2 py-0.5 bg-[#EEF2FF] text-[#4338CA] border border-[#C7D2FE] font-mono rounded text-[10px] font-bold">
-                            ⚡ Starter Code Set
-                          </span>
-                        )}
-                        <span className="text-[11px] font-mono text-[#8B93A0]">
-                          Time Limit: {p.time_limit_ms}ms · RAM: {p.memory_limit_mb}MB
+                        <span className="meta-chip uppercase text-[10px]">
+                          {q.language || 'Python'}
                         </span>
                       </div>
 
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={() => handleOpenEditProblem(p)}
-                          className="px-2.5 py-1 bg-[#EEF1F6] text-[#16233F] border border-[#C6C1B0] hover:bg-[#DBD7C9] rounded-[3px] transition-colors font-medium text-xs flex items-center space-x-1"
-                          title="Edit Problem & Starter Code"
-                        >
-                          <span>✏️</span>
-                          <span>Edit Problem</span>
-                        </button>
-                        <button
                           onClick={() => {
-                            setSelectedProblemForTestCase(p);
-                            setNewTestCase({
-                              input_data: '',
-                              expected_output: '',
-                              is_hidden: false,
-                              order_num: (p.test_cases?.length || 0) + 1,
-                            });
-                            setShowAddTestCaseModal(true);
+                            setEditProbForm({ ...q });
+                            setShowEditProbModal(true);
                           }}
-                          className="px-3 py-1 bg-[#1E7E34] text-white font-semibold text-xs rounded-[3px] hover:bg-[#166027] transition-colors flex items-center space-x-1"
+                          className="px-2.5 py-1 bg-[#EEF1F6] text-[#16233F] border border-[#C6C1B0] hover:bg-[#DBD7C9] rounded-[3px] transition-colors font-medium text-xs flex items-center space-x-1"
                         >
-                          <span>+ Add Test Case</span>
+                          <span>✏️ Edit</span>
                         </button>
                         <button
-                          onClick={() => handleDeleteProblem(p.id)}
+                          onClick={() => handleDeleteL2Question(q.id, q.question_id)}
                           className="px-2.5 py-1 text-[#A82A2A] hover:bg-[#FDEDEC] rounded-[3px] transition-colors font-medium text-xs"
                         >
-                          Delete Problem
+                          Delete
                         </button>
                       </div>
                     </div>
 
-                    <div>
-                      <div className="font-mono text-[10px] uppercase font-bold text-[#59626F] mb-1">Description:</div>
-                      <p className="text-[#1B2029] whitespace-pre-line bg-[#F6F6F2] p-3 rounded-[3px] border border-[#DBD7C9]/60 leading-relaxed">
-                        {p.description}
-                      </p>
+                    {/* Question Prompt */}
+                    <div className="text-[#1B2029] text-[13px] font-medium leading-relaxed">
+                      {q.question}
                     </div>
 
-                    {p.constraints && (
-                      <div>
-                        <div className="font-mono text-[10px] uppercase font-bold text-[#59626F] mb-1">Constraints:</div>
-                        <pre className="text-[#59626F] font-mono text-[11px] bg-[#F6F6F2] p-2.5 rounded-[3px] border border-[#DBD7C9]/60 whitespace-pre-wrap">
-                          {p.constraints}
-                        </pre>
-                      </div>
-                    )}
+                    {/* Code Snippet with highlighted missing line */}
+                    <div className="bg-[#161B22] text-[#E6EDF3] rounded-[4px] border border-[#30363D] overflow-x-auto p-3 font-mono text-[11px] leading-relaxed max-h-56">
+                      {q.code.split('\n').map((line: string, lineIdx: number) => {
+                        const isMissing =
+                          line.includes('// [ MISSING LINE HERE ]') ||
+                          line.includes('MISSING LINE') ||
+                          line.includes('__MISSING_LINE__') ||
+                          line.includes('???');
+                        return isMissing ? (
+                          <div
+                            key={lineIdx}
+                            className="my-1 px-2.5 py-1 rounded border border-dashed border-[#F59E0B] bg-[#F59E0B]/20 text-[#FBBF24] font-mono text-[11px] font-bold flex items-center space-x-2"
+                          >
+                            <span>👉</span>
+                            <span>[ MISSING LINE HERE ]</span>
+                          </div>
+                        ) : (
+                          <div key={lineIdx} className="flex hover:bg-[#21262D]/50 px-1 rounded">
+                            <span className="select-none text-[#484F58] w-6 shrink-0 text-right pr-2 font-mono text-[10px]">
+                              {lineIdx + 1}
+                            </span>
+                            <span className="whitespace-pre font-mono text-[#C9D1D9]">{line}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
 
-                    {/* Test Cases Section */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-bold text-[#16233F] font-mono uppercase text-[11px] flex items-center space-x-1.5">
-                          <span>Test Cases ({p.test_cases?.length || 0})</span>
-                          <span className="text-[#8B93A0] font-normal normal-case text-[11px]">
-                            ({p.test_cases?.filter((tc: any) => !tc.is_hidden).length || 0} Public Sample, {p.test_cases?.filter((tc: any) => tc.is_hidden).length || 0} Hidden)
-                          </span>
-                        </h4>
-                      </div>
+                    {/* 4 Options Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 font-mono text-xs">
+                      {(['a', 'b', 'c', 'd'] as const).map((opt) => {
+                        const isCorrect = q.correct_answer.toLowerCase() === opt;
+                        const optText = q[`option_${opt}`];
 
-                      {p.test_cases && p.test_cases.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {p.test_cases.map((tc: any, i: number) => (
-                            <div
-                              key={tc.id}
-                              className={`p-3 rounded-[4px] border transition-all ${
-                                tc.is_hidden
-                                  ? 'bg-[#FCF9F9] border-[#E8D2D2]'
-                                  : 'bg-[#F9FCFA] border-[#D0E5D7]'
-                              }`}
-                            >
-                              <div className="flex justify-between items-center mb-2">
-                                <div className="flex items-center space-x-2">
-                                  <span className="font-mono text-[11px] font-bold text-[#16233F]">
-                                    Case #{i + 1}
-                                  </span>
-                                  <span
-                                    className={`px-1.5 py-0.2 rounded font-mono text-[9.5px] font-bold uppercase ${
-                                      tc.is_hidden
-                                        ? 'bg-[#FDEDEC] text-[#C0392B] border border-[#F5B7B1]'
-                                        : 'bg-[#E8F3EC] text-[#1E7A46] border border-[#A9DFBF]'
-                                    }`}
-                                  >
-                                    {tc.is_hidden ? '🔒 Hidden Case' : '👁 Public Sample'}
-                                  </span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteTestCase(tc.id, p.title)}
-                                  className="text-[#A82A2A] hover:bg-[#FDEDEC] px-1.5 py-0.5 rounded text-[11px] font-semibold"
-                                  title="Delete Test Case"
-                                >
-                                  ✕ Delete
-                                </button>
-                              </div>
-
-                              <div className="space-y-1.5 font-mono text-[11px]">
-                                <div>
-                                  <span className="text-[10px] text-[#59626F] block uppercase font-bold">Standard Input (stdin):</span>
-                                  <pre className="bg-white p-1.5 border border-[#DBD7C9] rounded text-[#16233F] overflow-x-auto max-h-20">
-                                    {tc.input_data || '(empty input)'}
-                                  </pre>
-                                </div>
-                                <div>
-                                  <span className="text-[10px] text-[#59626F] block uppercase font-bold">Expected Output (stdout):</span>
-                                  <pre className="bg-white p-1.5 border border-[#DBD7C9] rounded text-[#1E7A46] font-bold overflow-x-auto max-h-20">
-                                    {tc.expected_output}
-                                  </pre>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="p-4 bg-[#F6F6F2] border border-[#DBD7C9] rounded text-center text-[#59626F] italic">
-                          No test cases added yet. Click "+ Add Test Case" to create public samples and hidden test cases.
-                        </div>
-                      )}
+                        return (
+                          <div
+                            key={opt}
+                            className={`p-2.5 rounded-[4px] border flex items-center space-x-2.5 ${
+                              isCorrect
+                                ? 'bg-[#E8F3EC] border-[#1E7A46] text-[#1E7A46] font-bold'
+                                : 'bg-[#F6F6F2] border-[#DBD7C9] text-[#1B2029]'
+                            }`}
+                          >
+                            <span className="font-bold uppercase text-[11px] w-5">
+                              {opt.toUpperCase()}.
+                            </span>
+                            <span className="break-all">{optText}</span>
+                            {isCorrect && (
+                              <span className="ml-auto text-[10.5px] px-1.5 py-0.2 bg-[#1E7A46] text-white rounded font-bold">
+                                ✓ Correct
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
+
+                {problems.length === 0 && (
+                  <div className="p-8 bg-white border border-[#DBD7C9] rounded text-center text-[#59626F] text-xs">
+                    No questions match the selected filters. Use "+ Add Question" or "Bulk CSV Question Import" above.
+                  </div>
+                )}
               </div>
 
-              {/* Add Problem Modal */}
-              {showAddProbModal && (
+              {/* Question Preview Modal */}
+              {showL2PreviewModal && l2PreviewData && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                  <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-6 max-w-2xl w-full text-xs space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
-                    <div className="border-b border-[#DBD7C9] pb-2">
-                      <h3 className="text-sm font-bold text-[#16233F]">Create New Coding Problem</h3>
-                      <p className="text-[11px] text-[#59626F]">Add a new Level 2 programming challenge with public &amp; hidden evaluation test cases</p>
+                  <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-6 max-w-3xl w-full text-xs space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+                    <div className="border-b border-[#DBD7C9] pb-3 flex justify-between items-center">
+                      <div>
+                        <h3 className="text-sm font-bold text-[#16233F]">Question Import Pre-flight Validation</h3>
+                        <p className="text-[11px] text-[#59626F] mt-0.5">
+                          Row-by-row validation of academic year, question IDs, syntax, and required fields.
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2 font-mono">
+                        <span className="px-2.5 py-1 bg-[#E8F3EC] text-[#1E7A46] border border-[#A9DFBF] rounded font-bold">
+                          {l2PreviewData.valid_rows_count} Valid
+                        </span>
+                        <span className="px-2.5 py-1 bg-[#FDEDEC] text-[#C0392B] border border-[#F5B7B1] rounded font-bold">
+                          {l2PreviewData.invalid_rows_count} Errors
+                        </span>
+                      </div>
                     </div>
 
-                    <form onSubmit={handleAddProblem} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Problem Title</label>
-                          <input
-                            value={newProb.title}
-                            onChange={(e) => setNewProb({ ...newProb, title: e.target.value })}
-                            placeholder="e.g. Two Sum or Valid Palindrome"
-                            className="w-full border border-[#C6C1B0] p-1.5 rounded"
-                            required
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">
-                              Difficulty Pool (Fixed Marks)
-                            </label>
-                            <select
-                              value={newProb.difficulty}
-                              onChange={(e) => {
-                                const d = e.target.value as 'EASY' | 'HARD';
-                                setNewProb({ ...newProb, difficulty: d, marks: d === 'EASY' ? 15 : 30 });
-                              }}
-                              className="w-full border border-[#C6C1B0] p-1.5 rounded font-semibold text-xs bg-white text-[#16233F]"
-                            >
-                              <option value="EASY">🟢 EASY — 15 Marks (P1 Pool)</option>
-                              <option value="HARD">🔴 HARD — 30 Marks (P2 Pool)</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Display Order #</label>
-                            <input
-                              type="number"
-                              value={newProb.order_num}
-                              onChange={(e) => setNewProb({ ...newProb, order_num: Number(e.target.value) })}
-                              className="w-full border border-[#C6C1B0] p-1.5 rounded"
-                              required
-                            />
-                          </div>
+                    {/* Errors List */}
+                    {l2PreviewData.invalid_rows_count > 0 && (
+                      <div className="bg-[#FDEDEC] border border-[#F5B7B1] rounded p-3 text-xs space-y-2">
+                        <strong className="text-[#C0392B] block">
+                          Validation Errors ({l2PreviewData.errors?.length} Issues Found):
+                        </strong>
+                        <div className="max-h-40 overflow-y-auto space-y-1 font-mono text-[11px] text-[#A82A2A]">
+                          {l2PreviewData.errors?.map((err: any, idx: number) => (
+                            <div key={idx} className="flex items-start space-x-2">
+                              <span className="font-bold shrink-0">Row {err.row_number} ({err.question_id}):</span>
+                              <span>{err.error}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
+                    )}
 
+                    {/* Preview Table */}
+                    <div>
+                      <h4 className="font-bold text-[#16233F] mb-2 uppercase text-[11px] font-mono">
+                        Preview Valid Rows (First {l2PreviewData.preview?.length || 0})
+                      </h4>
+                      <div className="border border-[#DBD7C9] rounded overflow-x-auto max-h-60">
+                        <table className="w-full text-left font-mono text-[11px]">
+                          <thead className="bg-[#EEF1F6] text-[#16233F] border-b border-[#DBD7C9]">
+                            <tr>
+                              <th className="p-2">ID</th>
+                              <th className="p-2">Year</th>
+                              <th className="p-2">Diff</th>
+                              <th className="p-2">Lang</th>
+                              <th className="p-2">Question</th>
+                              <th className="p-2">Ans</th>
+                              <th className="p-2">Marks</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#DBD7C9]">
+                            {l2PreviewData.preview?.map((r: any, idx: number) => (
+                              <tr key={idx} className="hover:bg-[#F6F6F2]">
+                                <td className="p-2 font-bold text-[#16233F]">{r.question_id}</td>
+                                <td className="p-2">Yr {r.academic_year}</td>
+                                <td className="p-2 uppercase">{r.difficulty}</td>
+                                <td className="p-2">{r.language}</td>
+                                <td className="p-2 font-sans truncate max-w-xs">{r.question}</td>
+                                <td className="p-2 uppercase font-bold text-[#1E7A46]">{r.correct_answer}</td>
+                                <td className="p-2">{r.marks}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end space-x-2 pt-3 border-t border-[#DBD7C9]">
+                      <button
+                        type="button"
+                        onClick={() => setShowL2PreviewModal(false)}
+                        className="px-4 py-1.5 border border-[#C6C1B0] rounded text-xs hover:bg-[#F6F6F2]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={l2PreviewData.valid_rows_count === 0 || loading}
+                        onClick={handleCommitL2Import}
+                        className="px-4 py-1.5 bg-[#1E7E34] text-white rounded text-xs font-semibold hover:bg-[#166027] disabled:opacity-50"
+                      >
+                        {loading ? 'Importing…' : `Import ${l2PreviewData.valid_rows_count} Valid Questions`}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Configure Quotas Modal */}
+              {showL2QuotaModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                  <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-6 max-w-md w-full text-xs space-y-4 shadow-xl">
+                    <div className="border-b border-[#DBD7C9] pb-2">
+                      <h3 className="text-sm font-bold text-[#16233F]">Configure Assessment Quotas</h3>
+                      <p className="text-[11px] text-[#59626F]">
+                        Set how many questions from each difficulty pool are sampled per student attempt.
+                      </p>
+                    </div>
+
+                    <form onSubmit={handleUpdateQuotas} className="space-y-3 font-mono">
                       <div>
-                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Problem Description</label>
-                        <textarea
-                          value={newProb.description}
-                          onChange={(e) => setNewProb({ ...newProb, description: e.target.value })}
-                          placeholder="Describe the problem, input format, and output format..."
-                          className="w-full border border-[#C6C1B0] p-2 rounded h-20 font-sans text-xs"
+                        <label className="block text-[10px] uppercase font-bold text-[#59626F] mb-1">
+                          Easy Questions Quota
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={quotaForm.quota_easy}
+                          onChange={(e) => setQuotaForm({ ...quotaForm, quota_easy: Number(e.target.value) })}
+                          className="w-full border border-[#C6C1B0] p-1.5 rounded"
                           required
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Constraints &amp; Limits</label>
-                        <textarea
-                          value={newProb.constraints}
-                          onChange={(e) => setNewProb({ ...newProb, constraints: e.target.value })}
-                          placeholder="1 <= N <= 10^5&#10;Time Limit: 2000ms"
-                          className="w-full border border-[#C6C1B0] p-2 rounded h-14 font-mono text-xs"
+                        <label className="block text-[10px] uppercase font-bold text-[#59626F] mb-1">
+                          Medium Questions Quota
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={quotaForm.quota_medium}
+                          onChange={(e) => setQuotaForm({ ...quotaForm, quota_medium: Number(e.target.value) })}
+                          className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                          required
                         />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-[#59626F] mb-1">
+                          Hard Questions Quota
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={quotaForm.quota_hard}
+                          onChange={(e) => setQuotaForm({ ...quotaForm, quota_hard: Number(e.target.value) })}
+                          className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                          required
+                        />
+                      </div>
+
+                      <div className="p-2.5 bg-[#EEF1F6] rounded text-[#16233F] text-[11px]">
+                        Total per Attempt: <strong>{Number(quotaForm.quota_easy) + Number(quotaForm.quota_medium) + Number(quotaForm.quota_hard)} questions</strong>
+                      </div>
+
+                      <div className="flex justify-end space-x-2 pt-2 border-t border-[#DBD7C9]">
+                        <button
+                          type="button"
+                          onClick={() => setShowL2QuotaModal(false)}
+                          className="px-3.5 py-1.5 border border-[#C6C1B0] rounded text-xs hover:bg-[#F6F6F2]"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="px-4 py-1.5 bg-[#16233F] text-white rounded text-xs font-semibold hover:bg-[#25355B]"
+                        >
+                          Save Quotas
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Add Single Question Modal */}
+              {showAddProbModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                  <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-6 max-w-2xl w-full text-xs space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+                    <div className="border-b border-[#DBD7C9] pb-2">
+                      <h3 className="text-sm font-bold text-[#16233F]">Create Level 2 Debugging Question</h3>
+                      <p className="text-[11px] text-[#59626F]">
+                        Add a new missing-line question with code snippet and 4 selectable options.
+                      </p>
+                    </div>
+
+                    <form onSubmit={handleAddL2Question} className="space-y-3">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Question ID</label>
+                          <input
+                            value={newL2Question.question_id}
+                            onChange={(e) => setNewL2Question({ ...newL2Question, question_id: e.target.value })}
+                            placeholder="e.g. L2_Y2_001"
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded font-mono"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Academic Year</label>
+                          <select
+                            value={newL2Question.academic_year}
+                            onChange={(e) => setNewL2Question({ ...newL2Question, academic_year: Number(e.target.value) })}
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded bg-white font-semibold"
+                          >
+                            <option value={2}>Year 2</option>
+                            <option value={3}>Year 3</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Difficulty</label>
+                          <select
+                            value={newL2Question.difficulty}
+                            onChange={(e) => setNewL2Question({ ...newL2Question, difficulty: e.target.value })}
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded bg-white"
+                          >
+                            <option value="easy">Easy</option>
+                            <option value="medium">Medium</option>
+                            <option value="hard">Hard</option>
+                          </select>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Time Limit (ms)</label>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Language</label>
                           <input
-                            type="number"
-                            value={newProb.time_limit_ms}
-                            onChange={(e) => setNewProb({ ...newProb, time_limit_ms: Number(e.target.value) })}
-                            className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                            value={newL2Question.language}
+                            onChange={(e) => setNewL2Question({ ...newL2Question, language: e.target.value })}
+                            placeholder="e.g. python, c, cpp, java"
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded font-mono"
+                            required
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Memory Limit (MB)</label>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Marks</label>
                           <input
                             type="number"
-                            value={newProb.memory_limit_mb}
-                            onChange={(e) => setNewProb({ ...newProb, memory_limit_mb: Number(e.target.value) })}
-                            className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                            min={1}
+                            value={newL2Question.marks}
+                            onChange={(e) => setNewL2Question({ ...newL2Question, marks: Number(e.target.value) })}
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded font-mono"
+                            required
                           />
                         </div>
                       </div>
 
-                      {/* Default Starter Code Section */}
-                      <div className="border-t border-[#DBD7C9] pt-3 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <label className="block text-[10px] text-[#59626F] font-bold uppercase">
-                              Default Starter Code / Boilerplate (Optional)
-                            </label>
-                            <p className="text-[10.5px] text-[#8B93A0]">
-                              Participants will see this code when opening the problem. Leave empty to use system default.
-                            </p>
-                          </div>
-                          <label className="px-2.5 py-1 bg-[#EEF1F6] text-[#16233F] border border-[#C6C1B0] rounded text-[11px] font-semibold hover:bg-[#DBD7C9] cursor-pointer inline-flex items-center space-x-1">
-                            <span>📂</span>
-                            <span>Upload File</span>
-                            <input
-                              type="file"
-                              accept=".py,.c,.cpp,.cc,.java,.txt"
-                              className="hidden"
-                              onChange={(e) => handleStarterFileUpload(e, false)}
-                            />
-                          </label>
-                        </div>
-
-                        {/* Language Tabs */}
-                        <div className="flex items-center space-x-1 border-b border-[#DBD7C9]">
-                          {(['python', 'c', 'cpp', 'java'] as const).map((lang) => (
-                            <button
-                              key={lang}
-                              type="button"
-                              onClick={() => setActiveStarterLang(lang)}
-                              className={`px-3 py-1 text-[11px] font-mono font-bold rounded-t transition-colors ${
-                                activeStarterLang === lang
-                                  ? 'bg-[#16233F] text-white'
-                                  : 'bg-[#F6F6F2] text-[#59626F] hover:bg-[#DBD7C9]'
-                              }`}
-                            >
-                              {lang === 'python' ? 'Python 🐍' : lang === 'cpp' ? 'C++' : lang === 'c' ? 'C' : 'Java ☕'}
-                              {newProb.starter_code[lang]?.trim() ? ' •' : ''}
-                            </button>
-                          ))}
-                        </div>
-
+                      <div>
+                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Question Prompt</label>
                         <textarea
-                          rows={6}
-                          value={newProb.starter_code[activeStarterLang]}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setNewProb((prev) => ({
-                              ...prev,
-                              starter_code: {
-                                ...prev.starter_code,
-                                [activeStarterLang]: val
-                              }
-                            }));
-                          }}
-                          placeholder={`// Enter default ${activeStarterLang.toUpperCase()} starter code or function definition here...`}
-                          className="w-full border border-[#C6C1B0] p-2.5 rounded font-mono text-xs bg-[#1E1E1E] text-[#D4D4D4] focus:outline-none focus:border-[#16233F]"
+                          rows={2}
+                          value={newL2Question.question}
+                          onChange={(e) => setNewL2Question({ ...newL2Question, question: e.target.value })}
+                          placeholder="State the objective or bug to identify..."
+                          className="w-full border border-[#C6C1B0] p-2 rounded text-xs"
+                          required
                         />
                       </div>
 
-                      {/* How to Give Input Guide */}
-                      <div className="bg-[#F0F4F8] border border-[#CBD5E1] rounded p-2.5 space-y-1 text-[11px] text-[#1E293B]">
-                        <div className="font-bold flex items-center space-x-1.5 text-[#16233F]">
-                          <span>💡</span>
-                          <span>How to Format Standard Input (stdin) for Test Cases:</span>
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase">
+                            Code Snippet (Include <code>// [ MISSING LINE HERE ]</code>)
+                          </label>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 font-mono text-[10.5px] text-[#475569]">
-                          <div className="bg-white p-1.5 rounded border border-[#E2E8F0]">
-                            <strong>Single Array:</strong> <code>[-2, 1, -3, 4, -1, 2, 1, -5, 4]</code>
-                          </div>
-                          <div className="bg-white p-1.5 rounded border border-[#E2E8F0]">
-                            <strong>Array + Target:</strong> <code>[2, 7, 11, 15] | 9</code> or multi-line
-                          </div>
-                          <div className="bg-white p-1.5 rounded border border-[#E2E8F0]">
-                            <strong>Multiple ints:</strong> <code>10 20</code>
-                          </div>
-                          <div className="bg-white p-1.5 rounded border border-[#E2E8F0]">
-                            <strong>Strings:</strong> <code>"()[]{}"</code> or <code>()[]{}</code>
-                          </div>
+                        <textarea
+                          rows={5}
+                          value={newL2Question.code}
+                          onChange={(e) => setNewL2Question({ ...newL2Question, code: e.target.value })}
+                          placeholder={"def calculate(arr):\n    ans = 0\n    for x in arr:\n        // [ MISSING LINE HERE ]\n    return ans"}
+                          className="w-full border border-[#C6C1B0] p-2 rounded font-mono text-xs bg-[#161B22] text-[#C9D1D9]"
+                          required
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold">Option A</label>
+                          <input
+                            value={newL2Question.option_a}
+                            onChange={(e) => setNewL2Question({ ...newL2Question, option_a: e.target.value })}
+                            className="w-full border border-[#C6C1B0] p-1 rounded font-mono text-xs"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold">Option B</label>
+                          <input
+                            value={newL2Question.option_b}
+                            onChange={(e) => setNewL2Question({ ...newL2Question, option_b: e.target.value })}
+                            className="w-full border border-[#C6C1B0] p-1 rounded font-mono text-xs"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold">Option C</label>
+                          <input
+                            value={newL2Question.option_c}
+                            onChange={(e) => setNewL2Question({ ...newL2Question, option_c: e.target.value })}
+                            className="w-full border border-[#C6C1B0] p-1 rounded font-mono text-xs"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold">Option D</label>
+                          <input
+                            value={newL2Question.option_d}
+                            onChange={(e) => setNewL2Question({ ...newL2Question, option_d: e.target.value })}
+                            className="w-full border border-[#C6C1B0] p-1 rounded font-mono text-xs"
+                            required
+                          />
                         </div>
                       </div>
 
-                      {/* Initial Test Cases Section */}
-                      <div className="border-t border-[#DBD7C9] pt-3">
-                        <div className="flex justify-between items-center mb-2">
-                          <h4 className="font-bold text-[#16233F] uppercase tracking-wider text-[11px]">
-                            Initial Test Cases ({newProb.test_cases.length})
-                          </h4>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNewProb({
-                                ...newProb,
-                                test_cases: [
-                                  ...newProb.test_cases,
-                                  {
-                                    input_data: '',
-                                    expected_output: '',
-                                    is_hidden: newProb.test_cases.length > 0,
-                                    order_num: newProb.test_cases.length + 1
-                                  }
-                                ]
-                              });
-                            }}
-                            className="text-[11px] text-[#1E7E34] hover:underline font-semibold"
-                          >
-                            + Add Another Test Case
-                          </button>
-                        </div>
-
-                        <div className="space-y-3">
-                          {newProb.test_cases.map((tc, tcIdx) => (
-                            <div key={tcIdx} className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] space-y-2">
-                              <div className="flex justify-between items-center">
-                                <span className="font-mono font-bold text-[11px] text-[#16233F]">
-                                  Test Case #{tcIdx + 1}
-                                </span>
-                                <div className="flex items-center space-x-3">
-                                  <label className="flex items-center space-x-1 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={tc.is_hidden}
-                                      onChange={(e) => {
-                                        const updated = [...newProb.test_cases];
-                                        updated[tcIdx].is_hidden = e.target.checked;
-                                        setNewProb({ ...newProb, test_cases: updated });
-                                      }}
-                                    />
-                                    <span className="text-[10.5px] font-semibold text-[#59626F]">Hidden for Evaluation</span>
-                                  </label>
-                                  {newProb.test_cases.length > 1 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const updated = newProb.test_cases.filter((_, i) => i !== tcIdx);
-                                        setNewProb({ ...newProb, test_cases: updated });
-                                      }}
-                                      className="text-[#A82A2A] hover:underline text-[10.5px]"
-                                    >
-                                      Remove
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-2 font-mono text-xs">
-                                <div>
-                                  <label className="block text-[9.5px] text-[#59626F] uppercase font-bold mb-0.5">
-                                    Standard Input (stdin)
-                                  </label>
-                                  <textarea
-                                    rows={2}
-                                    value={tc.input_data}
-                                    onChange={(e) => {
-                                      const updated = [...newProb.test_cases];
-                                      updated[tcIdx].input_data = e.target.value;
-                                      setNewProb({ ...newProb, test_cases: updated });
-                                    }}
-                                    placeholder="e.g. 10 20 or [2,7,11,15]|9"
-                                    className="w-full border border-[#C6C1B0] p-1.5 rounded font-mono text-[11px] bg-white"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[9.5px] text-[#59626F] uppercase font-bold mb-0.5">
-                                    Expected Output (stdout)
-                                  </label>
-                                  <textarea
-                                    rows={2}
-                                    value={tc.expected_output}
-                                    onChange={(e) => {
-                                      const updated = [...newProb.test_cases];
-                                      updated[tcIdx].expected_output = e.target.value;
-                                      setNewProb({ ...newProb, test_cases: updated });
-                                    }}
-                                    placeholder="e.g. 30 or [0,1]"
-                                    className="w-full border border-[#C6C1B0] p-1.5 rounded font-mono text-[11px] bg-white font-bold text-[#1E7A46]"
-                                    required
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                      <div>
+                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">
+                          Correct Option (Award marks if participant selects this)
+                        </label>
+                        <select
+                          value={newL2Question.correct_answer}
+                          onChange={(e) => setNewL2Question({ ...newL2Question, correct_answer: e.target.value })}
+                          className="w-full border border-[#C6C1B0] p-1.5 rounded font-bold bg-[#E8F3EC] text-[#1E7A46]"
+                        >
+                          <option value="a">A</option>
+                          <option value="b">B</option>
+                          <option value="c">C</option>
+                          <option value="d">D</option>
+                        </select>
                       </div>
 
                       <div className="flex justify-end space-x-2 pt-3 border-t border-[#DBD7C9]">
@@ -2140,9 +2442,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         <button
                           type="submit"
                           disabled={loading}
-                          className="px-4 py-1.5 bg-[#16233F] text-white rounded text-xs font-semibold hover:bg-[#25355B] disabled:opacity-50"
+                          className="px-4 py-1.5 bg-[#16233F] text-white rounded text-xs font-semibold hover:bg-[#25355B]"
                         >
-                          {loading ? 'Creating…' : 'Create Problem'}
+                          {loading ? 'Saving…' : 'Save Question'}
                         </button>
                       </div>
                     </form>
@@ -2150,167 +2452,127 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                 </div>
               )}
 
-              {/* Edit Problem Modal */}
+              {/* Edit Question Modal */}
               {showEditProbModal && editProbForm && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                   <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-6 max-w-2xl w-full text-xs space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
-                    <div className="border-b border-[#DBD7C9] pb-2 flex justify-between items-start">
-                      <div>
-                        <div className="text-[10px] font-mono uppercase font-bold text-[#16233F]">
-                          Update Challenge Settings &amp; Code
-                        </div>
-                        <h3 className="text-sm font-bold text-[#16233F]">
-                          Edit P{editProbForm.order_num}: {editProbForm.title}
-                        </h3>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => { setShowEditProbModal(false); setEditProbForm(null); }}
-                        className="text-[#8B93A0] hover:text-[#16233F] font-bold text-base px-1"
-                      >
-                        ✕
-                      </button>
+                    <div className="border-b border-[#DBD7C9] pb-2">
+                      <h3 className="text-sm font-bold text-[#16233F]">Edit Question: {editProbForm.question_id}</h3>
                     </div>
 
-                    <form onSubmit={handleUpdateProblem} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
+                    <form onSubmit={handleUpdateL2Question} className="space-y-3">
+                      <div className="grid grid-cols-3 gap-3">
                         <div>
-                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Problem Title</label>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Academic Year</label>
+                          <select
+                            value={editProbForm.academic_year}
+                            onChange={(e) => setEditProbForm({ ...editProbForm, academic_year: Number(e.target.value) })}
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded bg-white"
+                          >
+                            <option value={2}>Year 2</option>
+                            <option value={3}>Year 3</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Difficulty</label>
+                          <select
+                            value={editProbForm.difficulty}
+                            onChange={(e) => setEditProbForm({ ...editProbForm, difficulty: e.target.value })}
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded bg-white"
+                          >
+                            <option value="easy">Easy</option>
+                            <option value="medium">Medium</option>
+                            <option value="hard">Hard</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Marks</label>
                           <input
-                            value={editProbForm.title}
-                            onChange={(e) => setEditProbForm({ ...editProbForm, title: e.target.value })}
-                            className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                            type="number"
+                            min={1}
+                            value={editProbForm.marks}
+                            onChange={(e) => setEditProbForm({ ...editProbForm, marks: Number(e.target.value) })}
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded font-mono"
                             required
                           />
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">
-                              Difficulty Pool (Fixed Marks)
-                            </label>
-                            <select
-                              value={editProbForm.difficulty || (editProbForm.marks > 20 ? 'HARD' : 'EASY')}
-                              onChange={(e) => {
-                                const d = e.target.value as 'EASY' | 'HARD';
-                                setEditProbForm({ ...editProbForm, difficulty: d, marks: d === 'EASY' ? 15 : 30 });
-                              }}
-                              className="w-full border border-[#C6C1B0] p-1.5 rounded font-semibold text-xs bg-white text-[#16233F]"
-                            >
-                              <option value="EASY">🟢 EASY — 15 Marks (P1 Pool)</option>
-                              <option value="HARD">🔴 HARD — 30 Marks (P2 Pool)</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Display Order #</label>
-                            <input
-                              type="number"
-                              value={editProbForm.order_num}
-                              onChange={(e) => setEditProbForm({ ...editProbForm, order_num: Number(e.target.value) })}
-                              className="w-full border border-[#C6C1B0] p-1.5 rounded"
-                              required
-                            />
-                          </div>
-                        </div>
                       </div>
 
                       <div>
-                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Problem Description</label>
+                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Question Prompt</label>
                         <textarea
-                          value={editProbForm.description}
-                          onChange={(e) => setEditProbForm({ ...editProbForm, description: e.target.value })}
-                          className="w-full border border-[#C6C1B0] p-2 rounded h-24 font-sans text-xs"
+                          rows={2}
+                          value={editProbForm.question}
+                          onChange={(e) => setEditProbForm({ ...editProbForm, question: e.target.value })}
+                          className="w-full border border-[#C6C1B0] p-2 rounded text-xs"
                           required
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Constraints &amp; Limits</label>
+                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Code Snippet</label>
                         <textarea
-                          value={editProbForm.constraints}
-                          onChange={(e) => setEditProbForm({ ...editProbForm, constraints: e.target.value })}
-                          className="w-full border border-[#C6C1B0] p-2 rounded h-16 font-mono text-xs"
+                          rows={5}
+                          value={editProbForm.code}
+                          onChange={(e) => setEditProbForm({ ...editProbForm, code: e.target.value })}
+                          className="w-full border border-[#C6C1B0] p-2 rounded font-mono text-xs bg-[#161B22] text-[#C9D1D9]"
+                          required
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Time Limit (ms)</label>
+                          <label className="block text-[10px] text-[#59626F] font-bold">Option A</label>
                           <input
-                            type="number"
-                            value={editProbForm.time_limit_ms}
-                            onChange={(e) => setEditProbForm({ ...editProbForm, time_limit_ms: Number(e.target.value) })}
-                            className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                            value={editProbForm.option_a}
+                            onChange={(e) => setEditProbForm({ ...editProbForm, option_a: e.target.value })}
+                            className="w-full border border-[#C6C1B0] p-1 rounded font-mono text-xs"
+                            required
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Memory Limit (MB)</label>
+                          <label className="block text-[10px] text-[#59626F] font-bold">Option B</label>
                           <input
-                            type="number"
-                            value={editProbForm.memory_limit_mb}
-                            onChange={(e) => setEditProbForm({ ...editProbForm, memory_limit_mb: Number(e.target.value) })}
-                            className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                            value={editProbForm.option_b}
+                            onChange={(e) => setEditProbForm({ ...editProbForm, option_b: e.target.value })}
+                            className="w-full border border-[#C6C1B0] p-1 rounded font-mono text-xs"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold">Option C</label>
+                          <input
+                            value={editProbForm.option_c}
+                            onChange={(e) => setEditProbForm({ ...editProbForm, option_c: e.target.value })}
+                            className="w-full border border-[#C6C1B0] p-1 rounded font-mono text-xs"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold">Option D</label>
+                          <input
+                            value={editProbForm.option_d}
+                            onChange={(e) => setEditProbForm({ ...editProbForm, option_d: e.target.value })}
+                            className="w-full border border-[#C6C1B0] p-1 rounded font-mono text-xs"
+                            required
                           />
                         </div>
                       </div>
 
-                      {/* Starter Code Section in Edit Modal */}
-                      <div className="border-t border-[#DBD7C9] pt-3 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <label className="block text-[10px] text-[#59626F] font-bold uppercase">
-                              Default Starter Code / Boilerplate
-                            </label>
-                            <p className="text-[10.5px] text-[#8B93A0]">
-                              Pre-populated code shown to students when selecting this problem.
-                            </p>
-                          </div>
-                          <label className="px-2.5 py-1 bg-[#EEF1F6] text-[#16233F] border border-[#C6C1B0] rounded text-[11px] font-semibold hover:bg-[#DBD7C9] cursor-pointer inline-flex items-center space-x-1">
-                            <span>📂</span>
-                            <span>Upload File</span>
-                            <input
-                              type="file"
-                              accept=".py,.c,.cpp,.cc,.java,.txt"
-                              className="hidden"
-                              onChange={(e) => handleStarterFileUpload(e, true)}
-                            />
-                          </label>
-                        </div>
-
-                        {/* Language Tabs */}
-                        <div className="flex items-center space-x-1 border-b border-[#DBD7C9]">
-                          {(['python', 'c', 'cpp', 'java'] as const).map((lang) => (
-                            <button
-                              key={lang}
-                              type="button"
-                              onClick={() => setActiveStarterLang(lang)}
-                              className={`px-3 py-1 text-[11px] font-mono font-bold rounded-t transition-colors ${
-                                activeStarterLang === lang
-                                  ? 'bg-[#16233F] text-white'
-                                  : 'bg-[#F6F6F2] text-[#59626F] hover:bg-[#DBD7C9]'
-                              }`}
-                            >
-                              {lang === 'python' ? 'Python 🐍' : lang === 'cpp' ? 'C++' : lang === 'c' ? 'C' : 'Java ☕'}
-                              {editProbForm.starter_code?.[lang]?.trim() ? ' •' : ''}
-                            </button>
-                          ))}
-                        </div>
-
-                        <textarea
-                          rows={7}
-                          value={editProbForm.starter_code?.[activeStarterLang] || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setEditProbForm((prev: any) => ({
-                              ...prev,
-                              starter_code: {
-                                ...(prev?.starter_code || {}),
-                                [activeStarterLang]: val
-                              }
-                            }));
-                          }}
-                          placeholder={`// Enter default ${activeStarterLang.toUpperCase()} starter code...`}
-                          className="w-full border border-[#C6C1B0] p-2.5 rounded font-mono text-xs bg-[#1E1E1E] text-[#D4D4D4] focus:outline-none focus:border-[#16233F]"
-                        />
+                      <div>
+                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">
+                          Correct Option
+                        </label>
+                        <select
+                          value={editProbForm.correct_answer.toLowerCase()}
+                          onChange={(e) => setEditProbForm({ ...editProbForm, correct_answer: e.target.value })}
+                          className="w-full border border-[#C6C1B0] p-1.5 rounded font-bold bg-[#E8F3EC] text-[#1E7A46]"
+                        >
+                          <option value="a">A</option>
+                          <option value="b">B</option>
+                          <option value="c">C</option>
+                          <option value="d">D</option>
+                        </select>
                       </div>
 
                       <div className="flex justify-end space-x-2 pt-3 border-t border-[#DBD7C9]">
@@ -2324,134 +2586,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         <button
                           type="submit"
                           disabled={loading}
-                          className="px-4 py-1.5 bg-[#16233F] text-white rounded text-xs font-semibold hover:bg-[#25355B] disabled:opacity-50"
+                          className="px-4 py-1.5 bg-[#16233F] text-white rounded text-xs font-semibold hover:bg-[#25355B]"
                         >
                           {loading ? 'Saving…' : 'Save Changes'}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              )}
-
-              {/* Add Test Case Modal */}
-              {showAddTestCaseModal && selectedProblemForTestCase && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                  <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-6 max-w-lg w-full text-xs space-y-4 shadow-xl animate-in fade-in zoom-in-95">
-                    <div className="border-b border-[#DBD7C9] pb-2">
-                      <div className="text-[10.5px] font-mono uppercase font-bold text-[#1E7E34]">
-                        P{selectedProblemForTestCase.order_num}: {selectedProblemForTestCase.title}
-                      </div>
-                      <h3 className="text-sm font-bold text-[#16233F]">Add Custom Test Case</h3>
-                      <p className="text-[11px] text-[#59626F]">Define specific input arguments and expected output</p>
-                    </div>
-
-                    <form onSubmit={handleAddTestCase} className="space-y-3">
-                      {/* Input format cheat sheet */}
-                      <div className="bg-[#F0F4F8] border border-[#CBD5E1] rounded p-2.5 space-y-1 text-[11px] text-[#1E293B]">
-                        <div className="font-bold flex items-center space-x-1.5 text-[#16233F]">
-                          <span>💡</span>
-                          <span>How to Format Standard Input (stdin):</span>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 font-mono text-[10px] text-[#475569]">
-                          <div className="bg-white p-1 rounded border border-[#E2E8F0]">
-                            <strong>Single Array:</strong> <code>[-2, 1, -3, 4, -1, 2, 1, -5, 4]</code>
-                          </div>
-                          <div className="bg-white p-1 rounded border border-[#E2E8F0]">
-                            <strong>Array + Target:</strong> <code>[2, 7, 11, 15] | 9</code> or 2 lines
-                          </div>
-                          <div className="bg-white p-1 rounded border border-[#E2E8F0]">
-                            <strong>Multiple ints:</strong> <code>10 20</code>
-                          </div>
-                          <div className="bg-white p-1 rounded border border-[#E2E8F0]">
-                            <strong>Strings:</strong> <code>"()[]{}"</code>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between items-center mb-1">
-                          <label className="block text-[10px] text-[#59626F] font-bold uppercase">
-                            Standard Input (stdin)
-                          </label>
-                          <span className="text-[10px] text-[#8B93A0]">Space / Comma / Multiline / Pipe supported</span>
-                        </div>
-                        <textarea
-                          rows={4}
-                          value={newTestCase.input_data}
-                          onChange={(e) => setNewTestCase({ ...newTestCase, input_data: e.target.value })}
-                          placeholder="e.g.&#10;10 20&#10;or: [2, 7, 11, 15] | 9&#10;or: hello world"
-                          className="w-full border border-[#C6C1B0] p-2 rounded font-mono text-xs focus:outline-none focus:border-[#16233F]"
-                        />
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between items-center mb-1">
-                          <label className="block text-[10px] text-[#59626F] font-bold uppercase">
-                            Expected Output (stdout)
-                          </label>
-                          <span className="text-[10px] text-[#8B93A0]">Exact text or number to match</span>
-                        </div>
-                        <textarea
-                          rows={3}
-                          value={newTestCase.expected_output}
-                          onChange={(e) => setNewTestCase({ ...newTestCase, expected_output: e.target.value })}
-                          placeholder="e.g. 30 or [0, 1] or true"
-                          required
-                          className="w-full border border-[#C6C1B0] p-2 rounded font-mono text-xs focus:outline-none focus:border-[#16233F] font-bold text-[#1E7A46]"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 pt-1">
-                        <div>
-                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Order #</label>
-                          <input
-                            type="number"
-                            value={newTestCase.order_num}
-                            onChange={(e) => setNewTestCase({ ...newTestCase, order_num: Number(e.target.value) })}
-                            className="w-full border border-[#C6C1B0] p-1.5 rounded font-mono"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Visibility Type</label>
-                          <div className="flex items-center space-x-4 pt-1">
-                            <label className="flex items-center space-x-1.5 cursor-pointer">
-                              <input
-                                type="radio"
-                                name="is_hidden"
-                                checked={!newTestCase.is_hidden}
-                                onChange={() => setNewTestCase({ ...newTestCase, is_hidden: false })}
-                              />
-                              <span className="font-semibold text-[#1E7A46]">👁 Public Sample</span>
-                            </label>
-                            <label className="flex items-center space-x-1.5 cursor-pointer">
-                              <input
-                                type="radio"
-                                name="is_hidden"
-                                checked={newTestCase.is_hidden}
-                                onChange={() => setNewTestCase({ ...newTestCase, is_hidden: true })}
-                              />
-                              <span className="font-semibold text-[#C0392B]">🔒 Hidden Case</span>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end space-x-2 pt-3 border-t border-[#DBD7C9]">
-                        <button
-                          type="button"
-                          onClick={() => setShowAddTestCaseModal(false)}
-                          className="px-3.5 py-1.5 border border-[#C6C1B0] rounded text-xs hover:bg-[#F6F6F2]"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={loading}
-                          className="px-4 py-1.5 bg-[#1E7E34] text-white rounded text-xs font-semibold hover:bg-[#166027] disabled:opacity-50"
-                        >
-                          {loading ? 'Saving…' : 'Save Test Case'}
                         </button>
                       </div>
                     </form>
@@ -2989,8 +3126,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-[#16233F]">🏆 Round 2 — Coding Results</h2>
-                  <p className="text-xs text-[#59626F]">Ranked by Total Score (MCQ + Coding). Gold = top 3 finalists.</p>
+                  <h2 className="text-lg font-bold text-[#16233F]">🏆 Round 2 — Debugging Results</h2>
+                  <p className="text-xs text-[#59626F]">Ranked by Total Score (MCQ + Debugging). Gold = top 3 finalists.</p>
                 </div>
                 <div className="flex items-center space-x-2">
                   <button
@@ -3004,8 +3141,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   <button
                     onClick={() => downloadCSV(
                       filteredWinners2,
-                      `round2_coding_results${r2YearFilter ? `_y${r2YearFilter}` : ''}${r2TopLimit ? `_top${r2TopLimit}` : ''}.csv`,
-                      ['Rank','Roll Number','Name','Year','MCQ Score (/25)','Coding Score (/60)','Total Score','Violations'],
+                      `round2_debugging_results${r2YearFilter ? `_y${r2YearFilter}` : ''}${r2TopLimit ? `_top${r2TopLimit}` : ''}.csv`,
+                      ['Rank','Roll Number','Name','Year','MCQ Score (/25)','Debugging Score (/60)','Total Score','Violations'],
                       ['r2_rank','roll_number','name','academic_year','mcq_score','coding_score','total_score','violations']
                     )}
                     className="px-4 py-2 bg-[#C0392B] text-white text-xs font-bold rounded-[3px] hover:bg-[#A82A2A] transition-colors flex items-center space-x-1.5"
@@ -3072,7 +3209,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <div className="font-bold text-[#16233F] text-sm">{w?.name}</div>
                       <div className="text-[11px] text-[#59626F] font-mono">{w?.roll_number}</div>
                       <div className="text-xl font-bold font-mono text-[#16233F] mt-2">
-                        {w?.coding_score ?? 0}<span className="text-sm text-[#8B93A0]"> / 60 pts (Code)</span>
+                        {w?.coding_score ?? 0}<span className="text-sm text-[#8B93A0]"> / 60 pts (Debug)</span>
                       </div>
                       <div className="text-[10px] text-[#59626F] mt-0.5">MCQ: {w?.mcq_score}/25 · Total: {w?.total_score}</div>
                     </div>
@@ -3089,7 +3226,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <th className="py-2.5 px-3">Name</th>
                       <th className="py-2.5 px-3 text-center">Year</th>
                       <th className="py-2.5 px-3 text-center">MCQ (/25)</th>
-                      <th className="py-2.5 px-3 text-center">Coding (/60)</th>
+                      <th className="py-2.5 px-3 text-center">Debugging (/60)</th>
                       <th className="py-2.5 px-3 text-center font-bold">Total</th>
                       <th className="py-2.5 px-3 text-center">Violations</th>
                       <th className="py-2.5 px-3 text-right">Actions</th>
@@ -3360,283 +3497,6 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
             </div>
           )}
 
-          {/* TAB: CONNECTED DEVICES (JUDGE0 NODES) */}
-          {activeTab === 'devices' && (
-            <div className="space-y-6">
-              {/* Header */}
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-bold text-[#16233F] flex items-center space-x-2">
-                    <span>🖥️ Connected Devices &amp; Judge0 Cluster</span>
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#16233F] text-white">
-                      Distributed Execution
-                    </span>
-                  </h2>
-                  <p className="text-xs text-[#59626F]">
-                    Real-time cluster telemetry, health monitoring, and node pairing for distributed code evaluation.
-                  </p>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={fetchNodes}
-                    disabled={nodesLoading}
-                    className="px-3 py-1.5 bg-white border border-[#DBD7C9] text-[#16233F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2] transition-colors flex items-center space-x-1.5 shadow-sm"
-                  >
-                    <span className={nodesLoading ? 'animate-spin inline-block' : ''}>🔄</span>
-                    <span>{nodesLoading ? 'Testing Pings…' : 'Re-scan Nodes'}</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setTestNodeResult(null);
-                      setNewNodeForm({ name: '', endpoint_url: '' });
-                      setShowAddNodeModal(true);
-                    }}
-                    className="px-3.5 py-1.5 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] transition-colors flex items-center space-x-1.5 shadow-sm"
-                  >
-                    <span>➕</span>
-                    <span>Connect New Device</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Cluster Telemetry Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="bg-white border border-[#DBD7C9] rounded-[4px] p-3.5 shadow-sm">
-                  <div className="text-[10.5px] font-mono uppercase tracking-wider text-[#59626F]">
-                    Total Registered Nodes
-                  </div>
-                  <div className="text-2xl font-bold font-mono text-[#16233F] mt-1">
-                    {nodesData?.summary?.total_nodes ?? (nodesLoading ? '…' : 0)}
-                  </div>
-                  <div className="text-[11px] text-[#59626F] mt-0.5">
-                    Distributed runner endpoints
-                  </div>
-                </div>
-
-                <div className="bg-white border border-[#DBD7C9] rounded-[4px] p-3.5 shadow-sm">
-                  <div className="text-[10.5px] font-mono uppercase tracking-wider text-[#59626F]">
-                    Cluster Health
-                  </div>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <span className={`w-2.5 h-2.5 rounded-full ${
-                      (nodesData?.summary?.online_nodes || 0) > 0 ? 'bg-[#1E7A46] animate-pulse' : 'bg-[#A82A2A]'
-                    }`} />
-                    <span className="text-2xl font-bold font-mono text-[#16233F]">
-                      {nodesData?.summary?.online_nodes ?? 0} <span className="text-xs text-[#8B93A0]">/ {nodesData?.summary?.total_nodes ?? 0} Online</span>
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-[#59626F] mt-0.5">
-                    {(nodesData?.summary?.online_nodes || 0) > 0 ? 'Cluster dispatch active' : 'All remote nodes offline'}
-                  </div>
-                </div>
-
-                <div className="bg-white border border-[#DBD7C9] rounded-[4px] p-3.5 shadow-sm">
-                  <div className="text-[10.5px] font-mono uppercase tracking-wider text-[#59626F]">
-                    Average Ping
-                  </div>
-                  <div className="text-2xl font-bold font-mono text-[#16233F] mt-1">
-                    {nodesData?.summary?.avg_latency_ms ? `${nodesData.summary.avg_latency_ms} ms` : 'N/A'}
-                  </div>
-                  <div className="text-[11px] text-[#59626F] mt-0.5">
-                    {nodesData?.summary?.avg_latency_ms && nodesData.summary.avg_latency_ms < 50 ? '⚡ Ultra-fast LAN latency' : 'Response roundtrip'}
-                  </div>
-                </div>
-
-                <div className="bg-[#F0FBF4] border border-[#2EA043]/30 rounded-[4px] p-3.5 shadow-sm">
-                  <div className="text-[10.5px] font-mono uppercase tracking-wider text-[#1E7A46] font-bold">
-                    Local Sandbox Engine
-                  </div>
-                  <div className="text-sm font-bold text-[#16233F] mt-1 flex items-center space-x-1.5">
-                    <span className="w-2 h-2 rounded-full bg-[#1E7A46]" />
-                    <span>🟢 ALWAYS READY</span>
-                  </div>
-                  <div className="text-[11px] text-[#59626F] mt-0.5">
-                    Zero-downtime local failover
-                  </div>
-                </div>
-              </div>
-
-              {/* Connected Nodes Table */}
-              <div className="bg-white border border-[#DBD7C9] rounded-[4px] overflow-hidden shadow-sm">
-                <div className="p-3 bg-[#F6F6F2] border-b border-[#DBD7C9] flex items-center justify-between">
-                  <div className="font-semibold text-xs text-[#16233F]">
-                    Configured Nodes ({nodesData?.nodes?.length || 0})
-                  </div>
-                  <span className="text-[11px] text-[#59626F] font-mono">
-                    Round-Robin Rotation with 60s Circuit Breaker
-                  </span>
-                </div>
-
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-[#DBD7C9] bg-[#FAF8F5] text-[#59626F] font-semibold">
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3">Node / Machine</th>
-                      <th className="py-2.5 px-3 font-mono">Endpoint (URL)</th>
-                      <th className="py-2.5 px-3 text-center">Ping (ms)</th>
-                      <th className="py-2.5 px-3 text-center">Engine / Version</th>
-                      <th className="py-2.5 px-3 text-center">Languages</th>
-                      <th className="py-2.5 px-3 text-center">Dispatch State</th>
-                      <th className="py-2.5 px-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#DBD7C9]">
-                    {nodesData?.nodes?.map((node: any) => (
-                      <tr key={node.id} className="hover:bg-[#F6F6F2]/60 transition-colors">
-                        <td className="py-2.5 px-3">
-                          <span className={`inline-flex items-center space-x-1.5 px-2 py-0.5 rounded text-[10.5px] font-bold font-mono ${
-                            node.is_online
-                              ? 'bg-[#E8F3EC] text-[#1E7E34] border border-[#1E7E34]/30'
-                              : 'bg-[#FCEDEC] text-[#A82A2A] border border-[#A82A2A]/30'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${node.is_online ? 'bg-[#1E7E34] animate-pulse' : 'bg-[#A82A2A]'}`} />
-                            <span>{node.is_online ? 'ONLINE' : 'OFFLINE'}</span>
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <div className="font-semibold text-[#16233F]">{node.name}</div>
-                          {node.error && (
-                            <div className="text-[10px] text-[#A82A2A] font-mono mt-0.5 truncate max-w-[180px]" title={node.error}>
-                              Err: {node.error}
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 font-mono text-[#16233F] font-medium">
-                          {node.endpoint_url}
-                        </td>
-                        <td className="py-2.5 px-3 text-center font-mono">
-                          {node.is_online && node.latency_ms !== null ? (
-                            <span className="font-bold text-[#1E7E34]">{node.latency_ms} ms</span>
-                          ) : (
-                            <span className="text-[#8B93A0]">—</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 text-center font-mono text-[11px] text-[#59626F]">
-                          {node.is_online ? `Judge0 v${node.version || '1.13.1'}` : '—'}
-                        </td>
-                        <td className="py-2.5 px-3 text-center">
-                          <span className="inline-flex space-x-1 font-mono text-[10px]">
-                            <span className="bg-[#F6F6F2] px-1 py-0.5 rounded text-[#16233F]">Py</span>
-                            <span className="bg-[#F6F6F2] px-1 py-0.5 rounded text-[#16233F]">C</span>
-                            <span className="bg-[#F6F6F2] px-1 py-0.5 rounded text-[#16233F]">C++</span>
-                            <span className="bg-[#F6F6F2] px-1 py-0.5 rounded text-[#16233F]">Java</span>
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-center">
-                          <button
-                            onClick={() => handleToggleNode(node.id)}
-                            className={`px-2 py-0.5 text-[10.5px] font-semibold rounded transition-colors ${
-                              node.is_active
-                                ? 'bg-[#16233F] text-white hover:bg-[#25355B]'
-                                : 'bg-[#E0E0DB] text-[#59626F] hover:bg-[#D0D0CB]'
-                            }`}
-                            title={node.is_active ? 'Click to Mute/Standby' : 'Click to Activate'}
-                          >
-                            {node.is_active ? 'Active' : 'Standby'}
-                          </button>
-                        </td>
-                        <td className="py-2.5 px-3 text-right space-x-2">
-                          <button
-                            onClick={() => handleTestSpecificNode(node.endpoint_url, node.id)}
-                            disabled={pingingNodeId === node.id}
-                            className="px-2 py-1 bg-white border border-[#DBD7C9] text-[#16233F] text-[11px] font-semibold rounded hover:bg-[#F6F6F2] transition-colors"
-                          >
-                            {pingingNodeId === node.id ? 'Pinging…' : 'Ping Test'}
-                          </button>
-                          <button
-                            onClick={() => handleDeleteNode(node.id, node.name)}
-                            className="text-[#A82A2A] hover:underline font-mono text-[11px]"
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                {(!nodesData?.nodes || nodesData.nodes.length === 0) && (
-                  <div className="p-8 text-center space-y-3">
-                    <div className="text-3xl">🖥️</div>
-                    <div className="text-xs text-[#59626F]">No Judge0 nodes currently registered.</div>
-                    <button
-                      onClick={() => setShowAddNodeModal(true)}
-                      className="px-3 py-1.5 bg-[#16233F] text-white text-xs font-semibold rounded"
-                    >
-                      Connect First Device
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Step-by-Step Setup Guide Card */}
-              <div className="bg-white border border-[#DBD7C9] rounded-[4px] p-5 shadow-sm space-y-4">
-                <div className="flex items-center justify-between border-b border-[#DBD7C9] pb-3">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-lg">⚡</span>
-                    <h3 className="font-serif font-bold text-sm text-[#16233F]">
-                      Simplest Guide: Turn Any Laptop or Lab PC into a Judge0 Node (3 Minutes)
-                    </h3>
-                  </div>
-                  <span className="text-[11px] font-mono text-[#1E7E34] bg-[#E8F3EC] px-2 py-0.5 rounded font-bold">
-                    Plug &amp; Play
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                  {/* Step 1 */}
-                  <div className="bg-[#F6F6F2] p-3.5 rounded border border-[#DBD7C9] space-y-2">
-                    <div className="font-bold text-[#16233F] flex items-center space-x-1.5">
-                      <span className="w-5 h-5 rounded-full bg-[#16233F] text-white text-[10px] inline-flex items-center justify-center font-bold">1</span>
-                      <span>Prerequisites &amp; Network</span>
-                    </div>
-                    <p className="text-[#59626F] text-[11.5px] leading-relaxed">
-                      Install <strong>Docker Desktop</strong> on Windows/Mac, or Docker CE on Linux.
-                    </p>
-                    <div className="p-2 bg-[#EEF1F6] rounded border border-[#C6C1B0] text-[11px] text-[#16233F] space-y-1">
-                      <div>☁️ <strong>Cloudflare Tunnel (Best for Render Cloud):</strong> Download <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/" target="_blank" rel="noreferrer" className="underline font-bold text-[#16233F]">cloudflared</a> on the PC running Judge0. It creates a secure, public HTTPS link that Render can reach instantly!</div>
-                      <div>🛡️ <strong>Tailscale (For Local Servers):</strong> If running CodeFest on a local PC, Tailscale unifies all PCs into one private mesh.</div>
-                    </div>
-                  </div>
-
-                  {/* Step 2 */}
-                  <div className="bg-[#F6F6F2] p-3.5 rounded border border-[#DBD7C9] space-y-2">
-                    <div className="font-bold text-[#16233F] flex items-center space-x-1.5">
-                      <span className="w-5 h-5 rounded-full bg-[#16233F] text-white text-[10px] inline-flex items-center justify-center font-bold">2</span>
-                      <span>Start Judge0 via Docker Compose</span>
-                    </div>
-                    <p className="text-[#59626F] text-[11.5px] leading-relaxed">
-                      Judge0 requires Redis &amp; DB to evaluate code. On the worker machine, open PowerShell and run:
-                    </p>
-                    <pre className="p-2.5 bg-[#16233F] text-[#E8F3EC] rounded text-[10.5px] font-mono overflow-x-auto select-all whitespace-pre-wrap">
-                      curl.exe -sSL https://github.com/judge0/judge0/releases/download/v1.13.1/judge0-v1.13.1.zip -o judge0.zip; tar.exe -xf judge0.zip; cd judge0-v1.13.1; docker compose up -d db redis; Start-Sleep 5; docker compose up -d
-                    </pre>
-                    <p className="text-[10.5px] text-[#59626F]">
-                      Or if inside this repo: <code className="font-bold text-[#16233F] font-mono">cd judge0-deployment; docker compose up -d</code>
-                    </p>
-                  </div>
-
-                  {/* Step 3 */}
-                  <div className="bg-[#F6F6F2] p-3.5 rounded border border-[#DBD7C9] space-y-2">
-                    <div className="font-bold text-[#16233F] flex items-center space-x-1.5">
-                      <span className="w-5 h-5 rounded-full bg-[#16233F] text-white text-[10px] inline-flex items-center justify-center font-bold">3</span>
-                      <span>Expose &amp; Connect to CodeFest</span>
-                    </div>
-                    <p className="text-[#59626F] text-[11.5px] leading-relaxed">
-                      <strong>If backend is on Render:</strong> Run <code className="p-1 bg-[#EEF1F6] text-[#16233F] rounded font-bold font-mono">cloudflared tunnel --url http://localhost:2358</code> and copy the <code className="font-bold">https://xxx.trycloudflare.com</code> URL.
-                    </p>
-                    <p className="text-[#59626F] text-[11.5px]">
-                      <strong>If backend is Local:</strong> Copy the Tailscale IP (<code className="font-mono font-bold">http://100.x.y.z:2358</code>).
-                    </p>
-                    <p className="text-[#59626F] text-[11px]">
-                      Click <strong>"Connect New Device"</strong> above, paste the URL, test ping, and save!
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
       {/* FACULTY LEVEL 3 GRADING MODAL */}
       {selectedFinalistForGrade && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -3840,125 +3700,6 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         </div>
       )}
 
-      {/* CONNECT NEW DEVICE MODAL */}
-      {showAddNodeModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#DBD7C9] rounded-[6px] max-w-md w-full p-6 shadow-2xl space-y-4 text-xs">
-            <div className="border-b border-[#DBD7C9] pb-3 flex items-start justify-between">
-              <div>
-                <h3 className="font-serif text-[18px] font-bold text-[#16233F]">
-                  Connect New Judge0 Execution Node
-                </h3>
-                <p className="text-xs text-[#59626F] mt-0.5">
-                  Pair another laptop or lab PC to expand concurrent code execution capacity.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAddNodeModal(false)}
-                className="text-lg font-bold text-[#8B93A0] hover:text-[#1B2029]"
-              >
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={handleAddNode} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#16233F] mb-1">
-                  Device / Machine Name:
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="E.g., Lab PC 204 or Faculty Laptop - Rohan"
-                  value={newNodeForm.name}
-                  onChange={(e) => setNewNodeForm({ ...newNodeForm, name: e.target.value })}
-                  className="w-full h-8 px-3 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#16233F] mb-1">
-                  Judge0 Endpoint URL (Cloudflare Tunnel, Tailscale, or LAN IP):
-                </label>
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    required
-                    placeholder="https://xxx.trycloudflare.com or http://100.x.y.z:2358"
-                    value={newNodeForm.endpoint_url}
-                    onChange={(e) => {
-                      setNewNodeForm({ ...newNodeForm, endpoint_url: e.target.value });
-                      setTestNodeResult(null);
-                    }}
-                    className="flex-1 h-8 px-3 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleTestModalNode}
-                    disabled={isTestingNode || !newNodeForm.endpoint_url.trim()}
-                    className="px-3 h-8 bg-white border border-[#DBD7C9] text-[#16233F] font-semibold text-xs rounded hover:bg-[#F6F6F2] disabled:opacity-50 shrink-0"
-                  >
-                    {isTestingNode ? 'Testing…' : 'Test Ping'}
-                  </button>
-                </div>
-                <p className="text-[10.5px] text-[#59626F] mt-1.5 leading-relaxed">
-                  ☁️ <strong>Cloudflare Tunnel (https://xxx.trycloudflare.com)</strong> is best when using Render cloud backend.<br />
-                  💡 <strong>Tailscale (http://100.x.y.z:2358)</strong> works when both the server and worker node share a virtual network.
-                </p>
-              </div>
-
-              {/* Test Result Indicator */}
-              {testNodeResult && (
-                <div className={`p-3 rounded border text-xs font-mono ${
-                  testNodeResult.is_online
-                    ? 'bg-[#E8F3EC] border-[#1E7E34]/40 text-[#1E7E34]'
-                    : 'bg-[#FCEDEC] border-[#A82A2A]/40 text-[#A82A2A]'
-                }`}>
-                  {testNodeResult.is_online ? (
-                    <div>
-                      ✅ <strong>Node Reachable!</strong> Latency: {testNodeResult.latency_ms} ms (Judge0 v{testNodeResult.version || '1.13.1'})
-                      <div className="text-[10px] mt-0.5 text-[#1E7E34]">
-                        Endpoint verified: <code className="font-bold">{testNodeResult.endpoint_url}</code>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      ❌ <strong>Connection Failed:</strong> {testNodeResult.error || 'Timed out / connection refused'}
-                      <div className="text-[10.5px] mt-1 text-[#16233F]">
-                        Tested endpoint: <code className="bg-white/80 px-1 py-0.5 rounded font-bold">{testNodeResult.endpoint_url}</code>
-                      </div>
-                      <div className="text-[10px] mt-1.5 text-[#59626F] leading-tight space-y-0.5">
-                        <div>Checklist:</div>
-                        <div>• <strong>Cloudflare:</strong> Run <code className="bg-black/5 px-1 rounded">cloudflared tunnel --url http://localhost:2358</code> on the lab PC.</div>
-                        <div>• <strong>Tailscale/IP:</strong> Ensure port <code className="bg-black/5 px-1 rounded">:2358</code> is open and Docker is running.</div>
-                        <div>• <strong>Docker:</strong> Run <code className="bg-black/5 px-1 rounded">docker ps</code> to confirm judge0-server is UP.</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#DBD7C9]">
-                <button
-                  type="button"
-                  onClick={() => setShowAddNodeModal(false)}
-                  className="px-4 py-2 bg-white border border-[#DBD7C9] text-[#59626F] text-xs font-semibold rounded-[3px] hover:bg-[#F6F6F2]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isAddingNode}
-                  className="px-5 py-2 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] disabled:opacity-50"
-                >
-                  {isAddingNode ? 'Connecting…' : 'Save & Register Node'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* GLOBAL EMERGENCY REASSIGN / TECHNICAL RESET MODAL (Accessible across all tabs & roles) */}
       {selectedParticipantForEmergency && (
@@ -4012,10 +3753,10 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
               <div className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] flex items-center justify-between gap-3">
                 <div>
                   <div className="font-bold text-xs text-[#16233F] flex items-center space-x-1.5">
-                    <span>💻 Reset Level 2 (Coding)</span>
+                    <span>💻 Reset Level 2 (Debugging)</span>
                   </div>
                   <p className="text-[11px] text-[#59626F] mt-0.5">
-                    Clears Coding submissions, timer &amp; violations. Re-opens coding environment.
+                    Clears Debugging answers, timer &amp; violations. Re-opens debugging challenge session.
                   </p>
                 </div>
                 <button
@@ -4034,7 +3775,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     <span>{selectedParticipantForEmergency.mcq_qualified ? '❌ Revoke Level 2 Entry' : '🏆 Direct Qualify for Level 2'}</span>
                   </div>
                   <p className="text-[11px] text-[#59626F] mt-0.5">
-                    {selectedParticipantForEmergency.mcq_qualified ? 'Revokes Round 2 entry and marks candidate as not qualified.' : 'Manually grants immediate entry to Round 2 without requiring cutoff score.'}
+                    {selectedParticipantForEmergency.mcq_qualified ? 'Revokes Round 2 entry and marks candidate as not qualified.' : 'Manually grants immediate entry to Round 2 without taking Level 1.'}
                   </p>
                 </div>
                 <button

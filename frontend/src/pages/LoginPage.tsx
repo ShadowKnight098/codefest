@@ -135,7 +135,7 @@ export const LoginPage: React.FC<{ onOpenAdmin?: () => void }> = ({ onOpenAdmin 
               </div>
               <div className="flex items-center space-x-3 text-[14px]">
                 <span className="font-mono text-[12px] font-medium text-white/45 w-5">02</span>
-                <span className="font-medium text-white/90">Coding Assessment</span>
+                <span className="font-medium text-white/90">Debugging Assessment</span>
               </div>
               <div className="flex items-center space-x-3 text-[14px]">
                 <span className="font-mono text-[12px] font-medium text-white/45 w-5">03</span>

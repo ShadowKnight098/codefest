@@ -11,12 +11,12 @@ interface DashboardPageProps {
 // Exact state configurations per spec
 interface DisplayStateConfig {
   r1: {
-    status: 'Available' | 'In Progress' | 'Completed' | 'Locked' | 'Terminated';
+    status: 'Available' | 'In Progress' | 'Completed' | 'Qualified' | 'Locked' | 'Terminated';
     sub: string;
     action?: 'Enter Assessment' | 'Resume';
   };
   r2: {
-    status: 'Available' | 'In Progress' | 'Completed' | 'Locked' | 'Terminated';
+    status: 'Available' | 'In Progress' | 'Completed' | 'Qualified' | 'Locked' | 'Terminated';
     sub: string;
     action?: 'Enter Assessment' | 'Resume';
   };
@@ -63,28 +63,28 @@ const PRESET_STATES: Record<string, DisplayStateConfig> = {
     }
   },
   'WAITING_FOR_LEVEL2': {
-    r1: { status: 'Completed', sub: 'Assessment submitted' },
-    r2: { status: 'Locked', sub: 'Shortlisted candidates will be notified via email or official group' },
+    r1: { status: 'Completed', sub: 'Assessment submitted · Qualified for Level 2' },
+    r2: { status: 'Qualified', sub: 'Qualified for Level 2 · Round 2 will open shortly' },
     r3: { status: 'Locked', sub: 'Evaluated manually' },
     panel: {
-      type: 'default',
-      title: 'Assessment submitted',
-      message: 'Your responses have been recorded. Shortlisted candidates will be notified regarding qualification and next steps via registered email or the official group.'
+      type: 'success',
+      title: 'Qualified for Level 2',
+      message: 'You have qualified for Level 2 (Debugging Challenge). Please wait for the organizers to open the round to begin.'
     }
   },
   'LEVEL2_AVAILABLE': {
     r1: { status: 'Completed', sub: 'Assessment submitted' },
-    r2: { status: 'Available', sub: '2 problems · 50 minutes total', action: 'Enter Assessment' },
+    r2: { status: 'Available', sub: 'Debugging Challenge · 10 Questions · 60 minutes', action: 'Enter Assessment' },
     r3: { status: 'Locked', sub: 'Evaluated manually' },
     panel: {
       type: 'default',
       title: 'Level 2 is open',
-      message: 'The coding assessment is available. You may begin any time before the round closes — once started, the timer cannot be paused.'
+      message: 'The Level 2 Debugging Challenge is available. You may begin any time before the round closes — once started, the timer cannot be paused.'
     }
   },
   'LEVEL2_IN_PROGRESS': {
     r1: { status: 'Completed', sub: 'Assessment submitted' },
-    r2: { status: 'In Progress', sub: 'Problem 1 of 2', action: 'Resume' },
+    r2: { status: 'In Progress', sub: 'Debugging Challenge in progress', action: 'Resume' },
     r3: { status: 'Locked', sub: 'Evaluated manually' },
     panel: {
       type: 'warn',
@@ -159,6 +159,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
         return <span className="badge-status badge-available">Available</span>;
       case 'In Progress':
         return <span className="badge-status badge-in-progress">In Progress</span>;
+      case 'Qualified':
+        return <span className="badge-status badge-completed">Qualified</span>;
       case 'Locked':
         return <span className="badge-status badge-locked">Locked</span>;
       case 'Terminated':
@@ -247,7 +249,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
 
           <div className="space-y-3">
             {/* ROUND ROW 01 */}
-            <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-[18px_20px] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className={`rounded-[6px] p-[18px_20px] flex flex-col sm:flex-row sm:items-center justify-between gap-4 border ${
+              backendState?.level1_result?.status_label === 'Directly Qualified'
+                ? 'bg-[#FAFAFA] border-[#DBD7C9] opacity-85'
+                : 'bg-white border-[#DBD7C9]'
+            }`}>
               <div className="flex items-center space-x-3.5">
                 <div className="w-[30px] h-[30px] border border-[#C6C1B0] rounded-[3px] flex items-center justify-center font-mono text-[13px] font-semibold text-[#59626F] shrink-0">
                   01
@@ -257,7 +263,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                     MCQ Assessment
                   </div>
                   <div className="text-[12.5px] text-[#59626F] mt-0.5">
-                    {backendState?.level1_result
+                    {backendState?.level1_result?.status_label === 'Directly Qualified'
+                      ? 'Directly Qualified by Admin · Level 1 Exempted'
+                      : backendState?.level1_result
                       ? 'Assessment Submitted · Shortlisted candidates will be notified via email'
                       : displayConfig.r1.sub}
                   </div>
@@ -265,8 +273,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
               </div>
 
               <div className="flex items-center space-x-3 self-end sm:self-center">
-                {renderBadge(displayConfig.r1.status)}
-                {displayConfig.r1.action && (
+                {backendState?.level1_result?.status_label === 'Directly Qualified' ? (
+                  <span className="badge-status badge-completed">Directly Qualified</span>
+                ) : (
+                  renderBadge(displayConfig.r1.status)
+                )}
+                {displayConfig.r1.action && (backendState?.can_start_level1 || backendState?.can_resume_level1) && (
                   <button
                     onClick={() => {
                       if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
@@ -285,26 +297,36 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
             </div>
 
             {/* ROUND ROW 02 */}
-            <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-[18px_20px] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className={`rounded-[6px] p-[18px_20px] flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
+              backendState?.can_start_level2 || backendState?.can_resume_level2
+                ? 'bg-white border-2 border-[#16233F] shadow-sm'
+                : 'bg-white border border-[#DBD7C9]'
+            }`}>
               <div className="flex items-center space-x-3.5">
-                <div className="w-[30px] h-[30px] border border-[#C6C1B0] rounded-[3px] flex items-center justify-center font-mono text-[13px] font-semibold text-[#59626F] shrink-0">
+                <div className={`w-[30px] h-[30px] rounded-[3px] flex items-center justify-center font-mono text-[13px] font-semibold shrink-0 ${
+                  backendState?.can_start_level2 || backendState?.can_resume_level2
+                    ? 'bg-[#16233F] text-white'
+                    : 'border border-[#C6C1B0] text-[#59626F]'
+                }`}>
                   02
                 </div>
                 <div>
                   <div className="text-[15px] font-semibold text-[#1B2029]">
-                    Coding Assessment
+                    Debugging Assessment
                   </div>
                   <div className="text-[12.5px] text-[#59626F] mt-0.5">
                     {backendState?.level2_result
                       ? 'Assessment Submitted · Shortlisted candidates will be notified via email'
+                      : backendState?.can_start_level2
+                      ? 'Debugging Challenge · 10 Questions · 60 minutes'
                       : displayConfig.r2.sub}
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center space-x-3 self-end sm:self-center">
-                {renderBadge(displayConfig.r2.status)}
-                {displayConfig.r2.action && (
+                {backendState?.can_start_level2 ? renderBadge('Available') : renderBadge(displayConfig.r2.status)}
+                {(backendState?.can_start_level2 || backendState?.can_resume_level2) && (
                   <button
                     onClick={() => {
                       if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
@@ -312,10 +334,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                       }
                       onStartCoding?.();
                     }}
-                    className="btn-primary h-[36px] px-4 text-[13px] font-semibold flex items-center space-x-1.5"
+                    className="btn-primary h-[36px] px-4 text-[13px] font-semibold flex items-center space-x-1.5 shadow-sm"
                     type="button"
                   >
-                    <span>{displayConfig.r2.action}</span>
+                    <span>{backendState?.can_resume_level2 ? 'Resume' : 'Enter Assessment'}</span>
                     <span>→</span>
                   </button>
                 )}
@@ -351,18 +373,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                 ? 'bg-[#FBF1DD] border-[#E9D6A3] text-[#8A5A00]'
                 : displayConfig.panel.type === 'error'
                 ? 'bg-[#FBEAE8] border-[#EFC5BF] text-[#AE2E22]'
-                : displayConfig.panel.type === 'success'
+                : (displayConfig.panel.type === 'success' || backendState?.state_headline?.includes('Qualified'))
                 ? 'bg-[#E8F3EC] border-[#BEDFCB] text-[#1E7A46]'
                 : 'bg-white border-[#DBD7C9] text-[#1B2029]'
             }`}
           >
             <div className="text-[14px] font-bold">
-              {displayConfig.panel.title}
+              {backendState?.state_headline || displayConfig.panel.title}
             </div>
             <div className={`text-[13px] mt-1 leading-[1.5] ${
-              displayConfig.panel.type === 'default' ? 'text-[#59626F]' : ''
+              (displayConfig.panel.type === 'default' && !backendState?.state_headline?.includes('Qualified')) ? 'text-[#59626F]' : ''
             }`}>
-              {displayConfig.panel.message}
+              {backendState?.state_description || displayConfig.panel.message}
             </div>
           </div>
         </div>

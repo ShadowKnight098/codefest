@@ -53,7 +53,7 @@ export const WaitingPage: React.FC<WaitingPageProps> = ({
           LEVEL 02
         </div>
         <h1 className="font-serif text-[22px] font-semibold text-[#1B2029] mt-1 mb-5">
-          CODING ASSESSMENT
+          DEBUGGING ASSESSMENT
         </h1>
 
         {/* Status line: Waiting for organizer (warn badge) */}

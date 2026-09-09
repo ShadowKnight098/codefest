@@ -183,6 +183,7 @@ class CodingAttempt(Base):
     duration_seconds = Column(Integer, default=3600, nullable=False) # 60 mins default
     status = Column(String(50), default="IN_PROGRESS", nullable=False) # NOT_STARTED, IN_PROGRESS, SUBMITTED, TERMINATED
     submitted_at = Column(DateTime(timezone=True), nullable=True)
+    score = Column(Integer, default=0, nullable=True)
     assigned_problem_ids = Column(Text, nullable=True) # JSON array of exactly 2 problem IDs: [easy_id, hard_id]
 
     __table_args__ = (
@@ -216,6 +217,71 @@ class CodingSubmission(Base):
 
     attempt = relationship("CodingAttempt", back_populates="submissions")
     problem = relationship("CodingProblem")
+
+
+# ─── Level 2 Debugging / Missing-Line Challenge Models ───
+
+class L2Question(Base):
+    __tablename__ = "l2_questions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    question_id = Column(String(100), unique=True, nullable=False, index=True)
+    academic_year = Column(Integer, nullable=False, index=True) # 2 or 3 only
+    language = Column(String(50), default="python", nullable=False) # python, c, cpp, java, etc.
+    difficulty = Column(String(50), default="medium", nullable=False) # easy, medium, hard
+    question = Column(Text, nullable=False)
+    code = Column(Text, nullable=False)
+    option_a = Column(Text, nullable=False)
+    option_b = Column(Text, nullable=False)
+    option_c = Column(Text, nullable=False)
+    option_d = Column(Text, nullable=False)
+    correct_answer = Column(String(10), nullable=False) # a, b, c, d (never exposed to client)
+    marks = Column(Integer, default=1, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    assignments = relationship("L2QuestionAssignment", back_populates="question", cascade="all, delete-orphan")
+    answers = relationship("L2Answer", back_populates="question", cascade="all, delete-orphan")
+
+
+class L2QuestionAssignment(Base):
+    __tablename__ = "l2_question_assignments"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    participant_id = Column(String(36), ForeignKey("participants.id", ondelete="CASCADE"), nullable=False)
+    question_id = Column(String(36), ForeignKey("l2_questions.id", ondelete="CASCADE"), nullable=False)
+    position = Column(Integer, nullable=False) # 1-indexed order within participant's attempt
+    difficulty = Column(String(50), nullable=False)
+    option_order = Column(String(100), nullable=True) # JSON array of option keys e.g. ["a","b","c","d"]
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("participant_id", "question_id", name="uq_l2_assignment_participant_question"),
+        Index("idx_l2_assignment_participant", "participant_id"),
+        Index("idx_l2_assignment_position", "participant_id", "position"),
+    )
+
+    participant = relationship("Participant")
+    question = relationship("L2Question", back_populates="assignments")
+
+
+class L2Answer(Base):
+    __tablename__ = "l2_answers"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    participant_id = Column(String(36), ForeignKey("participants.id", ondelete="CASCADE"), nullable=False)
+    question_id = Column(String(36), ForeignKey("l2_questions.id", ondelete="CASCADE"), nullable=False)
+    selected_option = Column(String(10), nullable=True) # a, b, c, d or None
+    saved_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("participant_id", "question_id", name="uq_l2_answer_participant_question"),
+        Index("idx_l2_answer_participant", "participant_id"),
+    )
+
+    participant = relationship("Participant")
+    question = relationship("L2Question", back_populates="answers")
+
 
 class RoundResult(Base):
     __tablename__ = "round_results"

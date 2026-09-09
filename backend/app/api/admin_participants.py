@@ -10,7 +10,7 @@ from sqlalchemy import select, update, delete, func
 from app.db.session import get_db
 from app.db.models import (
     Participant, MCQAttempt, CodingAttempt, RoundResult, SecurityEvent, Round,
-    MCQAttemptQuestion, MCQAnswer, CodingSubmission
+    MCQAttemptQuestion, MCQAnswer, CodingSubmission, L2QuestionAssignment, L2Answer
 )
 from app.core.security import hash_pin
 from app.schemas.admin import (
@@ -548,6 +548,14 @@ async def reset_participant_level2(
     # 4. Delete Coding Attempt
     await db.execute(
         delete(CodingAttempt).where(CodingAttempt.participant_id == participant_id)
+    )
+
+    # 5. Delete Level 2 Debugging answers and question assignments
+    await db.execute(
+        delete(L2Answer).where(L2Answer.participant_id == participant_id)
+    )
+    await db.execute(
+        delete(L2QuestionAssignment).where(L2QuestionAssignment.participant_id == participant_id)
     )
 
     await db.commit()

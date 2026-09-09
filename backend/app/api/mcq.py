@@ -73,7 +73,21 @@ async def get_or_start_mcq_attempt(
             detail="Level 1 assessment is currently closed."
         )
 
-    # 2. Check for existing attempt
+    # 2. Check if already qualified for Round 2 (e.g. directly qualified by admin)
+    r1_qual_res = await db.execute(
+        select(RoundResult).where(
+            RoundResult.participant_id == current_participant.id,
+            RoundResult.round_id == round_1.id,
+            RoundResult.is_qualified == True
+        )
+    )
+    if r1_qual_res.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You are already directly qualified for Level 2 and do not need to take the Level 1 assessment."
+        )
+
+    # 3. Check for existing attempt
     att_res = await db.execute(
         select(MCQAttempt).where(
             MCQAttempt.participant_id == current_participant.id,

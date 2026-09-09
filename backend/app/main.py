@@ -55,6 +55,15 @@ async def lifespan(app: FastAPI):
                 except Exception:
                     pass
 
+            # Safe migration: ensure score column exists in coding_attempts
+            try:
+                await conn.execute(text("ALTER TABLE coding_attempts ADD COLUMN IF NOT EXISTS score INTEGER DEFAULT 0;"))
+            except Exception:
+                try:
+                    await conn.execute(text("ALTER TABLE coding_attempts ADD COLUMN score INTEGER DEFAULT 0;"))
+                except Exception:
+                    pass
+
             # Safe migration: ensure assigned_problem_ids column exists in coding_attempts
             try:
                 await conn.execute(text("ALTER TABLE coding_attempts ADD COLUMN IF NOT EXISTS assigned_problem_ids TEXT;"))
@@ -108,9 +117,21 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception on {request.method} {request.url.path}: {str(exc)}", exc_info=True)
+    origin = request.headers.get("origin")
+    headers = {
+        "Access-Control-Allow-Methods": "*",
+        "Access-Control-Allow-Headers": "*",
+    }
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+    else:
+        headers["Access-Control-Allow-Origin"] = "*"
+
     return JSONResponse(
         status_code=500,
-        content={"detail": "An internal server error occurred. Please contact the competition administrator."}
+        content={"detail": "An internal server error occurred. Please contact the competition administrator."},
+        headers=headers
     )
 
 # Include Routers

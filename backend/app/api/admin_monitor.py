@@ -24,35 +24,47 @@ async def get_live_stats(
     if cached is not None:
         return cached
 
-    # Fast parallel execution of summary statistics
-    tasks = [
-        db.execute(select(func.count(Participant.id))),
-        db.execute(select(func.count(Participant.id)).where(Participant.is_enabled == True)),
-        db.execute(select(func.count(MCQAttempt.id)).where(MCQAttempt.status == "IN_PROGRESS")),
-        db.execute(select(func.count(MCQAttempt.id)).where(MCQAttempt.status == "SUBMITTED")),
-        db.execute(select(func.count(CodingAttempt.id)).where(CodingAttempt.status == "IN_PROGRESS")),
-        db.execute(select(func.count(CodingAttempt.id)).where(CodingAttempt.status == "SUBMITTED")),
-        db.execute(select(func.count(distinct(MCQAttempt.participant_id))).where(MCQAttempt.status == "TERMINATED")),
-        db.execute(select(func.count(SecurityEvent.id))),
-        db.execute(select(func.count(RoundResult.id)).where(RoundResult.is_qualified == True)),
-        db.execute(select(func.count(RoundResult.id)).where(RoundResult.is_qualified == False))
-    ]
-    results = await asyncio.gather(*tasks)
+    # Execute count queries sequentially on the AsyncSession (SQLAlchemy sessions do not support concurrent operations)
+    try:
+        total_p = (await db.execute(select(func.count(Participant.id)))).scalar() or 0
+        enabled_p = (await db.execute(select(func.count(Participant.id)).where(Participant.is_enabled == True))).scalar() or 0
+        act_mcq = (await db.execute(select(func.count(MCQAttempt.id)).where(MCQAttempt.status == "IN_PROGRESS"))).scalar() or 0
+        sub_mcq = (await db.execute(select(func.count(MCQAttempt.id)).where(MCQAttempt.status == "SUBMITTED"))).scalar() or 0
+        act_code = (await db.execute(select(func.count(CodingAttempt.id)).where(CodingAttempt.status == "IN_PROGRESS"))).scalar() or 0
+        sub_code = (await db.execute(select(func.count(CodingAttempt.id)).where(CodingAttempt.status == "SUBMITTED"))).scalar() or 0
+        term_cnt = (await db.execute(select(func.count(distinct(MCQAttempt.participant_id))).where(MCQAttempt.status == "TERMINATED"))).scalar() or 0
+        viols = (await db.execute(select(func.count(SecurityEvent.id)))).scalar() or 0
+        qual_cnt = (await db.execute(select(func.count(RoundResult.id)).where(RoundResult.is_qualified == True))).scalar() or 0
+        not_qual_cnt = (await db.execute(select(func.count(RoundResult.id)).where(RoundResult.is_qualified == False))).scalar() or 0
 
-    stats = LiveStats(
-        total_participants=results[0].scalar() or 0,
-        enabled_participants=results[1].scalar() or 0,
-        active_mcq_attempts=results[2].scalar() or 0,
-        submitted_mcq_attempts=results[3].scalar() or 0,
-        active_coding_attempts=results[4].scalar() or 0,
-        submitted_coding_attempts=results[5].scalar() or 0,
-        terminated_count=results[6].scalar() or 0,
-        total_violations=results[7].scalar() or 0,
-        qualified_count=results[8].scalar() or 0,
-        not_qualified_count=results[9].scalar() or 0
-    )
-    memory_cache.set("admin_live_stats", stats, ttl_seconds=3.0)
-    return stats
+        stats = LiveStats(
+            total_participants=total_p,
+            enabled_participants=enabled_p,
+            active_mcq_attempts=act_mcq,
+            submitted_mcq_attempts=sub_mcq,
+            active_coding_attempts=act_code,
+            submitted_coding_attempts=sub_code,
+            terminated_count=term_cnt,
+            total_violations=viols,
+            qualified_count=qual_cnt,
+            not_qualified_count=not_qual_cnt
+        )
+        memory_cache.set("admin_live_stats", stats, ttl_seconds=3.0)
+        return stats
+    except Exception as e:
+        # Fallback to zeroed stats if any error occurs
+        return LiveStats(
+            total_participants=0,
+            enabled_participants=0,
+            active_mcq_attempts=0,
+            submitted_mcq_attempts=0,
+            active_coding_attempts=0,
+            submitted_coding_attempts=0,
+            terminated_count=0,
+            total_violations=0,
+            qualified_count=0,
+            not_qualified_count=0
+        )
 
 @router.get("/leaderboard", response_model=List[LeaderboardEntry])
 async def get_leaderboard(

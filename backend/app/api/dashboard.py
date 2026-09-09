@@ -135,12 +135,15 @@ async def get_dashboard_state(
                 await db.refresh(r2_result)
 
     # Participant-facing summary: do not expose raw marks or qualification status
+    is_direct_admin_qual = bool(
+        r1_result and r1_result.is_qualified and (not mcq_attempt or mcq_attempt.status != "SUBMITTED")
+    )
     l1_summary = ResultSummary(
         round_number=1,
         score=0,
         total_marks=25,
         is_qualified=False,
-        status_label="Submitted"
+        status_label="Directly Qualified" if is_direct_admin_qual else "Submitted"
     ) if r1_result else None
 
     l2_summary = ResultSummary(
@@ -222,7 +225,57 @@ async def get_dashboard_state(
                 violations_count=violations_count
             )
 
-    # MCQ Round (Round 1) evaluation
+    # Qualified for Level 2 (MCQ cutoff or direct admin qualification)
+    # The candidate does NOT need to take Level 1!
+    if r1_result and r1_result.is_qualified:
+        if round_2_dict and (round_2_dict["is_open"] or is_direct_admin_qual):
+            headline = "Directly Qualified for Level 2" if is_direct_admin_qual else "Level 2 Assessment Available"
+            desc = (
+                "You have been directly qualified for Level 2 by the administrator and do not need to take Level 1. Click below to begin your assessment session."
+                if is_direct_admin_qual
+                else "Level 2 (Debugging Challenge) is now open. Click below to begin your assessment session."
+            )
+            return DashboardStateResponse(
+                participant_name=current_participant.name,
+                roll_number=current_participant.roll_number,
+                academic_year=current_participant.academic_year,
+                email=current_participant.email,
+                state=ParticipantState.LEVEL2_AVAILABLE,
+                state_headline=headline,
+                state_description=desc,
+                can_start_level1=False,
+                can_resume_level1=False,
+                can_start_level2=True,
+                can_resume_level2=False,
+                level1_round=round_1_info,
+                level2_round=round_2_info,
+                level1_result=l1_summary,
+                level2_result=l2_summary,
+                violations_count=violations_count
+            )
+        else:
+            headline = "Qualified for Level 2"
+            desc = "You have successfully qualified for Level 2 (Debugging Challenge). Please wait for the organizers to open Round 2 to begin."
+            return DashboardStateResponse(
+                participant_name=current_participant.name,
+                roll_number=current_participant.roll_number,
+                academic_year=current_participant.academic_year,
+                email=current_participant.email,
+                state=ParticipantState.WAITING_FOR_LEVEL2,
+                state_headline=headline,
+                state_description=desc,
+                can_start_level1=False,
+                can_resume_level1=False,
+                can_start_level2=False,
+                can_resume_level2=False,
+                level1_round=round_1_info,
+                level2_round=round_2_info,
+                level1_result=l1_summary,
+                level2_result=l2_summary,
+                violations_count=violations_count
+            )
+
+    # MCQ Round (Round 1) evaluation for un-qualified candidates
     if mcq_attempt:
         if mcq_attempt.status == "IN_PROGRESS":
             return DashboardStateResponse(
@@ -246,67 +299,24 @@ async def get_dashboard_state(
             )
         
         if mcq_attempt.status == "SUBMITTED":
-            # Check qualification
-            if r1_result and r1_result.is_qualified:
-                # Student is qualified! Check if Level 2 is open
-                if round_2_dict and round_2_dict["is_open"]:
-                    return DashboardStateResponse(
-                        participant_name=current_participant.name,
-                        roll_number=current_participant.roll_number,
-                        academic_year=current_participant.academic_year,
-                        email=current_participant.email,
-                        state=ParticipantState.LEVEL2_AVAILABLE,
-                        state_headline="Level 2 Assessment Available",
-                        state_description="Level 2 (Coding Assessment) is now open. Click below to begin your assessment session.",
-                        can_start_level1=False,
-                        can_resume_level1=False,
-                        can_start_level2=True,
-                        can_resume_level2=False,
-                        level1_round=round_1_info,
-                        level2_round=round_2_info,
-                        level1_result=l1_summary,
-                        level2_result=l2_summary,
-                        violations_count=violations_count
-                    )
-                else:
-                    return DashboardStateResponse(
-                        participant_name=current_participant.name,
-                        roll_number=current_participant.roll_number,
-                        academic_year=current_participant.academic_year,
-                        email=current_participant.email,
-                        state=ParticipantState.WAITING_FOR_LEVEL2,
-                        state_headline="Assessment Submitted",
-                        state_description="Your Level 1 assessment has been submitted successfully. Shortlisted candidates will be notified regarding qualification and next steps via registered email or the official group.",
-                        can_start_level1=False,
-                        can_resume_level1=False,
-                        can_start_level2=False,
-                        can_resume_level2=False,
-                        level1_round=round_1_info,
-                        level2_round=round_2_info,
-                        level1_result=l1_summary,
-                        level2_result=l2_summary,
-                        violations_count=violations_count
-                    )
-            else:
-                # Not qualified
-                return DashboardStateResponse(
-                    participant_name=current_participant.name,
-                    roll_number=current_participant.roll_number,
-                    academic_year=current_participant.academic_year,
-                    email=current_participant.email,
-                    state=ParticipantState.NOT_QUALIFIED,
-                    state_headline="Assessment Submitted",
-                    state_description="Your Level 1 assessment has been submitted successfully. Shortlisted candidates will be notified regarding qualification and next steps via registered email or the official group.",
-                    can_start_level1=False,
-                    can_resume_level1=False,
-                    can_start_level2=False,
-                    can_resume_level2=False,
-                    level1_round=round_1_info,
-                    level2_round=round_2_info,
-                    level1_result=l1_summary,
-                    level2_result=l2_summary,
-                    violations_count=violations_count
-                )
+            return DashboardStateResponse(
+                participant_name=current_participant.name,
+                roll_number=current_participant.roll_number,
+                academic_year=current_participant.academic_year,
+                email=current_participant.email,
+                state=ParticipantState.NOT_QUALIFIED,
+                state_headline="Assessment Submitted",
+                state_description="Your Level 1 assessment has been submitted successfully. Shortlisted candidates will be notified regarding qualification and next steps via registered email or the official group.",
+                can_start_level1=False,
+                can_resume_level1=False,
+                can_start_level2=False,
+                can_resume_level2=False,
+                level1_round=round_1_info,
+                level2_round=round_2_info,
+                level1_result=l1_summary,
+                level2_result=l2_summary,
+                violations_count=violations_count
+            )
 
     # No attempt yet
     if round_1_dict and round_1_dict["is_open"]:
