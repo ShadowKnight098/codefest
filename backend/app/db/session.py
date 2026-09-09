@@ -16,10 +16,10 @@ if settings.is_postgres:
 
     engine_kwargs.update({
         "connect_args": {"ssl": ssl_context},
-        "pool_size": 25,
-        "max_overflow": 35,
-        "pool_timeout": 15,
-        "pool_recycle": 180,
+        "pool_size": 40,
+        "max_overflow": 60,
+        "pool_timeout": 30,
+        "pool_recycle": 300,
     })
 
     # asyncpg needs the +asyncpg scheme, and doesn't understand

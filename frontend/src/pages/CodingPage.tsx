@@ -176,42 +176,65 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [questions, currentIndex, submitResult]);
 
-  // Auto-save selected option on click
-  const handleSelectOption = async (optionKey: string) => {
+  const pendingSaveRef = useRef<{ question_id: string; selected_option: string | null } | null>(null);
+  const debounceTimerRef = useRef<number | null>(null);
+
+  const flushPendingSave = async () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (pendingSaveRef.current) {
+      const payload = pendingSaveRef.current;
+      pendingSaveRef.current = null;
+      try {
+        await apiFetch('/coding/answer', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        setAutosaveState('saved');
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = window.setTimeout(() => {
+          setAutosaveState('idle');
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to auto-save answer:', err);
+        setAutosaveState('error');
+      }
+    }
+  };
+
+  // Auto-save selected option on click (debounced by 300ms)
+  const handleSelectOption = (optionKey: string) => {
     if (!currentQ || submitResult) return;
 
     const optNormalized = optionKey.toLowerCase();
     // Toggle off if already selected, or select new
     const newSelection = currentQ.selected_option === optNormalized ? null : optNormalized;
 
-    // Optimistic UI update
+    // Instant optimistic UI update
     setQuestions((prev) =>
       prev.map((q, idx) => (idx === currentIndex ? { ...q, selected_option: newSelection } : q))
     );
     setAutosaveState('saving');
 
-    try {
-      await apiFetch('/coding/answer', {
-        method: 'POST',
-        body: JSON.stringify({
-          question_id: currentQ.id,
-          selected_option: newSelection,
-        }),
-      });
-      setAutosaveState('saved');
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = window.setTimeout(() => {
-        setAutosaveState('idle');
-      }, 2000);
-    } catch (err) {
-      console.error('Failed to auto-save answer:', err);
-      setAutosaveState('error');
+    pendingSaveRef.current = {
+      question_id: currentQ.id,
+      selected_option: newSelection,
+    };
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
+    debounceTimerRef.current = window.setTimeout(async () => {
+      await flushPendingSave();
+    }, 300);
   };
 
   // Final submit handler
   const handleFinalSubmit = async () => {
     setIsSubmitting(true);
+    await flushPendingSave();
     try {
       const res = await apiFetch<any>('/coding/submit', {
         method: 'POST',

@@ -82,9 +82,44 @@ async def lifespan(app: FastAPI):
         logger.info("Database schema verified.")
     except Exception as e:
         logger.warning(f"Schema check skipped or already present: {e}")
+
+    # ─── Render Anti-Sleep Agent ───
+    keep_alive_task = None
+    if settings.KEEP_ALIVE_ENABLED and settings.RENDER_EXTERNAL_URL:
+        import asyncio
+        import httpx
+
+        async def render_keep_alive_agent():
+            """
+            Background sentinel worker that pings this Render web service
+            every 7 minutes to prevent the free instance from spinning down
+            and going to sleep during the competition.
+            """
+            target_url = f"{settings.RENDER_EXTERNAL_URL.rstrip('/')}/api/health"
+            interval = settings.KEEP_ALIVE_INTERVAL_SECONDS
+            logger.info(f"🚀 Render Anti-Sleep Agent started. Pinging {target_url} every {interval}s.")
+            
+            # Initial grace period after startup
+            await asyncio.sleep(60)
+
+            while True:
+                try:
+                    async with httpx.AsyncClient(timeout=15.0) as client:
+                        resp = await client.get(target_url)
+                        logger.info(f"💓 Render Keep-Alive heartbeat sent -> HTTP {resp.status_code}")
+                except Exception as ex:
+                    logger.warning(f"⚠️ Render Keep-Alive ping warning (non-fatal): {ex}")
+
+                await asyncio.sleep(interval)
+
+        keep_alive_task = asyncio.create_task(render_keep_alive_agent())
+
     yield
+
     # Shutdown
     logger.info("Shutting down application...")
+    if keep_alive_task:
+        keep_alive_task.cancel()
     await engine.dispose()
 
 app = FastAPI(

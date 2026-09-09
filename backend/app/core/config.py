@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # Redis (optional — for production rate limiting & job queue)
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    # Self-ping / Anti-Sleep Agent for Render Free Tier
+    RENDER_EXTERNAL_URL: str = "https://codefest-jqh3.onrender.com"
+    KEEP_ALIVE_ENABLED: bool = True
+    KEEP_ALIVE_INTERVAL_SECONDS: int = 420  # Ping every 7 minutes (Render sleeps after 15 mins inactivity)
+
     # CORS
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
