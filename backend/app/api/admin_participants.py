@@ -181,8 +181,8 @@ async def import_participants_csv(
 ):
     """
     Bulk import participants from CSV.
-    Supports flexible header names (RollNumber, Name, Email, Year, etc.) and formats (3 YEAR, III, etc.).
-    Automatically upserts existing participants.
+    Supports flexible header names (RollNumber, Register Number, Name, Email, Year, etc.) and formats.
+    Automatically upserts existing participants safely.
     """
     content = await file.read()
     try:
@@ -195,128 +195,200 @@ async def import_participants_csv(
     skipped = 0
     errors: List[ImportValidationRow] = []
 
+    # Get max existing FDH counter
+    existing_fdhs = (await db.execute(select(Participant).where(Participant.roll_number.like('FDH%')))).scalars().all()
+    fdh_counter = 0
+    for p in existing_fdhs:
+        m = re.search(r'FDH(\d+)', p.roll_number, re.IGNORECASE)
+        if m:
+            fdh_counter = max(fdh_counter, int(m.group(1)))
+
+    batch_rolls = {}
+    batch_emails = {}
+
     row_num = 1
     for row in reader:
         row_num += 1
-        row_norm = {normalize_header_key(k): (v or "").strip() for k, v in row.items() if k}
+        try:
+            row_norm = {normalize_header_key(k): (v or "").strip() for k, v in row.items() if k}
 
-        # Extract roll number
-        roll = None
-        for k in ("rollnumber", "rollno", "roll", "htno", "hallticket", "regno", "id"):
-            if k in row_norm and row_norm[k]:
-                roll = row_norm[k].strip().upper()
-                break
-        if not roll:
-            for k, v in row_norm.items():
-                if "roll" in k or "ticket" in k:
-                    roll = v.strip().upper()
+            # Extract roll number / register number
+            roll = None
+            for k in ("registernumber", "registerno", "register", "registrationnumber", "registrationno", "regno", "rollnumber", "rollno", "roll", "htno", "hallticket", "hallticketno", "id"):
+                if k in row_norm and row_norm[k]:
+                    roll = row_norm[k].strip().upper()
                     break
+            if not roll:
+                for k, v in row_norm.items():
+                    if any(term in k for term in ("register", "regno", "roll", "ticket", "htno")):
+                        roll = v.strip().upper()
+                        break
 
-        # Extract name
-        name = None
-        for k in ("name", "studentname", "fullname", "candidatename"):
-            if k in row_norm and row_norm[k]:
-                name = row_norm[k].strip()
-                break
-        if not name:
-            for k, v in row_norm.items():
-                if "name" in k:
-                    name = v.strip()
+            # Extract name
+            name = None
+            for k in ("name", "studentname", "fullname", "candidatename"):
+                if k in row_norm and row_norm[k]:
+                    name = row_norm[k].strip()
                     break
+            if not name:
+                for k, v in row_norm.items():
+                    if "name" in k:
+                        name = v.strip()
+                        break
 
-        # Extract email
-        email = None
-        for k in ("email", "emailid", "mail", "mailid", "emailaddress"):
-            if k in row_norm and row_norm[k]:
-                email = row_norm[k].strip().lower()
-                break
-        if not email:
-            for k, v in row_norm.items():
-                if "email" in k or "mail" in k:
-                    email = v.strip().lower()
+            # Extract email
+            email = None
+            for k in ("email", "emailid", "mail", "mailid", "emailaddress"):
+                if k in row_norm and row_norm[k]:
+                    email = row_norm[k].strip().lower()
                     break
+            if not email:
+                for k, v in row_norm.items():
+                    if "email" in k or "mail" in k:
+                        email = v.strip().lower()
+                        break
 
-        # Extract year
-        year_raw = None
-        for k in ("year", "academicyear", "yr", "class", "batch"):
-            if k in row_norm and row_norm[k]:
-                year_raw = row_norm[k].strip()
-                break
-        if not year_raw:
-            for k, v in row_norm.items():
-                if "year" in k:
-                    year_raw = v.strip()
+            # Extract year
+            year_raw = None
+            for k in ("year", "academicyear", "yr", "class", "batch"):
+                if k in row_norm and row_norm[k]:
+                    year_raw = row_norm[k].strip()
                     break
+            if not year_raw:
+                for k, v in row_norm.items():
+                    if "year" in k:
+                        year_raw = v.strip()
+                        break
 
-        # Fallback to positional values if headers were unmapped
-        if not roll and len(row) >= 1:
-            values = list(row.values())
-            roll = (values[0] or "").strip().upper()
-            if len(values) >= 2 and not name:
-                name = (values[1] or "").strip()
-            if len(values) >= 3 and not email:
-                email = (values[2] or "").strip().lower()
-            if len(values) >= 4 and not year_raw:
-                year_raw = (values[3] or "").strip()
+            # If headers completely failed to match, fallback to positional if non-timestamp
+            if not roll and len(row) >= 1:
+                values = [v for v in row.values() if v is not None]
+                non_ts_vals = [str(v).strip() for v in values if not re.search(r'\d{1,2}/\d{1,2}/\d{4}', str(v))]
+                if non_ts_vals:
+                    roll = non_ts_vals[0].upper()
+                    if len(non_ts_vals) >= 2 and not name:
+                        name = non_ts_vals[1]
+                    if len(non_ts_vals) >= 3 and not email:
+                        email = non_ts_vals[2].lower()
+                    if len(non_ts_vals) >= 4 and not year_raw:
+                        year_raw = non_ts_vals[3]
 
-        if not roll:
+            if not roll:
+                skipped += 1
+                errors.append(ImportValidationRow(
+                    row_number=row_num,
+                    roll_number="",
+                    email=email or "",
+                    name=name or "",
+                    academic_year=0,
+                    status="error",
+                    error="Row missing roll number"
+                ))
+                continue
+
+            # Handle FDH rolls
+            if "fdh" in roll.lower():
+                clean_email = (email or "").strip().lower()
+                if clean_email and clean_email in batch_emails:
+                    roll = batch_emails[clean_email].roll_number
+                else:
+                    ex_p = None
+                    if clean_email:
+                        ex_p = (await db.execute(select(Participant).where(Participant.email == clean_email))).scalar_one_or_none()
+                    if ex_p and ex_p.roll_number.startswith("FDH"):
+                        roll = ex_p.roll_number
+                    else:
+                        fdh_counter += 1
+                        roll = f"FDH{fdh_counter}"
+            else:
+                roll = re.sub(r'\s+', '', roll).upper()
+
+            if not name:
+                name = roll
+            else:
+                name = re.sub(r'\s+', ' ', name).strip()
+
+            year = parse_academic_year(year_raw)
+            email = sanitize_email(email, roll)
+
+            # In-batch duplicate check
+            if roll in batch_rolls or email in batch_emails:
+                existing_batch_p = batch_rolls.get(roll) or batch_emails.get(email)
+                existing_batch_p.name = name
+                existing_batch_p.email = email
+                existing_batch_p.academic_year = year
+                existing_batch_p.is_enabled = True
+                imported += 1
+                continue
+
+            # DB duplicate check
+            existing_p = (await db.execute(
+                select(Participant).where(
+                    (Participant.roll_number == roll) | (Participant.email == email)
+                )
+            )).scalar_one_or_none()
+
+            # Optional custom PIN or default to roll number
+            custom_pin = row.get("pin") or row_norm.get("pin")
+
+            if existing_p:
+                existing_p.roll_number = roll
+                existing_p.name = name
+                existing_p.email = email
+                existing_p.academic_year = year
+                existing_p.is_enabled = True
+                if custom_pin and custom_pin.strip():
+                    existing_p.hashed_pin = hash_pin(custom_pin.strip().upper())
+                batch_rolls[roll] = existing_p
+                batch_emails[email] = existing_p
+                imported += 1
+            else:
+                pin = (custom_pin or roll).strip().upper()
+                new_participant = Participant(
+                    roll_number=roll,
+                    email=email,
+                    name=name,
+                    academic_year=year,
+                    hashed_pin=hash_pin(pin),
+                    is_enabled=True
+                )
+                db.add(new_participant)
+                batch_rolls[roll] = new_participant
+                batch_emails[email] = new_participant
+                imported += 1
+
+        except Exception as row_err:
             skipped += 1
             errors.append(ImportValidationRow(
                 row_number=row_num,
-                roll_number="",
+                roll_number=roll or "",
                 email=email or "",
                 name=name or "",
                 academic_year=0,
                 status="error",
-                error="Row missing roll number"
+                error=f"Row processing error: {str(row_err)}"
             ))
-            continue
 
-        if not name:
-            name = roll
-
-        year = parse_academic_year(year_raw)
-        email = sanitize_email(email, roll)
-
-        # Check if email is used by a DIFFERENT participant to avoid unique collision
-        email_conflict = await db.execute(
-            select(Participant.id).where(
-                (Participant.email == email) & (Participant.roll_number != roll)
-            )
+    try:
+        await db.commit()
+    except Exception as commit_err:
+        await db.rollback()
+        errors.append(ImportValidationRow(
+            row_number=0,
+            roll_number="",
+            email="",
+            name="",
+            academic_year=0,
+            status="error",
+            error=f"Database commit error: {str(commit_err)}"
+        ))
+        return ImportResult(
+            total_rows=row_num - 1,
+            imported=0,
+            skipped=row_num - 1,
+            errors=errors
         )
-        if email_conflict.scalar_one_or_none():
-            clean_roll = re.sub(r'[^a-z0-9]', '', roll.lower()) or "student"
-            email = f"{clean_roll}_{email}"
 
-        # Extract PIN or default to roll number
-        pin = (row.get("pin") or row_norm.get("pin") or roll).strip().upper()
-
-        # Check if roll_number already exists -> update (upsert)
-        existing = await db.execute(
-            select(Participant).where(Participant.roll_number == roll)
-        )
-        existing_p = existing.scalar_one_or_none()
-
-        if existing_p:
-            existing_p.name = name
-            existing_p.email = email
-            existing_p.academic_year = year
-            existing_p.is_enabled = True
-            existing_p.hashed_pin = hash_pin(pin)
-            imported += 1
-        else:
-            new_participant = Participant(
-                roll_number=roll,
-                email=email,
-                name=name,
-                academic_year=year,
-                hashed_pin=hash_pin(pin),
-                is_enabled=True
-            )
-            db.add(new_participant)
-            imported += 1
-
-    await db.commit()
     return ImportResult(
         total_rows=row_num - 1,
         imported=imported,
@@ -333,7 +405,7 @@ async def import_participants_text(
 ):
     """
     Bulk import participants by directly pasting text/CSV/TSV lines.
-    Handles headers, quotes, custom formats (e.g. '3 YEAR'), and auto-upserts existing students.
+    Handles headers, quotes, custom formats (e.g. '3 YEAR'), and auto-upserts existing students safely.
     """
     raw = payload.raw_text.strip()
     if not raw:
@@ -346,6 +418,17 @@ async def import_participants_text(
     skipped = 0
     errors: List[ImportValidationRow] = []
 
+    # Get max existing FDH counter
+    existing_fdhs = (await db.execute(select(Participant).where(Participant.roll_number.like('FDH%')))).scalars().all()
+    fdh_counter = 0
+    for p in existing_fdhs:
+        m = re.search(r'FDH(\d+)', p.roll_number, re.IGNORECASE)
+        if m:
+            fdh_counter = max(fdh_counter, int(m.group(1)))
+
+    batch_rolls = {}
+    batch_emails = {}
+
     header_mapped = False
     col_map = {"roll": 0, "name": 1, "email": 2, "year": 3}
 
@@ -357,92 +440,150 @@ async def import_participants_text(
         parts = [p.strip() for p in parts]
         row_num += 1
 
-        # Check if row 1 is a header line
-        first_row_check = [normalize_header_key(p) for p in parts]
-        if not header_mapped and any("roll" in k or "email" in k or "name" in k for k in first_row_check):
-            header_mapped = True
-            for idx, k in enumerate(first_row_check):
-                if "roll" in k or "ticket" in k:
-                    col_map["roll"] = idx
-                elif "name" in k:
-                    col_map["name"] = idx
-                elif "email" in k or "mail" in k:
-                    col_map["email"] = idx
-                elif "year" in k or "class" in k:
-                    col_map["year"] = idx
-            continue
+        try:
+            # Check if row 1 is a header line
+            first_row_check = [normalize_header_key(p) for p in parts]
+            if not header_mapped and any(
+                any(term in k for term in ("register", "regno", "roll", "ticket", "email", "mail", "name"))
+                for k in first_row_check
+            ):
+                header_mapped = True
+                for idx, k in enumerate(first_row_check):
+                    if any(term in k for term in ("register", "regno", "roll", "ticket", "htno")):
+                        col_map["roll"] = idx
+                    elif "name" in k:
+                        col_map["name"] = idx
+                    elif "email" in k or "mail" in k:
+                        col_map["email"] = idx
+                    elif "year" in k or "class" in k:
+                        col_map["year"] = idx
+                continue
 
-        # Extract by mapped column or position
-        roll = parts[col_map["roll"]].strip().upper() if len(parts) > col_map["roll"] else ""
-        name = parts[col_map["name"]].strip() if len(parts) > col_map["name"] else ""
-        email = parts[col_map["email"]].strip().lower() if len(parts) > col_map["email"] else ""
-        year_raw = parts[col_map["year"]].strip() if len(parts) > col_map["year"] else ""
+            # Extract by mapped column or position
+            roll = parts[col_map["roll"]].strip().upper() if len(parts) > col_map["roll"] else ""
+            name = parts[col_map["name"]].strip() if len(parts) > col_map["name"] else ""
+            email = parts[col_map["email"]].strip().lower() if len(parts) > col_map["email"] else ""
+            year_raw = parts[col_map["year"]].strip() if len(parts) > col_map["year"] else ""
 
-        # Skip comment or duplicate header lines
-        if roll.startswith("#") or roll in ("ROLL", "ROLLNUMBER", "ROLL_NUMBER", "ROLL NUMBER", "ROLLNO"):
-            continue
+            # Skip comment or duplicate header lines
+            if roll.startswith("#") or roll in ("ROLL", "ROLLNUMBER", "ROLL_NUMBER", "ROLL NUMBER", "ROLLNO", "REGISTER", "REGISTERNUMBER", "REGNO"):
+                continue
 
-        # If email and name got swapped (e.g. column 1 was email and 2 was name)
-        if "@" in name and "@" not in email:
-            name, email = email, name
+            # If email and name got swapped (e.g. column 1 was email and 2 was name)
+            if "@" in name and "@" not in email:
+                name, email = email, name
 
-        if not roll:
+            if not roll:
+                skipped += 1
+                errors.append(ImportValidationRow(
+                    row_number=row_num,
+                    roll_number="",
+                    email=email,
+                    name=name,
+                    academic_year=0,
+                    status="error",
+                    error="Line missing roll number"
+                ))
+                continue
+
+            # Handle FDH rolls
+            if "fdh" in roll.lower():
+                clean_email = (email or "").strip().lower()
+                if clean_email and clean_email in batch_emails:
+                    roll = batch_emails[clean_email].roll_number
+                else:
+                    ex_p = None
+                    if clean_email:
+                        ex_p = (await db.execute(select(Participant).where(Participant.email == clean_email))).scalar_one_or_none()
+                    if ex_p and ex_p.roll_number.startswith("FDH"):
+                        roll = ex_p.roll_number
+                    else:
+                        fdh_counter += 1
+                        roll = f"FDH{fdh_counter}"
+            else:
+                roll = re.sub(r'\s+', '', roll).upper()
+
+            if not name:
+                name = roll
+            else:
+                name = re.sub(r'\s+', ' ', name).strip()
+
+            year = parse_academic_year(year_raw)
+            email = sanitize_email(email, roll)
+
+            # In-batch duplicate check
+            if roll in batch_rolls or email in batch_emails:
+                existing_batch_p = batch_rolls.get(roll) or batch_emails.get(email)
+                existing_batch_p.name = name
+                existing_batch_p.email = email
+                existing_batch_p.academic_year = year
+                existing_batch_p.is_enabled = True
+                imported += 1
+                continue
+
+            # DB duplicate check
+            existing_p = (await db.execute(
+                select(Participant).where(
+                    (Participant.roll_number == roll) | (Participant.email == email)
+                )
+            )).scalar_one_or_none()
+
+            if existing_p:
+                existing_p.roll_number = roll
+                existing_p.name = name
+                existing_p.email = email
+                existing_p.academic_year = year
+                existing_p.is_enabled = True
+                batch_rolls[roll] = existing_p
+                batch_emails[email] = existing_p
+                imported += 1
+            else:
+                pin = roll
+                new_participant = Participant(
+                    roll_number=roll,
+                    email=email,
+                    name=name,
+                    academic_year=year,
+                    hashed_pin=hash_pin(pin),
+                    is_enabled=True
+                )
+                db.add(new_participant)
+                batch_rolls[roll] = new_participant
+                batch_emails[email] = new_participant
+                imported += 1
+
+        except Exception as row_err:
             skipped += 1
             errors.append(ImportValidationRow(
                 row_number=row_num,
-                roll_number="",
-                email=email,
-                name=name,
+                roll_number=roll or "",
+                email=email or "",
+                name=name or "",
                 academic_year=0,
                 status="error",
-                error="Line missing roll number"
+                error=f"Line processing error: {str(row_err)}"
             ))
-            continue
 
-        if not name:
-            name = roll
-
-        year = parse_academic_year(year_raw)
-        email = sanitize_email(email, roll)
-
-        # Check if email is already taken by ANOTHER roll number
-        email_conflict = await db.execute(
-            select(Participant.id).where(
-                (Participant.email == email) & (Participant.roll_number != roll)
-            )
+    try:
+        await db.commit()
+    except Exception as commit_err:
+        await db.rollback()
+        errors.append(ImportValidationRow(
+            row_number=0,
+            roll_number="",
+            email="",
+            name="",
+            academic_year=0,
+            status="error",
+            error=f"Database commit error: {str(commit_err)}"
+        ))
+        return ImportResult(
+            total_rows=row_num,
+            imported=0,
+            skipped=row_num,
+            errors=errors
         )
-        if email_conflict.scalar_one_or_none():
-            clean_roll = re.sub(r'[^a-z0-9]', '', roll.lower()) or "student"
-            email = f"{clean_roll}_{email}"
 
-        pin = roll.strip().upper()
-
-        # Upsert
-        existing = await db.execute(
-            select(Participant).where(Participant.roll_number == roll)
-        )
-        existing_p = existing.scalar_one_or_none()
-
-        if existing_p:
-            existing_p.name = name
-            existing_p.email = email
-            existing_p.academic_year = year
-            existing_p.is_enabled = True
-            existing_p.hashed_pin = hash_pin(pin)
-            imported += 1
-        else:
-            new_participant = Participant(
-                roll_number=roll,
-                email=email,
-                name=name,
-                academic_year=year,
-                hashed_pin=hash_pin(pin),
-                is_enabled=True
-            )
-            db.add(new_participant)
-            imported += 1
-
-    await db.commit()
     return ImportResult(
         total_rows=row_num,
         imported=imported,
