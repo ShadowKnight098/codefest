@@ -268,9 +268,9 @@ async def get_or_start_l2_attempt(
         val_m = q_med_setting.scalar_one_or_none()
         val_h = q_hard_setting.scalar_one_or_none()
 
-        quota_easy = int(val_e) if val_e and int(val_e) > 0 else 3
-        quota_medium = int(val_m) if val_m and int(val_m) > 0 else 3
-        quota_hard = int(val_h) if val_h and int(val_h) > 0 else 2
+        quota_easy = int(val_e) if val_e and int(val_e) > 0 else 5
+        quota_medium = int(val_m) if val_m and int(val_m) > 0 else 5
+        quota_hard = int(val_h) if val_h and int(val_h) > 0 else 5
 
         # 1. Pull eligible pool for participant's academic year (fallback to academic_year IN (2, 3))
         pool_res = await db.execute(

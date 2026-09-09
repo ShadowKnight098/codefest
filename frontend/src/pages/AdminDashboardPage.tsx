@@ -79,7 +79,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   const [showEditProbModal, setShowEditProbModal] = useState<boolean>(false);
   const [editProbForm, setEditProbForm] = useState<any>(null);
   const [showL2QuotaModal, setShowL2QuotaModal] = useState<boolean>(false);
-  const [quotaForm, setQuotaForm] = useState({ quota_easy: 3, quota_medium: 3, quota_hard: 2 });
+  const [quotaForm, setQuotaForm] = useState({ quota_easy: 5, quota_medium: 5, quota_hard: 5 });
   const [newL2Question, setNewL2Question] = useState({
     question_id: '',
     academic_year: 2,

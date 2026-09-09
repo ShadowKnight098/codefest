@@ -74,7 +74,7 @@ const PRESET_STATES: Record<string, DisplayStateConfig> = {
   },
   'LEVEL2_AVAILABLE': {
     r1: { status: 'Completed', sub: 'Assessment submitted' },
-    r2: { status: 'Available', sub: 'Debugging Challenge · 10 Questions · 60 minutes', action: 'Enter Assessment' },
+    r2: { status: 'Available', sub: 'Debugging Challenge · 15 Questions · 45 Marks · 60 minutes', action: 'Enter Assessment' },
     r3: { status: 'Locked', sub: 'Evaluated manually' },
     panel: {
       type: 'default',
@@ -318,7 +318,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                     {backendState?.level2_result
                       ? 'Assessment Submitted · Shortlisted candidates will be notified via email'
                       : backendState?.can_start_level2
-                      ? 'Debugging Challenge · 10 Questions · 60 minutes'
+                      ? 'Debugging Challenge · 15 Questions · 45 Marks · 60 minutes'
                       : displayConfig.r2.sub}
                   </div>
                 </div>

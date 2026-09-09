@@ -158,6 +158,24 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
     };
   }, [participant]);
 
+  // Keyboard shortcuts (1-4 or A-D to select option, ArrowLeft/Right to navigate)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+      if (['1', 'a', 'A'].includes(e.key)) handleSelectOption('a');
+      else if (['2', 'b', 'B'].includes(e.key)) handleSelectOption('b');
+      else if (['3', 'c', 'C'].includes(e.key)) handleSelectOption('c');
+      else if (['4', 'd', 'D'].includes(e.key)) handleSelectOption('d');
+      else if (e.key === 'ArrowRight') {
+        setCurrentIndex((prev) => Math.min(questions.length - 1, prev + 1));
+      } else if (e.key === 'ArrowLeft') {
+        setCurrentIndex((prev) => Math.max(0, prev - 1));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [questions, currentIndex, submitResult]);
+
   // Auto-save selected option on click
   const handleSelectOption = async (optionKey: string) => {
     if (!currentQ || submitResult) return;
@@ -413,94 +431,59 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
         }
       />
 
-      {/* THREE-COLUMN LAYOUT (Left: 22%, Center: 54%, Right: 24%) */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* LEFT COLUMN: Question Navigator */}
-        <div className="hidden lg:flex w-[22%] bg-[#F6F6F2] border-r border-[#DBD7C9] p-6 flex-col justify-between overflow-y-auto">
-          <div>
-            <div className="text-[11.5px] font-bold tracking-[0.08em] text-[#59626F] uppercase">
-              CSE (AI &amp; ML) · CODEFEST
-            </div>
-            <div className="font-serif text-[17px] font-bold text-[#1B2029] mt-0.5">
-              Level 2 · Debugging
-            </div>
-
-            <div className="mt-5 pt-5 border-t border-[#DBD7C9]">
-              <div className="text-[12px] font-semibold text-[#59626F] uppercase tracking-[0.04em] mb-3">
-                Question Navigator
+      {/* THREE-COLUMN LAYOUT: Left (Code & Statement: 44%), Center (Options & Nav: 34%), Right (Tracker & Status: 22%) */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        {/* LEFT COLUMN: Question Statement & Code Snippet (44%) */}
+        <div className="w-full lg:w-[44%] xl:w-[45%] bg-white border-b lg:border-b-0 lg:border-r border-[#DBD7C9] p-6 lg:p-8 overflow-y-auto flex flex-col justify-between">
+          {currentQ ? (
+            <div>
+              {/* Question metadata */}
+              <div className="flex items-center space-x-2.5 pb-3 mb-4 border-b border-[#DBD7C9]">
+                <span className="font-mono text-xs font-bold bg-[#EEF1F6] text-[#16233F] px-2.5 py-1 rounded-[3px]">
+                  QUESTION {String(currentIndex + 1).padStart(2, '0')} / {String(questions.length).padStart(2, '0')}
+                </span>
+                <span className="meta-chip uppercase">
+                  {currentQ.language || 'Python'}
+                </span>
+                <span className={`px-2.5 py-0.5 rounded font-mono text-[11px] font-bold uppercase ${
+                  currentQ.difficulty.toLowerCase() === 'easy'
+                    ? 'bg-[#E8F3EC] text-[#1E7A46] border border-[#A9DFBF]'
+                    : currentQ.difficulty.toLowerCase() === 'hard'
+                    ? 'bg-[#FDEDEC] text-[#C0392B] border border-[#F5B7B1]'
+                    : 'bg-[#FEF9E7] text-[#B7950B] border border-[#F9E79F]'
+                }`}>
+                  {currentQ.difficulty} · {currentQ.marks} {currentQ.marks === 1 ? 'Mark' : 'Marks'}
+                </span>
               </div>
 
-              {/* Navigator Grid */}
-              <div className="grid grid-cols-4 gap-2 w-full">
-                {questions.map((q, idx) => {
-                  const isAttempted = Boolean(q.selected_option);
-                  const isCurrent = idx === currentIndex;
-
-                  let cellClass = 'nav-cell unattempted';
-                  if (isAttempted) cellClass = 'nav-cell attempted';
-                  if (isCurrent) {
-                    cellClass = isAttempted ? 'nav-cell current attempted' : 'nav-cell current';
-                  }
-
-                  return (
-                    <button
-                      key={q.id}
-                      onClick={() => setCurrentIndex(idx)}
-                      className={cellClass}
-                      title={`Question ${idx + 1}: ${isAttempted ? 'Answered' : 'Unanswered'}`}
-                      type="button"
-                    >
-                      {String(idx + 1).padStart(2, '0')}
-                    </button>
-                  );
-                })}
+              {/* Question Prompt / Problem statement */}
+              <div className="text-[15px] font-medium text-[#1B2029] leading-relaxed mb-3">
+                {currentQ.question}
               </div>
 
-              {/* Legend */}
-              <div className="mt-5 space-y-2 text-[11.5px] font-mono text-[#59626F] pt-4 border-t border-[#DBD7C9]">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3.5 h-3.5 rounded-[2px] bg-[#16233F]" />
-                  <span>Current Question</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-3.5 h-3.5 rounded-[2px] bg-[#E8F3EC] border border-[#A9DFBF]" />
-                  <span>Answered</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-3.5 h-3.5 rounded-[2px] bg-white border border-[#DBD7C9]" />
-                  <span>Unanswered</span>
-                </div>
-              </div>
+              {/* Code Snippet / Pattern Display */}
+              {renderCodeSnippet(currentQ.code)}
             </div>
-          </div>
+          ) : null}
 
-          <div className="p-3 bg-white border border-[#DBD7C9] rounded-[3px] text-[11.5px] text-[#59626F] leading-relaxed">
-            💡 <strong>Auto-Save Active:</strong> Clicking an option saves your answer immediately. You can switch questions at any time.
+          <div className="mt-4 p-3 bg-[#F6F6F2] border border-[#DBD7C9] rounded-[4px] text-[12px] text-[#59626F] leading-relaxed">
+            💡 <strong>Code Viewer:</strong> Analyze the snippet above. Select the correct completion or output from the <strong>Center Panel</strong>.
           </div>
         </div>
 
-        {/* CENTER COLUMN: Question & Answer (Statement, Code Snippet, 4 Options) */}
-        <div className="w-full lg:w-[54%] bg-white p-6 sm:p-10 lg:p-12 overflow-y-auto flex flex-col justify-between">
+        {/* CENTER COLUMN: The Options & Navigation (34%) */}
+        <div className="w-full lg:w-[34%] xl:w-[33%] bg-[#FAFAFA] border-b lg:border-b-0 lg:border-r border-[#DBD7C9] p-6 lg:p-7 overflow-y-auto flex flex-col justify-between">
           {currentQ ? (
             <div>
-              {/* Question metadata & Autosave indicator */}
-              <div className="flex items-start justify-between mb-3 border-b border-[#DBD7C9] pb-3">
-                <div className="flex items-center space-x-2.5">
-                  <span className="font-mono text-sm font-bold bg-[#EEF1F6] text-[#16233F] px-2.5 py-0.5 rounded-[3px]">
-                    QUESTION {String(currentIndex + 1).padStart(2, '0')} / {String(questions.length).padStart(2, '0')}
-                  </span>
-                  <span className="meta-chip uppercase">
-                    {currentQ.language || 'Python'}
-                  </span>
-                  <span className={`px-2 py-0.5 rounded font-mono text-[11px] font-bold uppercase ${
-                    currentQ.difficulty.toLowerCase() === 'easy'
-                      ? 'bg-[#E8F3EC] text-[#1E7A46] border border-[#A9DFBF]'
-                      : currentQ.difficulty.toLowerCase() === 'hard'
-                      ? 'bg-[#FDEDEC] text-[#C0392B] border border-[#F5B7B1]'
-                      : 'bg-[#FEF9E7] text-[#B7950B] border border-[#F9E79F]'
-                  }`}>
-                    {currentQ.difficulty} · {currentQ.marks} {currentQ.marks === 1 ? 'Mark' : 'Marks'}
-                  </span>
+              {/* Header with Autosave Status */}
+              <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#DBD7C9]">
+                <div>
+                  <div className="text-[11px] font-bold font-mono uppercase tracking-wider text-[#59626F]">
+                    Answer Choices
+                  </div>
+                  <div className="text-[14px] font-bold text-[#16233F]">
+                    Select One Option
+                  </div>
                 </div>
 
                 {/* Inline Autosave Indicator */}
@@ -515,31 +498,30 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
                     </span>
                   )}
                   {autosaveState === 'saved' && (
-                    <span className="text-[#1E7A46] font-medium">
-                      ✓ Saved
+                    <span className="text-[#1E7A46] font-medium flex items-center space-x-1">
+                      <span>✓</span>
+                      <span>Saved</span>
                     </span>
                   )}
                   {autosaveState === 'error' && (
                     <span className="text-[#AE2E22] font-medium">
-                      ⚠ Save failed, retry
+                      ⚠ Retry save
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Question Prompt */}
-              <div className="text-[16px] text-[#1B2029] leading-[1.6] mb-3 font-medium">
-                {currentQ.question}
+              {/* Prompt subtitle */}
+              <div className="text-xs font-semibold text-[#59626F] uppercase tracking-wider mb-3">
+                {currentQ.question.toLowerCase().includes('output')
+                  ? 'Select the predicted program output:'
+                  : currentQ.question.toLowerCase().includes('pattern')
+                  ? 'Select the correct pattern logic:'
+                  : 'Select the line of code that correctly fills the placeholder:'}
               </div>
 
-              {/* Read-only Code Snippet with Missing Line clearly marked */}
-              {renderCodeSnippet(currentQ.code)}
-
-              {/* 4 Selectable Options */}
-              <div className="mt-5 space-y-2.5">
-                <div className="text-xs font-semibold text-[#59626F] uppercase tracking-wider mb-1">
-                  Select the line of code that correctly fills the placeholder:
-                </div>
+              {/* 4 Selectable Option Cards */}
+              <div className="space-y-2.5">
                 {(currentQ.option_keys || ['a', 'b', 'c', 'd']).map((optKey, idx) => {
                   const optText = currentQ.options?.[optKey] || '';
                   const isSelected = currentQ.selected_option === optKey.toLowerCase();
@@ -549,100 +531,175 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
                     <button
                       key={optKey}
                       onClick={() => handleSelectOption(optKey)}
-                      className={`option-card group ${isSelected ? 'selected' : ''}`}
+                      className={`w-full text-left p-3.5 rounded-[5px] border transition-all flex items-start group ${
+                        isSelected
+                          ? 'border-[#16233F] ring-2 ring-[#16233F] bg-white shadow-sm'
+                          : 'border-[#DBD7C9] bg-white hover:border-[#16233F]/50 hover:bg-[#FDFDFD]'
+                      }`}
                       type="button"
                     >
                       <div
-                        className={`w-[20px] h-[20px] rounded-full border flex items-center justify-center mr-3 shrink-0 transition-colors ${
+                        className={`w-[22px] h-[22px] rounded-full border flex items-center justify-center mr-3 mt-0.5 shrink-0 transition-colors ${
                           isSelected
                             ? 'border-[#16233F] bg-[#16233F] text-white'
-                            : 'border-[#C6C1B0] bg-white group-hover:border-[#16233F]/50'
+                            : 'border-[#C6C1B0] bg-white group-hover:border-[#16233F]/60'
                         }`}
                       >
                         {isSelected && <div className="w-2 h-2 bg-white rounded-full" />}
                       </div>
 
-                      <div className="text-[13.5px] text-[#1B2029] font-mono leading-snug break-all">
-                        <span className="font-bold text-[#59626F] mr-2.5">
+                      <div className="flex-1 min-w-0">
+                        <span className="font-mono font-bold text-xs text-[#59626F] mr-2">
                           {letterLabel}.
                         </span>
-                        <span>{optText}</span>
+                        <span className="text-[13.5px] font-mono text-[#1B2029] leading-snug break-words whitespace-pre-wrap">
+                          {optText}
+                        </span>
                       </div>
                     </button>
                   );
                 })}
               </div>
 
-              {/* Navigation: Prev / Next */}
-              <div className="mt-8 pt-6 border-t border-[#DBD7C9] flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-                  disabled={currentIndex === 0}
-                  className="px-4 py-2 bg-[#F6F6F2] border border-[#C6C1B0] rounded-[3px] text-xs font-semibold text-[#16233F] hover:bg-[#DBD7C9] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  ← Previous Question
-                </button>
-
-                {currentIndex < questions.length - 1 ? (
+              {/* Clear Selection Button */}
+              {currentQ.selected_option && (
+                <div className="text-right mt-2">
                   <button
+                    onClick={() => handleSelectOption(currentQ.selected_option!)}
+                    className="text-[11.5px] text-[#59626F] hover:text-[#AE2E22] underline font-mono"
                     type="button"
-                    onClick={() => setCurrentIndex((prev) => Math.min(questions.length - 1, prev + 1))}
-                    className="px-5 py-2 bg-[#16233F] text-white rounded-[3px] text-xs font-semibold hover:bg-[#25355B] transition-colors shadow-sm"
                   >
-                    Next Question →
+                    ✕ Clear selection
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowSubmitModal(true)}
-                    className="px-5 py-2 bg-[#1E7E34] text-white rounded-[3px] text-xs font-semibold hover:bg-[#166027] transition-colors shadow-sm"
-                  >
-                    Review &amp; Final Submit →
-                  </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           ) : null}
-        </div>
 
-        {/* RIGHT COLUMN: Status & Live Proctoring (24%) */}
-        <div className="hidden lg:flex w-[24%] bg-[#F6F6F2] border-l border-[#DBD7C9] p-6 flex-col justify-between overflow-y-auto">
-          <div className="space-y-5">
-            <div className="text-[12px] font-semibold text-[#59626F] uppercase tracking-[0.04em]">
-              Assessment Status
+          {/* Navigation Controls */}
+          <div className="mt-8 pt-5 border-t border-[#DBD7C9]">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
+                disabled={currentIndex === 0}
+                className="px-4 py-2 bg-white border border-[#C6C1B0] rounded-[3px] text-xs font-semibold text-[#16233F] hover:bg-[#F6F6F2] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                ← Previous
+              </button>
+
+              {currentIndex < questions.length - 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentIndex((prev) => Math.min(questions.length - 1, prev + 1))}
+                  className="px-5 py-2 bg-[#16233F] text-white rounded-[3px] text-xs font-semibold hover:bg-[#25355B] transition-colors shadow-sm"
+                >
+                  Next Question →
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowSubmitModal(true)}
+                  className="px-5 py-2 bg-[#1E7E34] text-white rounded-[3px] text-xs font-semibold hover:bg-[#166027] transition-colors shadow-sm"
+                >
+                  Review &amp; Submit →
+                </button>
+              )}
             </div>
 
-            {/* Counts Card */}
-            <div className="bg-white border border-[#DBD7C9] rounded-[4px] p-4 space-y-3 font-mono text-xs">
-              <div className="flex justify-between items-center pb-2 border-b border-[#DBD7C9]">
+            <div className="text-[11px] font-mono text-[#8B93A0] text-center mt-3">
+              Keyboard: [1-4] or [A-D] to select · [←/→] to navigate
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Question Tracker & Status (22%) */}
+        <div className="hidden lg:flex lg:w-[22%] xl:w-[22%] bg-[#F6F6F2] p-5 flex-col justify-between overflow-y-auto">
+          <div className="space-y-5">
+            {/* Tracker Header */}
+            <div>
+              <div className="text-[11px] font-bold font-mono tracking-wider text-[#59626F] uppercase">
+                QUESTION TRACKER
+              </div>
+              <div className="font-serif text-[16px] font-bold text-[#1B2029]">
+                15 Questions · 45 Marks
+              </div>
+
+              {/* 15-Question Grid (5x3) */}
+              <div className="grid grid-cols-5 gap-1.5 w-full mt-3">
+                {questions.map((q, idx) => {
+                  const isAttempted = Boolean(q.selected_option);
+                  const isCurrent = idx === currentIndex;
+
+                  let cellClass = 'h-9 rounded-[3px] font-mono text-[12px] font-bold flex items-center justify-center transition-all ';
+                  if (isCurrent) {
+                    cellClass += 'bg-[#16233F] text-white ring-2 ring-[#16233F] shadow-sm';
+                  } else if (isAttempted) {
+                    cellClass += 'bg-[#E8F3EC] text-[#1E7A46] border border-[#A9DFBF]';
+                  } else {
+                    cellClass += 'bg-white text-[#59626F] border border-[#DBD7C9] hover:border-[#16233F]/40';
+                  }
+
+                  return (
+                    <button
+                      key={q.id}
+                      onClick={() => setCurrentIndex(idx)}
+                      className={cellClass}
+                      title={`Q${idx + 1} (${q.difficulty}, ${q.marks}M): ${isAttempted ? 'Answered' : 'Unanswered'}`}
+                      type="button"
+                    >
+                      {String(idx + 1).padStart(2, '0')}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Legend */}
+              <div className="mt-3.5 space-y-1.5 text-[11px] font-mono text-[#59626F] pt-3 border-t border-[#DBD7C9]">
+                <div className="flex items-center space-x-2">
+                  <div className="w-3.5 h-3.5 rounded-[2px] bg-[#16233F]" />
+                  <span>Current Question</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3.5 h-3.5 rounded-[2px] bg-[#E8F3EC] border border-[#A9DFBF]" />
+                  <span>Answered</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3.5 h-3.5 rounded-[2px] bg-white border border-[#DBD7C9]" />
+                  <span>Unanswered</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Assessment Progress & Marks Breakdown */}
+            <div className="bg-white border border-[#DBD7C9] rounded-[4px] p-3.5 space-y-2 font-mono text-xs">
+              <div className="flex justify-between items-center pb-1.5 border-b border-[#DBD7C9]">
                 <span className="text-[#59626F]">Total Questions:</span>
-                <span className="font-bold text-[#16233F] text-sm">{questions.length}</span>
+                <span className="font-bold text-[#16233F]">{questions.length}</span>
               </div>
-              <div className="flex justify-between items-center pb-2 border-b border-[#DBD7C9]">
+              <div className="flex justify-between items-center pb-1.5 border-b border-[#DBD7C9]">
                 <span className="text-[#59626F]">Answered:</span>
-                <span className="font-bold text-[#1E7A46] text-sm">{answeredCount}</span>
+                <span className="font-bold text-[#1E7A46]">{answeredCount} / {questions.length}</span>
               </div>
-              <div className="flex justify-between items-center pb-2 border-b border-[#DBD7C9]">
+              <div className="flex justify-between items-center pb-1.5 border-b border-[#DBD7C9]">
                 <span className="text-[#59626F]">Unanswered:</span>
-                <span className="font-bold text-[#D97706] text-sm">{unansweredCount}</span>
+                <span className="font-bold text-[#D97706]">{unansweredCount}</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[#59626F]">Current Position:</span>
-                <span className="font-bold text-[#16233F] text-sm">{currentIndex + 1} / {questions.length}</span>
+              <div className="pt-1 text-[11px] text-[#59626F] leading-snug">
+                <div>• 5 Easy (1M each = 5M)</div>
+                <div>• 5 Medium (3M each = 15M)</div>
+                <div>• 5 Hard (5M each = 25M)</div>
+                <div className="font-bold text-[#16233F] mt-1">Total: 45 Marks</div>
               </div>
             </div>
 
             {/* Proctoring Card */}
-            <div className="bg-white border border-[#DBD7C9] rounded-[4px] p-4 space-y-2.5">
+            <div className="bg-white border border-[#DBD7C9] rounded-[4px] p-3.5 space-y-2">
               <div className="flex items-center space-x-2 font-mono text-[11px] font-bold text-[#16233F]">
                 <span className={`w-2.5 h-2.5 rounded-full ${tabSwitchCount === 0 ? 'bg-[#1E7A46]' : 'bg-[#DC2626]'} animate-pulse`} />
                 <span>PROCTORING ACTIVE</span>
               </div>
-              <p className="text-[11.5px] text-[#59626F] leading-relaxed">
-                Tab switching or minimizing the window is recorded. On the <strong>{maxViolations}th strike</strong>, your assessment is automatically terminated.
-              </p>
-              <div className="pt-2 border-t border-[#DBD7C9] flex justify-between items-center font-mono text-xs">
+              <div className="pt-1 border-t border-[#DBD7C9] flex justify-between items-center font-mono text-xs">
                 <span className="text-[#59626F]">Tab Switches:</span>
                 <strong className={
                   tabSwitchCount === 0 ? 'text-[#1E7A46]' :
@@ -656,18 +713,86 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
             {/* Assessment Submit Button */}
             <button
               onClick={() => setShowSubmitModal(true)}
-              className="w-full py-3 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] transition-colors shadow-sm flex items-center justify-center space-x-2"
+              className="w-full py-2.5 bg-[#1E7E34] text-white text-xs font-bold rounded-[3px] hover:bg-[#166027] transition-colors shadow-sm flex items-center justify-center space-x-1.5"
+              type="button"
             >
               <span>Submit Assessment</span>
               <span>→</span>
             </button>
           </div>
 
-          <div className="text-[11px] font-mono text-[#8B93A0]">
-            Candidate: {participant?.roll_number} · Year {participant?.academic_year}
+          <div className="text-[11px] font-mono text-[#8B93A0] pt-3">
+            Roll: {participant?.roll_number} · Year {participant?.academic_year}
           </div>
         </div>
       </div>
+
+      {/* Mobile / Slide-Over Drawer for Question Tracker */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden flex">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} />
+          <div className="relative ml-auto w-4/5 max-w-sm bg-[#F6F6F2] h-full p-5 overflow-y-auto flex flex-col justify-between shadow-2xl z-50">
+            <div>
+              <div className="flex items-center justify-between pb-3 border-b border-[#DBD7C9]">
+                <span className="font-bold text-[#16233F] text-sm">Question Tracker</span>
+                <button onClick={() => setDrawerOpen(false)} className="font-bold text-lg p-1 text-[#59626F]">✕</button>
+              </div>
+
+              <div className="grid grid-cols-5 gap-2 w-full mt-4">
+                {questions.map((q, idx) => {
+                  const isAttempted = Boolean(q.selected_option);
+                  const isCurrent = idx === currentIndex;
+                  return (
+                    <button
+                      key={q.id}
+                      onClick={() => {
+                        setCurrentIndex(idx);
+                        setDrawerOpen(false);
+                      }}
+                      className={`h-9 rounded-[3px] font-mono text-xs font-bold flex items-center justify-center ${
+                        isCurrent
+                          ? 'bg-[#16233F] text-white'
+                          : isAttempted
+                          ? 'bg-[#E8F3EC] text-[#1E7A46] border border-[#A9DFBF]'
+                          : 'bg-white text-[#59626F] border border-[#DBD7C9]'
+                      }`}
+                      type="button"
+                    >
+                      {String(idx + 1).padStart(2, '0')}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-5 p-3 bg-white border border-[#DBD7C9] rounded font-mono text-xs space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-[#59626F]">Answered:</span>
+                  <strong className="text-[#1E7A46]">{answeredCount} / {questions.length}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#59626F]">Unanswered:</span>
+                  <strong className="text-[#D97706]">{unansweredCount}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#59626F]">Total Marks:</span>
+                  <strong className="text-[#16233F]">45 Marks</strong>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setDrawerOpen(false);
+                setShowSubmitModal(true);
+              }}
+              className="w-full py-3 bg-[#1E7E34] text-white text-xs font-bold rounded mt-4"
+              type="button"
+            >
+              Submit Assessment →
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Modal */}
       {showSubmitModal && (

@@ -149,7 +149,7 @@ async def get_dashboard_state(
     l2_summary = ResultSummary(
         round_number=2,
         score=0,
-        total_marks=60,
+        total_marks=45,
         is_qualified=False,
         status_label="Submitted" if (coding_attempt and coding_attempt.status == "SUBMITTED") else ("In Progress" if coding_attempt else "Locked")
     ) if (r2_result or coding_attempt) else None
