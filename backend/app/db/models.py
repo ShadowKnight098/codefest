@@ -154,7 +154,8 @@ class CodingProblem(Base):
     constraints = Column(Text, nullable=True)
     time_limit_ms = Column(Integer, default=2000, nullable=False)
     memory_limit_mb = Column(Integer, default=256, nullable=False)
-    marks = Column(Integer, default=20, nullable=False)
+    marks = Column(Integer, default=15, nullable=False) # 15 for EASY, 30 for HARD
+    difficulty = Column(String(20), default="EASY", nullable=False) # "EASY" or "HARD"
     order_num = Column(Integer, default=1, nullable=False)
     starter_code = Column(Text, nullable=True) # JSON string of per-language starter code or plain string
 
@@ -182,6 +183,7 @@ class CodingAttempt(Base):
     duration_seconds = Column(Integer, default=3600, nullable=False) # 60 mins default
     status = Column(String(50), default="IN_PROGRESS", nullable=False) # NOT_STARTED, IN_PROGRESS, SUBMITTED, TERMINATED
     submitted_at = Column(DateTime(timezone=True), nullable=True)
+    assigned_problem_ids = Column(Text, nullable=True) # JSON array of exactly 2 problem IDs: [easy_id, hard_id]
 
     __table_args__ = (
         UniqueConstraint("participant_id", "round_id", name="uq_coding_attempt_participant_round"),

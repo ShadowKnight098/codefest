@@ -74,7 +74,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     constraints: '',
     time_limit_ms: 2000,
     memory_limit_mb: 256,
-    marks: 20,
+    marks: 15,
+    difficulty: 'EASY' as 'EASY' | 'HARD',
     order_num: 1,
     starter_code: {
       python: '',
@@ -685,6 +686,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         parsedStarter.python = p.starter_code;
       }
     }
+    const diff = (p.difficulty || (p.marks > 20 ? 'HARD' : 'EASY')) as 'EASY' | 'HARD';
     setEditProbForm({
       id: p.id,
       title: p.title,
@@ -692,7 +694,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
       constraints: p.constraints || '',
       time_limit_ms: p.time_limit_ms,
       memory_limit_mb: p.memory_limit_mb,
-      marks: p.marks,
+      marks: diff === 'EASY' ? 15 : 30,
+      difficulty: diff,
       order_num: p.order_num,
       starter_code: parsedStarter
     });
@@ -704,13 +707,15 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     if (!editProbForm) return;
     setLoading(true);
     try {
+      const diff = ((editProbForm.difficulty || (editProbForm.marks > 20 ? 'HARD' : 'EASY')) as string).toUpperCase();
       const payload = {
         title: editProbForm.title,
         description: editProbForm.description,
         constraints: editProbForm.constraints,
         time_limit_ms: editProbForm.time_limit_ms,
         memory_limit_mb: editProbForm.memory_limit_mb,
-        marks: editProbForm.marks,
+        marks: diff === 'EASY' ? 15 : 30,
+        difficulty: diff,
         order_num: editProbForm.order_num,
         starter_code: JSON.stringify(editProbForm.starter_code)
       };
@@ -733,8 +738,11 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     e.preventDefault();
     setLoading(true);
     try {
+      const diff = (newProb.difficulty || 'EASY').toUpperCase();
       const payload = {
         ...newProb,
+        marks: diff === 'EASY' ? 15 : 30,
+        difficulty: diff,
         starter_code: JSON.stringify(newProb.starter_code)
       };
       await apiFetch('/admin/coding-problems', {
@@ -749,7 +757,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         constraints: '',
         time_limit_ms: 2000,
         memory_limit_mb: 256,
-        marks: 20,
+        marks: 15,
+        difficulty: 'EASY',
         order_num: (problems.length || 0) + 1,
         starter_code: { python: '', c: '', cpp: '', java: '' },
         test_cases: [
@@ -1668,6 +1677,29 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                 </button>
               </div>
 
+              {/* Random Level 2 Assignment Banner */}
+              <div className="bg-[#EEF1F6] border border-[#CBD5E1] rounded-[6px] p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-sm">
+                <div className="flex items-center space-x-3 text-xs">
+                  <span className="text-2xl">🎲</span>
+                  <div>
+                    <strong className="text-[#16233F] text-sm block font-bold">Random Problem Assignment Active (2 Problems · Total 45 Marks)</strong>
+                    <p className="text-[#475569] text-xs mt-0.5 leading-relaxed">
+                      Every participant gets assigned exactly <strong>2 problems</strong>:
+                      <strong className="ml-1 text-[#1E7A46]">Problem 1 = 1 Random EASY (15 Marks)</strong> and 
+                      <strong className="ml-1 text-[#C0392B]">Problem 2 = 1 Random HARD (30 Marks)</strong>.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2 font-mono text-xs shrink-0">
+                  <span className="px-3 py-1 bg-[#E8F3EC] border border-[#A9DFBF] rounded text-[#1E7A46] font-bold">
+                    🟢 {problems.filter(p => (p.difficulty || (p.marks <= 20 ? 'EASY' : 'HARD')) === 'EASY').length} Easy in Pool
+                  </span>
+                  <span className="px-3 py-1 bg-[#FDEDEC] border border-[#F5B7B1] rounded text-[#C0392B] font-bold">
+                    🔴 {problems.filter(p => (p.difficulty || (p.marks <= 20 ? 'EASY' : 'HARD')) === 'HARD').length} Hard in Pool
+                  </span>
+                </div>
+              </div>
+
               <div className="space-y-5">
                 {problems.map((p) => (
                   <div key={p.id} className="bg-white border border-[#DBD7C9] rounded-[6px] p-5 text-xs space-y-4 shadow-sm">
@@ -1677,10 +1709,14 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                           P{p.order_num}
                         </span>
                         <span className="font-serif font-bold text-base text-[#16233F]">{p.title}</span>
-                        <span className={`px-2 py-0.5 font-mono rounded text-[10px] font-bold uppercase ${
-                          p.order_num === 1 ? 'bg-[#E8F3EC] text-[#1E7A46]' : 'bg-[#FDEDEC] text-[#C0392B]'
+                        <span className={`px-2.5 py-0.5 font-mono rounded text-[10.5px] font-bold uppercase ${
+                          (p.difficulty || (p.marks > 20 ? 'HARD' : 'EASY')) === 'EASY'
+                            ? 'bg-[#E8F3EC] text-[#1E7A46] border border-[#A9DFBF]'
+                            : 'bg-[#FDEDEC] text-[#C0392B] border border-[#F5B7B1]'
                         }`}>
-                          {p.marks} Marks · {p.order_num === 1 ? 'EASY' : 'HARD'}
+                          {(p.difficulty || (p.marks > 20 ? 'HARD' : 'EASY')) === 'EASY'
+                            ? '🟢 EASY · 15 Marks (P1 Pool)'
+                            : '🔴 HARD · 30 Marks (P2 Pool)'}
                         </span>
                         {p.starter_code && (
                           <span className="px-2 py-0.5 bg-[#EEF2FF] text-[#4338CA] border border-[#C7D2FE] font-mono rounded text-[10px] font-bold">
@@ -1838,17 +1874,23 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Marks</label>
-                            <input
-                              type="number"
-                              value={newProb.marks}
-                              onChange={(e) => setNewProb({ ...newProb, marks: Number(e.target.value) })}
-                              className="w-full border border-[#C6C1B0] p-1.5 rounded"
-                              required
-                            />
+                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">
+                              Difficulty Pool (Fixed Marks)
+                            </label>
+                            <select
+                              value={newProb.difficulty}
+                              onChange={(e) => {
+                                const d = e.target.value as 'EASY' | 'HARD';
+                                setNewProb({ ...newProb, difficulty: d, marks: d === 'EASY' ? 15 : 30 });
+                              }}
+                              className="w-full border border-[#C6C1B0] p-1.5 rounded font-semibold text-xs bg-white text-[#16233F]"
+                            >
+                              <option value="EASY">🟢 EASY — 15 Marks (P1 Pool)</option>
+                              <option value="HARD">🔴 HARD — 30 Marks (P2 Pool)</option>
+                            </select>
                           </div>
                           <div>
-                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Order #</label>
+                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Display Order #</label>
                             <input
                               type="number"
                               value={newProb.order_num}
@@ -2143,17 +2185,23 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Marks</label>
-                            <input
-                              type="number"
-                              value={editProbForm.marks}
-                              onChange={(e) => setEditProbForm({ ...editProbForm, marks: Number(e.target.value) })}
-                              className="w-full border border-[#C6C1B0] p-1.5 rounded"
-                              required
-                            />
+                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">
+                              Difficulty Pool (Fixed Marks)
+                            </label>
+                            <select
+                              value={editProbForm.difficulty || (editProbForm.marks > 20 ? 'HARD' : 'EASY')}
+                              onChange={(e) => {
+                                const d = e.target.value as 'EASY' | 'HARD';
+                                setEditProbForm({ ...editProbForm, difficulty: d, marks: d === 'EASY' ? 15 : 30 });
+                              }}
+                              className="w-full border border-[#C6C1B0] p-1.5 rounded font-semibold text-xs bg-white text-[#16233F]"
+                            >
+                              <option value="EASY">🟢 EASY — 15 Marks (P1 Pool)</option>
+                              <option value="HARD">🔴 HARD — 30 Marks (P2 Pool)</option>
+                            </select>
                           </div>
                           <div>
-                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Order #</label>
+                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Display Order #</label>
                             <input
                               type="number"
                               value={editProbForm.order_num}

@@ -37,6 +37,9 @@ async def create_coding_problem(
     if not round_2:
         raise HTTPException(status_code=400, detail="Round 2 (Coding) not found. Create round 2 first.")
 
+    diff = (payload.difficulty or "EASY").upper()
+    calc_marks = 15 if diff == "EASY" else 30
+
     prob = CodingProblem(
         round_id=round_2.id,
         title=payload.title.strip(),
@@ -44,7 +47,8 @@ async def create_coding_problem(
         constraints=payload.constraints,
         time_limit_ms=payload.time_limit_ms,
         memory_limit_mb=payload.memory_limit_mb,
-        marks=payload.marks,
+        marks=calc_marks,
+        difficulty=diff,
         order_num=payload.order_num,
         starter_code=payload.starter_code
     )
@@ -95,7 +99,11 @@ async def update_coding_problem(
         prob.time_limit_ms = payload.time_limit_ms
     if payload.memory_limit_mb is not None:
         prob.memory_limit_mb = payload.memory_limit_mb
-    if payload.marks is not None:
+    if payload.difficulty is not None:
+        diff = payload.difficulty.upper()
+        prob.difficulty = diff
+        prob.marks = 15 if diff == "EASY" else 30
+    elif payload.marks is not None:
         prob.marks = payload.marks
     if payload.order_num is not None:
         prob.order_num = payload.order_num

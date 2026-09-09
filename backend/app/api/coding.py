@@ -1,4 +1,6 @@
 import asyncio
+import json
+import random
 from datetime import datetime, timezone
 from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -35,6 +37,7 @@ class CodingProblemOut(BaseModel):
     memory_limit_mb: int
     marks: int
     order_num: int
+    difficulty: Optional[str] = "EASY"
     starter_code: Optional[str] = None
     sample_test_cases: List[PublicTestCase]
 
@@ -192,17 +195,73 @@ async def get_or_start_coding_attempt(
         elapsed = (now - started_at).total_seconds()
         remaining = max(0, int(attempt.duration_seconds - elapsed))
 
-    # Fetch problems with public test cases only (HIDDEN TEST CASES NEVER LEAKED)
+    # Fetch all candidate problems for Round 2 with test cases
     probs_res = await db.execute(
         select(CodingProblem)
         .options(selectinload(CodingProblem.test_cases))
         .where(CodingProblem.round_id == round_2.id)
         .order_by(CodingProblem.order_num.asc())
     )
-    problems = probs_res.scalars().all()
+    all_problems = probs_res.scalars().all()
+
+    # Determine assigned problem IDs for this attempt
+    assigned_ids = []
+    if attempt.assigned_problem_ids:
+        try:
+            assigned_ids = json.loads(attempt.assigned_problem_ids)
+        except Exception:
+            assigned_ids = []
+
+    # If not yet assigned (or fewer than 2 problems assigned), perform random selection:
+    # Problem 1 = 1 random EASY problem (15 marks)
+    # Problem 2 = 1 random HARD problem (30 marks)
+    if not assigned_ids or len(assigned_ids) < 2:
+        easy_pool = [
+            p for p in all_problems 
+            if getattr(p, "difficulty", "EASY") == "EASY" or p.order_num == 1 or p.marks <= 20
+        ]
+        hard_pool = [
+            p for p in all_problems 
+            if getattr(p, "difficulty", "EASY") == "HARD" or p.order_num >= 2 or p.marks > 20
+        ]
+
+        # Select 1 random EASY problem
+        chosen_easy = random.choice(easy_pool) if easy_pool else (all_problems[0] if all_problems else None)
+
+        # Select 1 random HARD problem (ensuring it's distinct from chosen_easy if possible)
+        hard_candidates = [p for p in hard_pool if chosen_easy is None or p.id != chosen_easy.id]
+        if not hard_candidates:
+            hard_candidates = [p for p in all_problems if chosen_easy is None or p.id != chosen_easy.id]
+        chosen_hard = random.choice(hard_candidates) if hard_candidates else (
+            random.choice(hard_pool) if hard_pool else None
+        )
+
+        assigned_ids = []
+        if chosen_easy:
+            assigned_ids.append(chosen_easy.id)
+        if chosen_hard and chosen_hard.id != (chosen_easy.id if chosen_easy else None):
+            assigned_ids.append(chosen_hard.id)
+        elif len(all_problems) > 1 and chosen_easy:
+            alt = [p for p in all_problems if p.id != chosen_easy.id]
+            if alt:
+                assigned_ids.append(alt[0].id)
+
+        attempt.assigned_problem_ids = json.dumps(assigned_ids)
+        await db.commit()
+
+    # Retrieve problems matching the assigned IDs in exact sequence (P1 Easy, P2 Hard)
+    prob_map = {p.id: p for p in all_problems}
+    assigned_problems = [prob_map[pid] for pid in assigned_ids if pid in prob_map]
+
+    # Fallback to first two problems if lookup fails
+    if not assigned_problems:
+        assigned_problems = all_problems[:2]
 
     problem_list = []
-    for p in problems:
+    for idx, p in enumerate(assigned_problems, start=1):
+        is_easy = (idx == 1)
+        expected_marks = 15 if is_easy else 30
+        diff_label = "EASY" if is_easy else "HARD"
         samples = [
             PublicTestCase(
                 id=tc.id,
@@ -219,8 +278,9 @@ async def get_or_start_coding_attempt(
             constraints=p.constraints,
             time_limit_ms=p.time_limit_ms,
             memory_limit_mb=p.memory_limit_mb,
-            marks=p.marks,
-            order_num=p.order_num,
+            marks=expected_marks,
+            difficulty=diff_label,
+            order_num=idx,  # Always P1 and P2 for participant
             starter_code=p.starter_code,
             sample_test_cases=samples
         ))

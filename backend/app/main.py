@@ -45,6 +45,31 @@ async def lifespan(app: FastAPI):
                     await conn.execute(text("ALTER TABLE coding_problems ADD COLUMN starter_code TEXT;"))
                 except Exception:
                     pass
+
+            # Safe migration: ensure difficulty column exists in coding_problems
+            try:
+                await conn.execute(text("ALTER TABLE coding_problems ADD COLUMN IF NOT EXISTS difficulty VARCHAR(20) DEFAULT 'EASY';"))
+            except Exception:
+                try:
+                    await conn.execute(text("ALTER TABLE coding_problems ADD COLUMN difficulty VARCHAR(20) DEFAULT 'EASY';"))
+                except Exception:
+                    pass
+
+            # Safe migration: ensure assigned_problem_ids column exists in coding_attempts
+            try:
+                await conn.execute(text("ALTER TABLE coding_attempts ADD COLUMN IF NOT EXISTS assigned_problem_ids TEXT;"))
+            except Exception:
+                try:
+                    await conn.execute(text("ALTER TABLE coding_attempts ADD COLUMN assigned_problem_ids TEXT;"))
+                except Exception:
+                    pass
+
+            # Standardize marks: 15 for EASY, 30 for HARD
+            try:
+                await conn.execute(text("UPDATE coding_problems SET marks = 15, difficulty = 'EASY' WHERE order_num = 1 OR difficulty = 'EASY' OR marks <= 20;"))
+                await conn.execute(text("UPDATE coding_problems SET marks = 30, difficulty = 'HARD' WHERE order_num >= 2 AND (difficulty = 'HARD' OR marks > 20);"))
+            except Exception:
+                pass
         logger.info("Database schema verified.")
     except Exception as e:
         logger.warning(f"Schema check skipped or already present: {e}")

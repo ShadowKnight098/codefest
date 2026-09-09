@@ -206,7 +206,8 @@ class CodingProblemCreate(BaseModel):
     constraints: Optional[str] = None
     time_limit_ms: int = Field(default=2000, ge=100, le=30000)
     memory_limit_mb: int = Field(default=256, ge=16, le=1024)
-    marks: int = Field(default=20, ge=1, le=100)
+    marks: int = Field(default=15, ge=1, le=100)
+    difficulty: str = Field(default="EASY", pattern=r"^(EASY|HARD)$")
     order_num: int = Field(default=1, ge=1)
     starter_code: Optional[str] = None
     test_cases: list[CodingTestCaseCreate] = []
@@ -219,6 +220,7 @@ class CodingProblemUpdate(BaseModel):
     time_limit_ms: Optional[int] = None
     memory_limit_mb: Optional[int] = None
     marks: Optional[int] = None
+    difficulty: Optional[str] = Field(default=None, pattern=r"^(EASY|HARD)$")
     order_num: Optional[int] = None
     starter_code: Optional[str] = None
 
@@ -232,6 +234,7 @@ class CodingProblemResponse(BaseModel):
     time_limit_ms: int
     memory_limit_mb: int
     marks: int
+    difficulty: str = "EASY"
     order_num: int
     starter_code: Optional[str] = None
     test_cases: list[CodingTestCaseResponse] = []
