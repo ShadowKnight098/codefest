@@ -342,7 +342,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         const s = r1Search.toLowerCase();
         return (
           w.roll_number?.toLowerCase().includes(s) ||
-          w.name?.toLowerCase().includes(s)
+          w.name?.toLowerCase().includes(s) ||
+          w.email?.toLowerCase().includes(s)
         );
       }
       return true;
@@ -356,7 +357,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         const s = r2Search.toLowerCase();
         return (
           w.roll_number?.toLowerCase().includes(s) ||
-          w.name?.toLowerCase().includes(s)
+          w.name?.toLowerCase().includes(s) ||
+          w.email?.toLowerCase().includes(s)
         );
       }
       return true;
@@ -372,7 +374,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
         const s = lbSearch.toLowerCase();
         return (
           w.roll_number?.toLowerCase().includes(s) ||
-          w.name?.toLowerCase().includes(s)
+          w.name?.toLowerCase().includes(s) ||
+          w.email?.toLowerCase().includes(s)
         );
       }
       return true;
@@ -3053,7 +3056,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     type="text"
                     value={r1Search}
                     onChange={(e) => setR1Search(e.target.value)}
-                    placeholder="Search by Roll Number or Name…"
+                    placeholder="Search by Roll Number, Name, or Email…"
                     className="h-8 px-3 text-xs border border-[#C6C1B0] rounded-[3px] w-full"
                   />
                 </div>
@@ -3133,7 +3136,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                               name: e.name,
                               academic_year: e.academic_year,
                               mcq_qualified: e.mcq_qualified,
-                              email: `${e.roll_number}@codefest`
+                              email: e.email || `${e.roll_number}@codefest`
                             })}
                             className="px-2 py-1 bg-[#16233F] text-white rounded text-[10.5px] font-semibold hover:bg-[#25355B] inline-flex items-center space-x-1"
                             title="Emergency Reset or Reassign L1 / L2"
@@ -3221,7 +3224,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     type="text"
                     value={r2Search}
                     onChange={(e) => setR2Search(e.target.value)}
-                    placeholder="Search by Roll Number or Name…"
+                    placeholder="Search by Roll Number, Name, or Email…"
                     className="h-8 px-3 text-xs border border-[#C6C1B0] rounded-[3px] w-full"
                   />
                 </div>
@@ -3291,7 +3294,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                               name: e.name,
                               academic_year: e.academic_year,
                               mcq_qualified: e.mcq_qualified,
-                              email: `${e.roll_number}@codefest`
+                              email: e.email || `${e.roll_number}@codefest`
                             })}
                             className="px-2 py-1 bg-[#16233F] text-white rounded text-[10.5px] font-semibold hover:bg-[#25355B] inline-flex items-center space-x-1"
                             title="Emergency Reset or Reassign L1 / L2"
@@ -3453,7 +3456,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     <tr className="bg-[#F6F6F2] border-b border-[#DBD7C9] font-semibold text-[#16233F]">
                       <th className="py-2.5 px-3 text-center font-mono">#</th>
                       <th className="py-2.5 px-3 font-mono">Roll Number</th>
-                      <th className="py-2.5 px-3">Candidate</th>
+                      <th className="py-2.5 px-3">Name</th>
+                      <th className="py-2.5 px-3">Email</th>
                       <th className="py-2.5 px-3 text-center">Year</th>
                       <th className="py-2.5 px-3 text-center">MCQ (/25)</th>
                       <th className="py-2.5 px-3 text-center">Code (/60)</th>
@@ -3473,10 +3477,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                           {idx + 1}
                         </td>
                         <td className="py-2.5 px-3 font-mono text-[#16233F]">{f.roll_number}</td>
-                        <td className="py-2.5 px-3">
-                          <div className="font-semibold text-[#16233F]">{f.name}</div>
-                          <div className="text-[11px] text-[#59626F] font-mono">{f.email}</div>
-                        </td>
+                        <td className="py-2.5 px-3 font-semibold text-[#16233F]">{f.name}</td>
+                        <td className="py-2.5 px-3 text-[#59626F]">{f.email || '—'}</td>
                         <td className="py-2.5 px-3 text-center">{f.academic_year}</td>
                         <td className="py-2.5 px-3 text-center font-mono">{f.mcq_score ?? '—'}</td>
                         <td className="py-2.5 px-3 text-center font-mono">{f.coding_score ?? '—'}</td>
