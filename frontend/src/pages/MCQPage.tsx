@@ -414,7 +414,7 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
   const remainingCount = questions.length - answeredCount;
 
   return (
-    <div className="min-h-screen bg-[#F6F6F2] flex flex-col select-none relative">
+    <div className="h-screen overflow-hidden bg-[#F6F6F2] flex flex-col select-none relative">
       {smallViewportNotice}
 
       {securityToast && (
@@ -449,39 +449,39 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
       />
 
       {/* MAIN THREE-PANEL GRID (22% / 53% / 25%) */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         
         {/* LEFT PANEL (22%) - Quiet Supporting */}
-        <div className="hidden lg:flex w-[22%] bg-[#F6F6F2] border-r border-[#DBD7C9] p-8 flex-col justify-between">
+        <div className="hidden lg:flex w-[22%] bg-[#F6F6F2] border-r border-[#DBD7C9] p-5 xl:p-7 flex-col justify-between overflow-y-auto">
           <div>
-            <div className="text-[11.5px] font-bold tracking-[0.08em] text-[#59626F] uppercase">
+            <div className="text-[11px] font-bold tracking-[0.08em] text-[#59626F] uppercase">
               CSE (AI &amp; ML)
             </div>
             <div className="font-serif text-[17px] font-bold text-[#1B2029]">
               CodeFest 2026
             </div>
 
-            <div className="mt-6 pt-6 border-t border-[#DBD7C9]">
+            <div className="mt-4 pt-4 border-t border-[#DBD7C9]">
               <div className="text-[13px] font-semibold text-[#1B2029]">
                 Level 1 · MCQ Assessment
               </div>
-              <div className="text-[12px] text-[#8B93A0] mt-1 font-mono">
+              <div className="text-[12px] text-[#8B93A0] mt-0.5 font-mono">
                 25 Questions · 30 Mins
               </div>
             </div>
 
-            <div className="mt-6 p-3.5 bg-white border border-[#DBD7C9] rounded-[3px] text-[12px] text-[#59626F] leading-relaxed">
+            <div className="mt-4 p-3 bg-white border border-[#DBD7C9] rounded-[3px] text-[11.5px] text-[#59626F] leading-relaxed">
               Answers save automatically as you go. You can revisit any question before submitting.
             </div>
           </div>
 
-          <div className="text-[11.5px] text-[#8B93A0]">
+          <div className="text-[11px] text-[#8B93A0] pt-4">
             Proctored session · ID: {attemptId.slice(0, 8)}
           </div>
         </div>
 
         {/* CENTER PANEL (53%) - Primary Focal Area */}
-        <div className="w-full lg:w-[53%] bg-white p-8 sm:p-12 lg:p-14 overflow-y-auto flex flex-col justify-between">
+        <div className="w-full lg:w-[53%] bg-white p-5 sm:p-8 lg:p-10 overflow-y-auto flex flex-col justify-between">
           {currentQ ? (
             <div>
               {/* Question metadata & Autosave status bar */}
@@ -563,7 +563,7 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
               </div>
 
               {/* Live Proctoring & Tab Switch Status Box below MCQ */}
-              <div className="mt-8 max-w-[640px] p-4 bg-[#F6F6F2] border border-[#DBD7C9] rounded-[4px] flex items-center justify-between font-mono">
+              <div className="mt-6 max-w-[640px] p-3.5 bg-[#F6F6F2] border border-[#DBD7C9] rounded-[4px] flex items-center justify-between font-mono">
                 <div className="flex items-center space-x-3">
                   <span className={`w-3 h-3 rounded-full shrink-0 ${tabSwitchCount === 0 ? 'bg-[#1E7A46]' : 'bg-[#C0392B]'} animate-pulse`} />
                   <div>
@@ -586,6 +586,42 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
                   </div>
                 </div>
               </div>
+
+              {/* CENTER PANEL INLINE QUICK NAVIGATION (Always visible on laptops) */}
+              <div className="mt-5 max-w-[640px] pt-3.5 border-t border-[#DBD7C9] flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={handlePrev}
+                  disabled={currentIndex === 0 || isSubmitted}
+                  className="px-4 py-2 bg-white border border-[#C6C1B0] text-[#16233F] rounded-[3px] text-xs font-semibold hover:bg-[#F6F6F2] disabled:opacity-40 transition-colors"
+                >
+                  ← Previous
+                </button>
+
+                {currentIndex < questions.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    disabled={isSubmitted}
+                    className="px-5 py-2 bg-[#16233F] text-white rounded-[3px] text-xs font-semibold hover:bg-[#25355B] transition-colors shadow-sm flex items-center space-x-1"
+                  >
+                    <span>Save &amp; Next</span>
+                    <span>→</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowReviewModal(true);
+                      setConfirmSubmitStep(false);
+                    }}
+                    disabled={isSubmitted}
+                    className="px-5 py-2 bg-[#1E7E34] text-white rounded-[3px] text-xs font-semibold hover:bg-[#166027] transition-colors shadow-sm"
+                  >
+                    Review &amp; Submit →
+                  </button>
+                )}
+              </div>
             </div>
           ) : null}
 
@@ -594,76 +630,112 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
 
         {/* RIGHT PANEL (25%) - Navigator */}
         <div
-          className={`fixed inset-y-0 right-0 z-30 lg:static w-[300px] lg:w-[25%] bg-[#F6F6F2] border-l border-[#DBD7C9] p-6 transition-transform duration-200 lg:translate-x-0 ${
+          className={`fixed inset-y-0 right-0 z-30 lg:static w-[280px] lg:w-[25%] bg-[#F6F6F2] border-l border-[#DBD7C9] p-4 sm:p-5 transition-transform duration-200 lg:translate-x-0 overflow-y-auto flex flex-col justify-between ${
             drawerOpen ? 'translate-x-0 shadow-xl' : 'translate-x-full lg:translate-x-0'
           }`}
         >
-          <div className="flex items-center justify-between lg:hidden mb-4 pb-2 border-b border-[#DBD7C9]">
-            <span className="text-sm font-semibold text-[#1B2029]">Question Navigator</span>
-            <button
-              onClick={() => setDrawerOpen(false)}
-              className="text-xs text-[#59626F] px-2 py-1"
-            >
-              Close ✕
-            </button>
-          </div>
+          <div>
+            <div className="flex items-center justify-between lg:hidden mb-3 pb-2 border-b border-[#DBD7C9]">
+              <span className="text-sm font-semibold text-[#1B2029]">Question Navigator</span>
+              <button
+                onClick={() => setDrawerOpen(false)}
+                className="text-xs text-[#59626F] px-2 py-1"
+              >
+                Close ✕
+              </button>
+            </div>
 
-          <div className="text-[12px] font-semibold text-[#59626F] uppercase tracking-[0.04em] mb-4">
-            Question Navigator
-          </div>
+            <div className="text-[11.5px] font-semibold text-[#59626F] uppercase tracking-[0.04em] mb-3">
+              Question Navigator
+            </div>
 
-          {/* 5x5 Grid */}
-          <div className="grid grid-cols-5 gap-2 w-fit">
-            {questions.map((q, idx) => {
-              const isAttempted = Boolean(q.selected_option);
-              const isCurrent = idx === currentIndex;
+            {/* 5x5 Grid */}
+            <div className="grid grid-cols-5 gap-1.5 sm:gap-2 w-fit">
+              {questions.map((q, idx) => {
+                const isAttempted = Boolean(q.selected_option);
+                const isCurrent = idx === currentIndex;
 
-              return (
+                return (
+                  <button
+                    key={q.question_id || idx}
+                    onClick={() => handleJumpToQuestion(idx)}
+                    className={`nav-cell ${
+                      isAttempted ? 'attempted' : 'unattempted'
+                    } ${isCurrent ? 'current' : ''}`}
+                    type="button"
+                  >
+                    {String(idx + 1).padStart(2, '0')}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Progress line */}
+            <div className="mt-4 pt-3 border-t border-[#DBD7C9]">
+              <div className="text-[13px] font-semibold text-[#1B2029]">
+                {answeredCount} / {questions.length} answered
+              </div>
+              <div className="text-[12px] text-[#8B93A0] mt-0.5 font-mono">
+                {remainingCount} remaining
+              </div>
+            </div>
+
+            {/* QUICK NAVIGATION BUTTONS INSIDE RIGHT TRACKER PANEL */}
+            <div className="mt-3 pt-3 border-t border-[#DBD7C9] flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={handlePrev}
+                disabled={currentIndex === 0 || isSubmitted}
+                className="flex-1 py-1.5 bg-white border border-[#C6C1B0] text-[#16233F] rounded text-xs font-semibold hover:bg-[#F6F6F2] disabled:opacity-40 text-center transition-colors"
+              >
+                ← Prev
+              </button>
+              {currentIndex < questions.length - 1 ? (
                 <button
-                  key={q.question_id || idx}
-                  onClick={() => handleJumpToQuestion(idx)}
-                  className={`nav-cell ${
-                    isAttempted ? 'attempted' : 'unattempted'
-                  } ${isCurrent ? 'current' : ''}`}
                   type="button"
+                  onClick={handleNext}
+                  disabled={isSubmitted}
+                  className="flex-1 py-1.5 bg-[#16233F] text-white rounded text-xs font-semibold hover:bg-[#25355B] text-center transition-colors shadow-xs"
                 >
-                  {String(idx + 1).padStart(2, '0')}
+                  Next →
                 </button>
-              );
-            })}
-          </div>
-
-          {/* Progress line */}
-          <div className="mt-6 pt-5 border-t border-[#DBD7C9]">
-            <div className="text-[14px] font-semibold text-[#1B2029]">
-              {answeredCount} / {questions.length} answered
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowReviewModal(true);
+                    setConfirmSubmitStep(false);
+                  }}
+                  disabled={isSubmitted}
+                  className="flex-1 py-1.5 bg-[#1E7E34] text-white rounded text-xs font-semibold hover:bg-[#166027] text-center transition-colors shadow-xs"
+                >
+                  Submit →
+                </button>
+              )}
             </div>
-            <div className="text-[13px] text-[#8B93A0] mt-0.5 font-mono">
-              {remainingCount} remaining
-            </div>
-          </div>
 
-          {/* Security Strikes Status in Sidebar */}
-          <div className="mt-4 pt-4 border-t border-[#DBD7C9]">
-            <div className="flex items-center justify-between font-mono text-xs">
-              <span className="text-[#59626F]">Tab Violations:</span>
-              <span className={`font-bold px-2 py-0.5 rounded text-[11px] ${
-                tabSwitchCount === 0 ? 'bg-[#E8F3EC] text-[#1E7A46]' : 'bg-[#FDEDEC] text-[#C0392B]'
-              }`}>
-                {tabSwitchCount} / {maxViolations} Strikes
-              </span>
+            {/* Security Strikes Status in Sidebar */}
+            <div className="mt-3 pt-3 border-t border-[#DBD7C9]">
+              <div className="flex items-center justify-between font-mono text-xs">
+                <span className="text-[#59626F]">Tab Violations:</span>
+                <span className={`font-bold px-2 py-0.5 rounded text-[11px] ${
+                  tabSwitchCount === 0 ? 'bg-[#E8F3EC] text-[#1E7A46]' : 'bg-[#FDEDEC] text-[#C0392B]'
+                }`}>
+                  {tabSwitchCount} / {maxViolations} Strikes
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* BOTTOM ACTION BAR */}
-      <div className="h-[68px] bg-white border-t border-[#DBD7C9] px-6 sm:px-14 flex items-center justify-between sticky bottom-0 z-20">
+      {/* BOTTOM ACTION BAR (Permanently Fixed & Visible) */}
+      <div className="h-[56px] sm:h-[62px] bg-white border-t border-[#DBD7C9] px-4 sm:px-10 flex items-center justify-between shrink-0 z-20 shadow-md">
         <div>
           <button
             onClick={handlePrev}
             disabled={currentIndex === 0 || isSubmitted}
-            className="btn-ghost"
+            className="btn-ghost text-xs"
             type="button"
           >
             ← Previous
