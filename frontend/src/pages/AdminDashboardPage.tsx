@@ -65,6 +65,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   // Coding Problems tab state
   const [problems, setProblems] = useState<any[]>([]);
   const [showAddProbModal, setShowAddProbModal] = useState(false);
+  const [showEditProbModal, setShowEditProbModal] = useState(false);
+  const [editProbForm, setEditProbForm] = useState<any>(null);
+  const [activeStarterLang, setActiveStarterLang] = useState<'python' | 'c' | 'cpp' | 'java'>('python');
   const [newProb, setNewProb] = useState({
     title: '',
     description: '',
@@ -73,6 +76,12 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     memory_limit_mb: 256,
     marks: 20,
     order_num: 1,
+    starter_code: {
+      python: '',
+      c: '',
+      cpp: '',
+      java: ''
+    },
     test_cases: [
       { input_data: '', expected_output: '', is_hidden: false, order_num: 1 },
       { input_data: '', expected_output: '', is_hidden: true, order_num: 2 }
@@ -628,16 +637,126 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     }
   };
 
+  const handleStarterFileUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const name = file.name.toLowerCase();
+    let detectedLang: 'python' | 'c' | 'cpp' | 'java' = activeStarterLang;
+    if (name.endsWith('.py')) detectedLang = 'python';
+    else if (name.endsWith('.cpp') || name.endsWith('.cc')) detectedLang = 'cpp';
+    else if (name.endsWith('.c')) detectedLang = 'c';
+    else if (name.endsWith('.java')) detectedLang = 'java';
+
+    setActiveStarterLang(detectedLang);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = (event.target?.result as string) || '';
+      if (isEdit) {
+        setEditProbForm((prev: any) => ({
+          ...prev,
+          starter_code: {
+            ...(prev?.starter_code || {}),
+            [detectedLang]: content
+          }
+        }));
+      } else {
+        setNewProb((prev) => ({
+          ...prev,
+          starter_code: {
+            ...prev.starter_code,
+            [detectedLang]: content
+          }
+        }));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleOpenEditProblem = (p: any) => {
+    let parsedStarter = { python: '', c: '', cpp: '', java: '' };
+    if (p.starter_code) {
+      try {
+        const obj = JSON.parse(p.starter_code);
+        if (typeof obj === 'object' && obj !== null) {
+          parsedStarter = { ...parsedStarter, ...obj };
+        }
+      } catch {
+        parsedStarter.python = p.starter_code;
+      }
+    }
+    setEditProbForm({
+      id: p.id,
+      title: p.title,
+      description: p.description,
+      constraints: p.constraints || '',
+      time_limit_ms: p.time_limit_ms,
+      memory_limit_mb: p.memory_limit_mb,
+      marks: p.marks,
+      order_num: p.order_num,
+      starter_code: parsedStarter
+    });
+    setShowEditProbModal(true);
+  };
+
+  const handleUpdateProblem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editProbForm) return;
+    setLoading(true);
+    try {
+      const payload = {
+        title: editProbForm.title,
+        description: editProbForm.description,
+        constraints: editProbForm.constraints,
+        time_limit_ms: editProbForm.time_limit_ms,
+        memory_limit_mb: editProbForm.memory_limit_mb,
+        marks: editProbForm.marks,
+        order_num: editProbForm.order_num,
+        starter_code: JSON.stringify(editProbForm.starter_code)
+      };
+      await apiFetch(`/admin/coding-problems/${editProbForm.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+      setMessage(`Problem "${editProbForm.title}" updated successfully.`);
+      setShowEditProbModal(false);
+      setEditProbForm(null);
+      fetchProblems();
+    } catch (e: any) {
+      alert(`Update failed: ${e?.detail || e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAddProblem = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
+      const payload = {
+        ...newProb,
+        starter_code: JSON.stringify(newProb.starter_code)
+      };
       await apiFetch('/admin/coding-problems', {
         method: 'POST',
-        body: JSON.stringify(newProb),
+        body: JSON.stringify(payload),
       });
       setMessage('Coding problem added successfully.');
       setShowAddProbModal(false);
+      setNewProb({
+        title: '',
+        description: '',
+        constraints: '',
+        time_limit_ms: 2000,
+        memory_limit_mb: 256,
+        marks: 20,
+        order_num: (problems.length || 0) + 1,
+        starter_code: { python: '', c: '', cpp: '', java: '' },
+        test_cases: [
+          { input_data: '', expected_output: '', is_hidden: false, order_num: 1 },
+          { input_data: '', expected_output: '', is_hidden: true, order_num: 2 }
+        ]
+      });
       fetchProblems();
     } catch (e: any) {
       setMessage(`Failed: ${e?.detail || e.message}`);
@@ -1563,12 +1682,25 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         }`}>
                           {p.marks} Marks · {p.order_num === 1 ? 'EASY' : 'HARD'}
                         </span>
+                        {p.starter_code && (
+                          <span className="px-2 py-0.5 bg-[#EEF2FF] text-[#4338CA] border border-[#C7D2FE] font-mono rounded text-[10px] font-bold">
+                            ⚡ Starter Code Set
+                          </span>
+                        )}
                         <span className="text-[11px] font-mono text-[#8B93A0]">
                           Time Limit: {p.time_limit_ms}ms · RAM: {p.memory_limit_mb}MB
                         </span>
                       </div>
 
                       <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleOpenEditProblem(p)}
+                          className="px-2.5 py-1 bg-[#EEF1F6] text-[#16233F] border border-[#C6C1B0] hover:bg-[#DBD7C9] rounded-[3px] transition-colors font-medium text-xs flex items-center space-x-1"
+                          title="Edit Problem & Starter Code"
+                        >
+                          <span>✏️</span>
+                          <span>Edit Problem</span>
+                        </button>
                         <button
                           onClick={() => {
                             setSelectedProblemForTestCase(p);
@@ -1770,6 +1902,88 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         </div>
                       </div>
 
+                      {/* Default Starter Code Section */}
+                      <div className="border-t border-[#DBD7C9] pt-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <label className="block text-[10px] text-[#59626F] font-bold uppercase">
+                              Default Starter Code / Boilerplate (Optional)
+                            </label>
+                            <p className="text-[10.5px] text-[#8B93A0]">
+                              Participants will see this code when opening the problem. Leave empty to use system default.
+                            </p>
+                          </div>
+                          <label className="px-2.5 py-1 bg-[#EEF1F6] text-[#16233F] border border-[#C6C1B0] rounded text-[11px] font-semibold hover:bg-[#DBD7C9] cursor-pointer inline-flex items-center space-x-1">
+                            <span>📂</span>
+                            <span>Upload File</span>
+                            <input
+                              type="file"
+                              accept=".py,.c,.cpp,.cc,.java,.txt"
+                              className="hidden"
+                              onChange={(e) => handleStarterFileUpload(e, false)}
+                            />
+                          </label>
+                        </div>
+
+                        {/* Language Tabs */}
+                        <div className="flex items-center space-x-1 border-b border-[#DBD7C9]">
+                          {(['python', 'c', 'cpp', 'java'] as const).map((lang) => (
+                            <button
+                              key={lang}
+                              type="button"
+                              onClick={() => setActiveStarterLang(lang)}
+                              className={`px-3 py-1 text-[11px] font-mono font-bold rounded-t transition-colors ${
+                                activeStarterLang === lang
+                                  ? 'bg-[#16233F] text-white'
+                                  : 'bg-[#F6F6F2] text-[#59626F] hover:bg-[#DBD7C9]'
+                              }`}
+                            >
+                              {lang === 'python' ? 'Python 🐍' : lang === 'cpp' ? 'C++' : lang === 'c' ? 'C' : 'Java ☕'}
+                              {newProb.starter_code[lang]?.trim() ? ' •' : ''}
+                            </button>
+                          ))}
+                        </div>
+
+                        <textarea
+                          rows={6}
+                          value={newProb.starter_code[activeStarterLang]}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNewProb((prev) => ({
+                              ...prev,
+                              starter_code: {
+                                ...prev.starter_code,
+                                [activeStarterLang]: val
+                              }
+                            }));
+                          }}
+                          placeholder={`// Enter default ${activeStarterLang.toUpperCase()} starter code or function definition here...`}
+                          className="w-full border border-[#C6C1B0] p-2.5 rounded font-mono text-xs bg-[#1E1E1E] text-[#D4D4D4] focus:outline-none focus:border-[#16233F]"
+                        />
+                      </div>
+
+                      {/* How to Give Input Guide */}
+                      <div className="bg-[#F0F4F8] border border-[#CBD5E1] rounded p-2.5 space-y-1 text-[11px] text-[#1E293B]">
+                        <div className="font-bold flex items-center space-x-1.5 text-[#16233F]">
+                          <span>💡</span>
+                          <span>How to Format Standard Input (stdin) for Test Cases:</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 font-mono text-[10.5px] text-[#475569]">
+                          <div className="bg-white p-1.5 rounded border border-[#E2E8F0]">
+                            <strong>Single Array:</strong> <code>[-2, 1, -3, 4, -1, 2, 1, -5, 4]</code>
+                          </div>
+                          <div className="bg-white p-1.5 rounded border border-[#E2E8F0]">
+                            <strong>Array + Target:</strong> <code>[2, 7, 11, 15] | 9</code> or multi-line
+                          </div>
+                          <div className="bg-white p-1.5 rounded border border-[#E2E8F0]">
+                            <strong>Multiple ints:</strong> <code>10 20</code>
+                          </div>
+                          <div className="bg-white p-1.5 rounded border border-[#E2E8F0]">
+                            <strong>Strings:</strong> <code>"()[]{}"</code> or <code>()[]{}</code>
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Initial Test Cases Section */}
                       <div className="border-t border-[#DBD7C9] pt-3">
                         <div className="flex justify-between items-center mb-2">
@@ -1894,6 +2108,184 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                 </div>
               )}
 
+              {/* Edit Problem Modal */}
+              {showEditProbModal && editProbForm && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                  <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-6 max-w-2xl w-full text-xs space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+                    <div className="border-b border-[#DBD7C9] pb-2 flex justify-between items-start">
+                      <div>
+                        <div className="text-[10px] font-mono uppercase font-bold text-[#16233F]">
+                          Update Challenge Settings &amp; Code
+                        </div>
+                        <h3 className="text-sm font-bold text-[#16233F]">
+                          Edit P{editProbForm.order_num}: {editProbForm.title}
+                        </h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setShowEditProbModal(false); setEditProbForm(null); }}
+                        className="text-[#8B93A0] hover:text-[#16233F] font-bold text-base px-1"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleUpdateProblem} className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Problem Title</label>
+                          <input
+                            value={editProbForm.title}
+                            onChange={(e) => setEditProbForm({ ...editProbForm, title: e.target.value })}
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Marks</label>
+                            <input
+                              type="number"
+                              value={editProbForm.marks}
+                              onChange={(e) => setEditProbForm({ ...editProbForm, marks: Number(e.target.value) })}
+                              className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Order #</label>
+                            <input
+                              type="number"
+                              value={editProbForm.order_num}
+                              onChange={(e) => setEditProbForm({ ...editProbForm, order_num: Number(e.target.value) })}
+                              className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                              required
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Problem Description</label>
+                        <textarea
+                          value={editProbForm.description}
+                          onChange={(e) => setEditProbForm({ ...editProbForm, description: e.target.value })}
+                          className="w-full border border-[#C6C1B0] p-2 rounded h-24 font-sans text-xs"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Constraints &amp; Limits</label>
+                        <textarea
+                          value={editProbForm.constraints}
+                          onChange={(e) => setEditProbForm({ ...editProbForm, constraints: e.target.value })}
+                          className="w-full border border-[#C6C1B0] p-2 rounded h-16 font-mono text-xs"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Time Limit (ms)</label>
+                          <input
+                            type="number"
+                            value={editProbForm.time_limit_ms}
+                            onChange={(e) => setEditProbForm({ ...editProbForm, time_limit_ms: Number(e.target.value) })}
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-[#59626F] font-bold uppercase mb-1">Memory Limit (MB)</label>
+                          <input
+                            type="number"
+                            value={editProbForm.memory_limit_mb}
+                            onChange={(e) => setEditProbForm({ ...editProbForm, memory_limit_mb: Number(e.target.value) })}
+                            className="w-full border border-[#C6C1B0] p-1.5 rounded"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Starter Code Section in Edit Modal */}
+                      <div className="border-t border-[#DBD7C9] pt-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <label className="block text-[10px] text-[#59626F] font-bold uppercase">
+                              Default Starter Code / Boilerplate
+                            </label>
+                            <p className="text-[10.5px] text-[#8B93A0]">
+                              Pre-populated code shown to students when selecting this problem.
+                            </p>
+                          </div>
+                          <label className="px-2.5 py-1 bg-[#EEF1F6] text-[#16233F] border border-[#C6C1B0] rounded text-[11px] font-semibold hover:bg-[#DBD7C9] cursor-pointer inline-flex items-center space-x-1">
+                            <span>📂</span>
+                            <span>Upload File</span>
+                            <input
+                              type="file"
+                              accept=".py,.c,.cpp,.cc,.java,.txt"
+                              className="hidden"
+                              onChange={(e) => handleStarterFileUpload(e, true)}
+                            />
+                          </label>
+                        </div>
+
+                        {/* Language Tabs */}
+                        <div className="flex items-center space-x-1 border-b border-[#DBD7C9]">
+                          {(['python', 'c', 'cpp', 'java'] as const).map((lang) => (
+                            <button
+                              key={lang}
+                              type="button"
+                              onClick={() => setActiveStarterLang(lang)}
+                              className={`px-3 py-1 text-[11px] font-mono font-bold rounded-t transition-colors ${
+                                activeStarterLang === lang
+                                  ? 'bg-[#16233F] text-white'
+                                  : 'bg-[#F6F6F2] text-[#59626F] hover:bg-[#DBD7C9]'
+                              }`}
+                            >
+                              {lang === 'python' ? 'Python 🐍' : lang === 'cpp' ? 'C++' : lang === 'c' ? 'C' : 'Java ☕'}
+                              {editProbForm.starter_code?.[lang]?.trim() ? ' •' : ''}
+                            </button>
+                          ))}
+                        </div>
+
+                        <textarea
+                          rows={7}
+                          value={editProbForm.starter_code?.[activeStarterLang] || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEditProbForm((prev: any) => ({
+                              ...prev,
+                              starter_code: {
+                                ...(prev?.starter_code || {}),
+                                [activeStarterLang]: val
+                              }
+                            }));
+                          }}
+                          placeholder={`// Enter default ${activeStarterLang.toUpperCase()} starter code...`}
+                          className="w-full border border-[#C6C1B0] p-2.5 rounded font-mono text-xs bg-[#1E1E1E] text-[#D4D4D4] focus:outline-none focus:border-[#16233F]"
+                        />
+                      </div>
+
+                      <div className="flex justify-end space-x-2 pt-3 border-t border-[#DBD7C9]">
+                        <button
+                          type="button"
+                          onClick={() => { setShowEditProbModal(false); setEditProbForm(null); }}
+                          className="px-3.5 py-1.5 border border-[#C6C1B0] rounded text-xs hover:bg-[#F6F6F2]"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="px-4 py-1.5 bg-[#16233F] text-white rounded text-xs font-semibold hover:bg-[#25355B] disabled:opacity-50"
+                        >
+                          {loading ? 'Saving…' : 'Save Changes'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
               {/* Add Test Case Modal */}
               {showAddTestCaseModal && selectedProblemForTestCase && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -1907,6 +2299,28 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     </div>
 
                     <form onSubmit={handleAddTestCase} className="space-y-3">
+                      {/* Input format cheat sheet */}
+                      <div className="bg-[#F0F4F8] border border-[#CBD5E1] rounded p-2.5 space-y-1 text-[11px] text-[#1E293B]">
+                        <div className="font-bold flex items-center space-x-1.5 text-[#16233F]">
+                          <span>💡</span>
+                          <span>How to Format Standard Input (stdin):</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 font-mono text-[10px] text-[#475569]">
+                          <div className="bg-white p-1 rounded border border-[#E2E8F0]">
+                            <strong>Single Array:</strong> <code>[-2, 1, -3, 4, -1, 2, 1, -5, 4]</code>
+                          </div>
+                          <div className="bg-white p-1 rounded border border-[#E2E8F0]">
+                            <strong>Array + Target:</strong> <code>[2, 7, 11, 15] | 9</code> or 2 lines
+                          </div>
+                          <div className="bg-white p-1 rounded border border-[#E2E8F0]">
+                            <strong>Multiple ints:</strong> <code>10 20</code>
+                          </div>
+                          <div className="bg-white p-1 rounded border border-[#E2E8F0]">
+                            <strong>Strings:</strong> <code>"()[]{}"</code>
+                          </div>
+                        </div>
+                      </div>
+
                       <div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="block text-[10px] text-[#59626F] font-bold uppercase">

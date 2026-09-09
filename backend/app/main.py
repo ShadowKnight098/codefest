@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from sqlalchemy import text
 from app.core.config import settings
 from app.db.session import engine, Base
 from app.api.auth import router as auth_router
@@ -36,6 +37,14 @@ async def lifespan(app: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            # Safe migration: ensure starter_code column exists
+            try:
+                await conn.execute(text("ALTER TABLE coding_problems ADD COLUMN IF NOT EXISTS starter_code TEXT;"))
+            except Exception:
+                try:
+                    await conn.execute(text("ALTER TABLE coding_problems ADD COLUMN starter_code TEXT;"))
+                except Exception:
+                    pass
         logger.info("Database schema verified.")
     except Exception as e:
         logger.warning(f"Schema check skipped or already present: {e}")

@@ -216,10 +216,27 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
 
   const currentProblem = attempt?.problems?.[selectedProblemIndex];
 
+  const getProblemStarterTemplate = (prob: any, lang: string): string => {
+    if (prob?.starter_code) {
+      try {
+        const parsed = JSON.parse(prob.starter_code);
+        if (parsed && typeof parsed === 'object' && parsed[lang]) {
+          return parsed[lang];
+        }
+      } catch {
+        // Plain text starter code fallback (if not JSON format, treat as python)
+        if (lang === 'python') {
+          return prob.starter_code;
+        }
+      }
+    }
+    return STARTER_TEMPLATES[lang] || '';
+  };
+
   // Unique key for caching code per participant, problem, and language
   const userKey = participant?.id || attempt?.attempt_id || 'active';
   const currentCodeKey = `user_${userKey}_prob_${selectedProblemIndex}_lang_${language}`;
-  const code = codeCache[currentCodeKey] ?? (STARTER_TEMPLATES[language] || '');
+  const code = codeCache[currentCodeKey] ?? getProblemStarterTemplate(currentProblem, language);
 
   const setCode = (newCode: string) => {
     setCodeCache((prev) => ({ ...prev, [currentCodeKey]: newCode }));
@@ -282,7 +299,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
       return {
         problem_id: prob.id,
         language: probLang,
-        code: probCode || STARTER_TEMPLATES[probLang] || '',
+        code: probCode || getProblemStarterTemplate(prob, probLang),
       };
     });
   };
@@ -320,7 +337,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
     setLanguage(newLang);
     const key = `user_${userKey}_prob_${selectedProblemIndex}_lang_${newLang}`;
     if (!codeCache[key]) {
-      setCodeCache((prev) => ({ ...prev, [key]: STARTER_TEMPLATES[newLang] || '' }));
+      setCodeCache((prev) => ({ ...prev, [key]: getProblemStarterTemplate(currentProblem, newLang) }));
     }
   };
 

@@ -45,7 +45,8 @@ async def create_coding_problem(
         time_limit_ms=payload.time_limit_ms,
         memory_limit_mb=payload.memory_limit_mb,
         marks=payload.marks,
-        order_num=payload.order_num
+        order_num=payload.order_num,
+        starter_code=payload.starter_code
     )
     db.add(prob)
     await db.flush()
@@ -98,6 +99,8 @@ async def update_coding_problem(
         prob.marks = payload.marks
     if payload.order_num is not None:
         prob.order_num = payload.order_num
+    if payload.starter_code is not None:
+        prob.starter_code = payload.starter_code
 
     await db.commit()
     await db.refresh(prob)

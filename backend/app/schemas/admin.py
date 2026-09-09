@@ -208,6 +208,7 @@ class CodingProblemCreate(BaseModel):
     memory_limit_mb: int = Field(default=256, ge=16, le=1024)
     marks: int = Field(default=20, ge=1, le=100)
     order_num: int = Field(default=1, ge=1)
+    starter_code: Optional[str] = None
     test_cases: list[CodingTestCaseCreate] = []
 
 
@@ -219,6 +220,7 @@ class CodingProblemUpdate(BaseModel):
     memory_limit_mb: Optional[int] = None
     marks: Optional[int] = None
     order_num: Optional[int] = None
+    starter_code: Optional[str] = None
 
 
 class CodingProblemResponse(BaseModel):
@@ -231,6 +233,7 @@ class CodingProblemResponse(BaseModel):
     memory_limit_mb: int
     marks: int
     order_num: int
+    starter_code: Optional[str] = None
     test_cases: list[CodingTestCaseResponse] = []
 
     model_config = ConfigDict(from_attributes=True)

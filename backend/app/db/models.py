@@ -156,6 +156,7 @@ class CodingProblem(Base):
     memory_limit_mb = Column(Integer, default=256, nullable=False)
     marks = Column(Integer, default=20, nullable=False)
     order_num = Column(Integer, default=1, nullable=False)
+    starter_code = Column(Text, nullable=True) # JSON string of per-language starter code or plain string
 
     test_cases = relationship("CodingTestCase", back_populates="problem", cascade="all, delete-orphan")
 

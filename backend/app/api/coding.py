@@ -35,6 +35,7 @@ class CodingProblemOut(BaseModel):
     memory_limit_mb: int
     marks: int
     order_num: int
+    starter_code: Optional[str] = None
     sample_test_cases: List[PublicTestCase]
 
 class CodingAttemptResponse(BaseModel):
@@ -220,6 +221,7 @@ async def get_or_start_coding_attempt(
             memory_limit_mb=p.memory_limit_mb,
             marks=p.marks,
             order_num=p.order_num,
+            starter_code=p.starter_code,
             sample_test_cases=samples
         ))
 
