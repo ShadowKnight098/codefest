@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, func
 from app.db.session import get_db
 from app.db.models import (
-    Participant, MCQAttempt, CodingAttempt, RoundResult, SecurityEvent, Round
+    Participant, MCQAttempt, CodingAttempt, RoundResult, SecurityEvent, Round,
+    MCQAttemptQuestion, MCQAnswer, CodingSubmission
 )
 from app.core.security import hash_pin
 from app.schemas.admin import (
@@ -476,7 +477,14 @@ async def reset_participant_level1(
         )
     )
 
-    # 2. Delete Round 1 Result
+    # 2. Explicitly delete child answers and attempt_questions to prevent foreign key errors
+    att_res = await db.execute(select(MCQAttempt.id).where(MCQAttempt.participant_id == participant_id))
+    att_ids = att_res.scalars().all()
+    if att_ids:
+        await db.execute(delete(MCQAnswer).where(MCQAnswer.attempt_id.in_(att_ids)))
+        await db.execute(delete(MCQAttemptQuestion).where(MCQAttemptQuestion.attempt_id.in_(att_ids)))
+
+    # 3. Delete Round 1 Result
     round_1 = (await db.execute(select(Round).where(Round.round_number == 1))).scalar_one_or_none()
     if round_1:
         await db.execute(
@@ -486,7 +494,7 @@ async def reset_participant_level1(
             )
         )
 
-    # 3. Delete MCQ Attempt (cascades to questions and answers)
+    # 4. Delete MCQ Attempt
     await db.execute(
         delete(MCQAttempt).where(MCQAttempt.participant_id == participant_id)
     )
@@ -523,7 +531,13 @@ async def reset_participant_level2(
         )
     )
 
-    # 2. Delete Round 2 Result
+    # 2. Explicitly delete child submissions to prevent foreign key errors
+    c_att_res = await db.execute(select(CodingAttempt.id).where(CodingAttempt.participant_id == participant_id))
+    c_att_ids = c_att_res.scalars().all()
+    if c_att_ids:
+        await db.execute(delete(CodingSubmission).where(CodingSubmission.attempt_id.in_(c_att_ids)))
+
+    # 3. Delete Round 2 Result
     round_2 = (await db.execute(select(Round).where(Round.round_number == 2))).scalar_one_or_none()
     if round_2:
         await db.execute(
@@ -533,7 +547,7 @@ async def reset_participant_level2(
             )
         )
 
-    # 3. Delete Coding Attempt (cascades to submissions)
+    # 4. Delete Coding Attempt
     await db.execute(
         delete(CodingAttempt).where(CodingAttempt.participant_id == participant_id)
     )
@@ -549,12 +563,14 @@ async def reset_participant_level2(
 @router.api_route("/{participant_id}/override-level2-qualification/", methods=["GET", "POST", "PUT"])
 async def override_level2_qualification(
     participant_id: str,
+    payload: Optional[dict] = None,
+    is_qualified: Optional[bool] = None,
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_admin)
 ):
     """
-    Emergency Technical Override: Manually qualify participant for Level 2.
-    Useful when a student encounters a technical glitch in Level 1 and faculty wants to grant them Round 2 access directly.
+    Emergency Technical Override: Qualify or Disqualify participant for Level 2.
+    Supports 1-click toggle, explicit boolean payload, or URL parameter.
     """
     result = await db.execute(select(Participant).where(Participant.id == participant_id))
     participant = result.scalar_one_or_none()
@@ -573,19 +589,34 @@ async def override_level2_qualification(
     )
     r1_result = r1_res.scalar_one_or_none()
 
+    # Determine desired status: explicit param > explicit payload body > toggle
+    target_status = is_qualified
+    if target_status is None and payload and "is_qualified" in payload:
+        target_status = bool(payload["is_qualified"])
+
     if r1_result:
-        r1_result.is_qualified = True
+        if target_status is not None:
+            r1_result.is_qualified = target_status
+        else:
+            r1_result.is_qualified = not r1_result.is_qualified
+        new_status = r1_result.is_qualified
     else:
+        new_status = True if target_status is None else target_status
         db.add(RoundResult(
             participant_id=participant_id,
             round_id=round_1.id,
-            score=18,
-            is_qualified=True
+            score=18 if new_status else 0,
+            is_qualified=new_status
         ))
 
     await db.commit()
     memory_cache.delete("admin_leaderboard")
     memory_cache.delete("admin_live_stats")
     memory_cache.delete(f"part:{participant_id}")
-    return {"message": f"{participant.roll_number} has been successfully qualified for Level 2."}
+    status_label = "QUALIFIED" if new_status else "DISQUALIFIED"
+    return {
+        "message": f"{participant.roll_number} ({participant.name}) is now {status_label} for Level 2.",
+        "is_qualified": new_status,
+        "participant_id": participant_id
+    }
 

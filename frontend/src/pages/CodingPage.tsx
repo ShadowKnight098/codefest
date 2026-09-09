@@ -246,7 +246,8 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
       if (data.best_scores) {
         setProblemScores(data.best_scores);
       }
-      if (data.status === 'SUBMITTED') {
+      if (data.status === 'SUBMITTED' || data.status === 'TERMINATED') {
+        setRemainingSeconds(0);
         setShowCompletedModal(true);
       }
       if (data.problems?.[0]?.sample_test_cases?.[0]?.input_data) {
@@ -263,21 +264,55 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
     }
   };
 
+  // Gathers the latest code for each problem across Monaco editor state and code cache
+  const getLatestProblemCodes = () => {
+    return (attempt?.problems || []).map((prob: any, idx: number) => {
+      let probCode = (idx === selectedProblemIndex) ? code : '';
+      let probLang = (idx === selectedProblemIndex) ? language : 'python';
+      if (!probCode || !probCode.trim()) {
+        for (const l of ['python', 'c', 'cpp', 'java']) {
+          const k = `user_${userKey}_prob_${idx}_lang_${l}`;
+          if (codeCache[k] && codeCache[k].trim()) {
+            probCode = codeCache[k];
+            probLang = l;
+            break;
+          }
+        }
+      }
+      return {
+        problem_id: prob.id,
+        language: probLang,
+        code: probCode || STARTER_TEMPLATES[probLang] || '',
+      };
+    });
+  };
+
   // Called automatically when the coding timer reaches 0
   const handleTimerExpiredSubmit = async () => {
     const aid = attemptIdRef.current;
     if (!aid) return;
+    const problemCodes = getLatestProblemCodes();
     try {
       await apiFetch<any>('/coding/final-submit', {
         method: 'POST',
-        body: JSON.stringify({ attempt_id: aid }),
+        body: JSON.stringify({
+          attempt_id: aid,
+          problem_codes: problemCodes,
+        }),
       });
     } catch {
       // Try query param fallback
       try {
-        await apiFetch<any>(`/coding/final-submit?attempt_id=${aid}`, { method: 'POST' });
+        await apiFetch<any>(`/coding/final-submit?attempt_id=${aid}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            attempt_id: aid,
+            problem_codes: problemCodes,
+          }),
+        });
       } catch { /* best effort */ }
     }
+    setRemainingSeconds(0);
     setShowCompletedModal(true);
   };
 
@@ -416,20 +451,30 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
   const handleFinalSubmit = async () => {
     if (!attempt) return;
     setIsFinalSubmitting(true);
+    const problemCodes = getLatestProblemCodes();
     try {
       const res = await apiFetch<any>('/coding/final-submit', {
         method: 'POST',
-        body: JSON.stringify({ attempt_id: attempt.attempt_id }),
+        body: JSON.stringify({
+          attempt_id: attempt.attempt_id,
+          problem_codes: problemCodes,
+        }),
       });
       setFinalResult(res);
+      setRemainingSeconds(0);
       setShowFinalSubmitModal(false);
       setShowCompletedModal(true);
     } catch (err: any) {
       try {
         const res = await apiFetch<any>(`/coding/final-submit?attempt_id=${attempt.attempt_id}`, {
           method: 'POST',
+          body: JSON.stringify({
+            attempt_id: attempt.attempt_id,
+            problem_codes: problemCodes,
+          }),
         });
         setFinalResult(res);
+        setRemainingSeconds(0);
         setShowFinalSubmitModal(false);
         setShowCompletedModal(true);
       } catch (fallbackErr: any) {
@@ -441,6 +486,7 @@ export const CodingPage: React.FC<{ onComplete?: () => void }> = ({ onComplete }
             best_score: problemScores[p.id] || 0,
           })) || [],
         });
+        setRemainingSeconds(0);
         setShowFinalSubmitModal(false);
         setShowCompletedModal(true);
       }

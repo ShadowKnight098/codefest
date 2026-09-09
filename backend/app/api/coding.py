@@ -95,8 +95,14 @@ class SubmitCodeResponse(BaseModel):
     verdict: str
     test_cases: List[TestCaseSummary] = []
 
+class ProblemCodeSubmission(BaseModel):
+    problem_id: str
+    language: str
+    code: str
+
 class FinalSubmitRequest(BaseModel):
     attempt_id: str
+    problem_codes: Optional[List[ProblemCodeSubmission]] = None
 
 class ProblemScoreSummary(BaseModel):
     problem_id: str
@@ -179,8 +185,11 @@ async def get_or_start_coding_attempt(
     if started_at.tzinfo is None:
         started_at = started_at.replace(tzinfo=timezone.utc)
 
-    elapsed = (now - started_at).total_seconds()
-    remaining = max(0, int(attempt.duration_seconds - elapsed))
+    if attempt.status in ("SUBMITTED", "TERMINATED"):
+        remaining = 0
+    else:
+        elapsed = (now - started_at).total_seconds()
+        remaining = max(0, int(attempt.duration_seconds - elapsed))
 
     # Fetch problems with public test cases only (HIDDEN TEST CASES NEVER LEAKED)
     probs_res = await db.execute(
@@ -615,16 +624,66 @@ async def final_submit_coding(
     if not attempt:
         raise HTTPException(status_code=404, detail="Active coding attempt not found.")
 
-    # Fetch coding problems for this round only
+    # Fetch coding problems for this round with test cases eager-loaded
     round_2 = (await db.execute(select(Round).where(Round.round_number == 2))).scalar_one_or_none()
     prob_res = await db.execute(
         select(CodingProblem)
+        .options(selectinload(CodingProblem.test_cases))
         .where(CodingProblem.round_id == attempt.round_id)
         .order_by(CodingProblem.order_num.asc())
     )
     problems = prob_res.scalars().all()
 
-    # Fetch all submissions for this attempt
+    # Auto-evaluate any unsubmitted or latest problem code provided at final submit
+    if payload and payload.problem_codes:
+        for pc in payload.problem_codes:
+            target_prob = next((p for p in problems if p.id == pc.problem_id), None)
+            if target_prob and pc.code and pc.code.strip():
+                try:
+                    all_cases = sorted(target_prob.test_cases, key=lambda tc: tc.order_num)
+                    total_cases = len(all_cases) or 1
+
+                    async def _eval_case(tc):
+                        res = await judge0_service.execute_code(
+                            source_code=pc.code,
+                            language=pc.language or "python",
+                            stdin=tc.input_data,
+                            expected_output=tc.expected_output,
+                            cpu_time_limit_sec=target_prob.time_limit_ms / 1000.0,
+                            memory_limit_mb=target_prob.memory_limit_mb
+                        )
+                        is_pass = res.get("success") and res.get("passed")
+                        t_ms = int(res["execution_time_sec"] * 1000) if res.get("execution_time_sec") else 0
+                        status_txt = res.get("status", "Error")
+                        return (tc, is_pass, t_ms, status_txt)
+
+                    case_logs = await asyncio.gather(*[_eval_case(tc) for tc in all_cases])
+                    passed_count = sum(1 for c in case_logs if c[1])
+                    total_time_ms = sum(c[2] for c in case_logs)
+                    first_fail = next((c[3] for c in case_logs if not c[1]), None)
+
+                    fraction = passed_count / total_cases
+                    earned_score = int(round(fraction * target_prob.marks))
+
+                    submission = CodingSubmission(
+                        attempt_id=attempt.id,
+                        problem_id=target_prob.id,
+                        language=pc.language or "python",
+                        code=pc.code,
+                        status="COMPLETED",
+                        test_cases_passed=passed_count,
+                        total_test_cases=total_cases,
+                        score=earned_score,
+                        execution_time_ms=total_time_ms,
+                        failure_reason=first_fail
+                    )
+                    db.add(submission)
+                except Exception as eval_err:
+                    print(f"Auto-eval on final submit error for problem {target_prob.id}: {eval_err}")
+
+        await db.flush()
+
+    # Fetch all submissions for this attempt (including newly auto-evaluated ones)
     sub_res = await db.execute(
         select(CodingSubmission).where(CodingSubmission.attempt_id == attempt.id)
     )

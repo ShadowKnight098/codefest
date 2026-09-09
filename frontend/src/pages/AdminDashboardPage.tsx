@@ -769,17 +769,22 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   };
 
   const handleResetLevel1 = async (p: any) => {
+    const partId = p?.id || p?.participant_id;
+    if (!partId) return alert('Participant ID not found.');
     if (!confirm(`Are you sure you want to completely RESET Level 1 (MCQ Assessment) for ${p.roll_number} (${p.name})?\n\nThis will clear their previous attempt, answers, violations, and timer, letting them start Level 1 freshly.`)) return;
     setLoading(true);
     try {
-      const res = await apiFetch<any>(`/admin/participants/${p.id}/reset-level1`, {
+      const res = await apiFetch<any>(`/admin/participants/${partId}/reset-level1`, {
         method: 'POST',
         body: JSON.stringify({})
       });
       alert(res.message || `Level 1 reset for ${p.roll_number}.`);
       setMessage(res.message);
       setSelectedParticipantForEmergency(null);
-      fetchParticipants();
+      if (isSuperAdmin) fetchParticipants();
+      fetchWinners1();
+      fetchLeaderboard();
+      fetchOverview();
     } catch (e: any) {
       alert(`Failed to reset Level 1: ${e?.detail || e.message}`);
     } finally {
@@ -788,17 +793,22 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   };
 
   const handleResetLevel2 = async (p: any) => {
+    const partId = p?.id || p?.participant_id;
+    if (!partId) return alert('Participant ID not found.');
     if (!confirm(`Are you sure you want to completely RESET Level 2 (Coding Assessment) for ${p.roll_number} (${p.name})?\n\nThis will clear their coding submissions, violations, and timer, letting them start Level 2 freshly.`)) return;
     setLoading(true);
     try {
-      const res = await apiFetch<any>(`/admin/participants/${p.id}/reset-level2`, {
+      const res = await apiFetch<any>(`/admin/participants/${partId}/reset-level2`, {
         method: 'POST',
         body: JSON.stringify({})
       });
       alert(res.message || `Level 2 reset for ${p.roll_number}.`);
       setMessage(res.message);
       setSelectedParticipantForEmergency(null);
-      fetchParticipants();
+      if (isSuperAdmin) fetchParticipants();
+      fetchWinners2();
+      fetchLeaderboard();
+      fetchOverview();
     } catch (e: any) {
       alert(`Failed to reset Level 2: ${e?.detail || e.message}`);
     } finally {
@@ -806,20 +816,50 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     }
   };
 
-  const handleOverrideLevel2 = async (p: any) => {
-    if (!confirm(`Manually QUALIFY ${p.roll_number} (${p.name}) for Level 2 (Coding)?\n\nThis allows the student to immediately enter Level 2 even if they had a device issue in Level 1.`)) return;
+  const handleOverrideLevel2 = async (p: any, explicitStatus?: boolean) => {
+    const partId = p?.id || p?.participant_id;
+    if (!partId) return alert('Participant ID not found.');
+    const isQualifying = explicitStatus !== undefined ? explicitStatus : !p.mcq_qualified;
+    const actionName = isQualifying ? 'QUALIFY' : 'DISQUALIFY';
+    if (!confirm(`Are you sure you want to ${actionName} ${p.roll_number} (${p.name}) for Level 2 (Coding)?\n\nThis allows the student to immediately enter Level 2.`)) return;
     setLoading(true);
     try {
-      const res = await apiFetch<any>(`/admin/participants/${p.id}/override-level2-qualification`, {
+      const res = await apiFetch<any>(`/admin/participants/${partId}/override-level2-qualification`, {
         method: 'POST',
-        body: JSON.stringify({})
+        body: JSON.stringify({ is_qualified: isQualifying })
       });
-      alert(res.message || `${p.roll_number} qualified for Level 2.`);
+      alert(res.message || `${p.roll_number} qualification updated.`);
       setMessage(res.message);
       setSelectedParticipantForEmergency(null);
-      fetchParticipants();
+      if (isSuperAdmin) fetchParticipants();
+      fetchWinners1();
+      fetchWinners2();
+      fetchLeaderboard();
+      fetchOverview();
     } catch (e: any) {
       alert(`Failed to qualify for Level 2: ${e?.detail || e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickToggleQualify = async (participantId: string, roll: string, name: string, currentQualified: boolean) => {
+    const nextAction = currentQualified ? 'DISQUALIFY from' : 'QUALIFY for';
+    if (!confirm(`Are you sure you want to ${nextAction} Level 2 (Coding) for ${roll} (${name})?`)) return;
+    setLoading(true);
+    try {
+      const res = await apiFetch<any>(`/admin/participants/${participantId}/override-level2-qualification`, {
+        method: 'POST',
+        body: JSON.stringify({ is_qualified: !currentQualified })
+      });
+      setMessage(res.message || `Updated qualification for ${roll}.`);
+      await fetchWinners1();
+      await fetchWinners2();
+      await fetchLeaderboard();
+      await fetchOverview();
+      if (isSuperAdmin) await fetchParticipants();
+    } catch (e: any) {
+      alert(`Failed to update qualification: ${e?.detail || e.message}`);
     } finally {
       setLoading(false);
     }
@@ -1134,123 +1174,6 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   </tbody>
                 </table>
               </div>
-
-              {/* Emergency Reassign / Technical Reset Modal */}
-              {selectedParticipantForEmergency && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                  <div className="bg-white rounded-[6px] max-w-lg w-full p-6 shadow-2xl border border-[#DBD7C9] space-y-4 animate-in fade-in">
-                    <div className="border-b border-[#DBD7C9] pb-3 flex justify-between items-start">
-                      <div>
-                        <div className="text-[10px] font-mono uppercase tracking-wider text-[#A82A2A] font-bold">
-                          Emergency Operations &amp; Recovery
-                        </div>
-                        <h3 className="font-serif text-lg font-bold text-[#16233F]">
-                          {selectedParticipantForEmergency.roll_number} — {selectedParticipantForEmergency.name}
-                        </h3>
-                        <div className="text-xs text-[#59626F]">
-                          Year {selectedParticipantForEmergency.academic_year} · {selectedParticipantForEmergency.email}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setSelectedParticipantForEmergency(null)}
-                        className="text-[#8B93A0] hover:text-[#16233F] font-bold text-lg px-2"
-                      >
-                        ✕
-                      </button>
-                    </div>
-
-                    <p className="text-xs text-[#59626F]">
-                      Use these recovery controls if the student experienced a power cut, system crash, or technical glitch during the contest.
-                    </p>
-
-                    <div className="space-y-3">
-                      {/* Action 1: Reset Level 1 */}
-                      <div className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] flex items-center justify-between gap-3">
-                        <div>
-                          <div className="font-bold text-xs text-[#16233F] flex items-center space-x-1.5">
-                            <span>🔄 Reset Level 1 (MCQ)</span>
-                          </div>
-                          <p className="text-[11px] text-[#59626F] mt-0.5">
-                            Clears MCQ attempt, answers &amp; violations. Gives student a fresh 30-minute timer.
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => handleResetLevel1(selectedParticipantForEmergency)}
-                          disabled={loading}
-                          className="px-3 py-1.5 bg-[#A82A2A] text-white font-semibold text-xs rounded hover:bg-[#8B2020] shrink-0 disabled:opacity-50"
-                        >
-                          Reset Level 1
-                        </button>
-                      </div>
-
-                      {/* Action 2: Reset Level 2 */}
-                      <div className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] flex items-center justify-between gap-3">
-                        <div>
-                          <div className="font-bold text-xs text-[#16233F] flex items-center space-x-1.5">
-                            <span>💻 Reset Level 2 (Coding)</span>
-                          </div>
-                          <p className="text-[11px] text-[#59626F] mt-0.5">
-                            Clears Coding submissions, timer &amp; violations. Re-opens coding environment.
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => handleResetLevel2(selectedParticipantForEmergency)}
-                          disabled={loading}
-                          className="px-3 py-1.5 bg-[#A82A2A] text-white font-semibold text-xs rounded hover:bg-[#8B2020] shrink-0 disabled:opacity-50"
-                        >
-                          Reset Level 2
-                        </button>
-                      </div>
-
-                      {/* Action 3: Force Qualify Level 2 */}
-                      <div className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] flex items-center justify-between gap-3">
-                        <div>
-                          <div className="font-bold text-xs text-[#1E7E34] flex items-center space-x-1.5">
-                            <span>🏆 Direct Qualify for Level 2</span>
-                          </div>
-                          <p className="text-[11px] text-[#59626F] mt-0.5">
-                            Manually grants entry to Round 2 without requiring Level 1 score.
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => handleOverrideLevel2(selectedParticipantForEmergency)}
-                          disabled={loading}
-                          className="px-3 py-1.5 bg-[#1E7E34] text-white font-semibold text-xs rounded hover:bg-[#166027] shrink-0 disabled:opacity-50"
-                        >
-                          Qualify for R2
-                        </button>
-                      </div>
-
-                      {/* Action 4: Reset Password */}
-                      <div className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] flex items-center justify-between gap-3">
-                        <div>
-                          <div className="font-bold text-xs text-[#16233F]">
-                            🔑 Reset Password
-                          </div>
-                          <p className="text-[11px] text-[#59626F] mt-0.5">
-                            Resets login password back to Roll Number ({selectedParticipantForEmergency.roll_number}).
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => handleResetPin(selectedParticipantForEmergency.id, selectedParticipantForEmergency.roll_number)}
-                          className="px-3 py-1.5 bg-[#16233F] text-white font-semibold text-xs rounded hover:bg-[#25355B] shrink-0"
-                        >
-                          Reset Pass
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end pt-2 border-t border-[#DBD7C9]">
-                      <button
-                        onClick={() => setSelectedParticipantForEmergency(null)}
-                        className="px-4 py-1.5 border border-[#C6C1B0] rounded text-xs font-medium hover:bg-[#F6F6F2]"
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Single Participant Modal */}
               {showAddPartModal && (
@@ -2361,6 +2284,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <th className="py-2.5 px-3 text-center">Presentation (/50)</th>
                       <th className="py-2.5 px-3 text-center font-bold">Total Score</th>
                       <th className="py-2.5 px-3 text-center">Violations</th>
+                      <th className="py-2.5 px-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#DBD7C9]">
@@ -2388,6 +2312,24 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                           <span className={e.violations > 0 ? 'text-[#A82A2A] font-bold' : 'text-[#8B93A0]'}>
                             {e.violations}
                           </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <button
+                            onClick={() => setSelectedParticipantForEmergency({
+                              id: e.participant_id,
+                              participant_id: e.participant_id,
+                              roll_number: e.roll_number,
+                              name: e.name,
+                              academic_year: e.academic_year,
+                              mcq_qualified: e.mcq_qualified,
+                              email: `${e.roll_number}@codefest`
+                            })}
+                            className="px-2 py-1 bg-[#16233F] text-white rounded text-[10.5px] font-semibold hover:bg-[#25355B] inline-flex items-center space-x-1"
+                            title="Emergency Reset or Reassign L1 / L2"
+                          >
+                            <span>⚙️</span>
+                            <span>Fix / Reset</span>
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -2520,8 +2462,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <th className="py-2.5 px-3">Name</th>
                       <th className="py-2.5 px-3 text-center">Year</th>
                       <th className="py-2.5 px-3 text-center">MCQ Score</th>
-                      <th className="py-2.5 px-3 text-center">Qualified</th>
+                      <th className="py-2.5 px-3 text-center">Round 2 Entry</th>
                       <th className="py-2.5 px-3 text-center">Violations</th>
+                      <th className="py-2.5 px-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#DBD7C9]">
@@ -2535,12 +2478,38 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         <td className="py-2.5 px-3 text-center">{e.academic_year}</td>
                         <td className="py-2.5 px-3 text-center font-mono font-bold">{e.mcq_score} / 25</td>
                         <td className="py-2.5 px-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-[2px] text-[10px] font-bold ${e.mcq_qualified ? 'bg-[#E8F3EC] text-[#1E7E34]' : 'bg-[#FDEDEC] text-[#A82A2A]'}`}>
-                            {e.mcq_qualified ? 'QUALIFIED' : 'NOT QUALIFIED'}
-                          </span>
+                          <button
+                            onClick={() => handleQuickToggleQualify(e.participant_id, e.roll_number, e.name, e.mcq_qualified)}
+                            className={`px-2.5 py-1 rounded-[3px] text-[10.5px] font-bold border transition-all cursor-pointer shadow-xs ${
+                              e.mcq_qualified
+                                ? 'bg-[#E8F3EC] text-[#1E7E34] border-[#1E7E34]/40 hover:bg-[#FDEDEC] hover:text-[#A82A2A] hover:border-[#A82A2A]/40'
+                                : 'bg-[#FDEDEC] text-[#A82A2A] border-[#A82A2A]/40 hover:bg-[#E8F3EC] hover:text-[#1E7E34] hover:border-[#1E7E34]/40'
+                            }`}
+                            title={`Click to ${e.mcq_qualified ? 'DISQUALIFY' : 'QUALIFY'} for Level 2`}
+                          >
+                            {e.mcq_qualified ? '✓ QUALIFIED' : '+ QUALIFY FOR R2'}
+                          </button>
                         </td>
                         <td className="py-2.5 px-3 text-center font-mono">
                           <span className={e.violations > 0 ? 'text-[#A82A2A] font-bold' : 'text-[#8B93A0]'}>{e.violations}</span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <button
+                            onClick={() => setSelectedParticipantForEmergency({
+                              id: e.participant_id,
+                              participant_id: e.participant_id,
+                              roll_number: e.roll_number,
+                              name: e.name,
+                              academic_year: e.academic_year,
+                              mcq_qualified: e.mcq_qualified,
+                              email: `${e.roll_number}@codefest`
+                            })}
+                            className="px-2 py-1 bg-[#16233F] text-white rounded text-[10.5px] font-semibold hover:bg-[#25355B] inline-flex items-center space-x-1"
+                            title="Emergency Reset or Reassign L1 / L2"
+                          >
+                            <span>⚙️</span>
+                            <span>Fix / Reset</span>
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -2661,6 +2630,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <th className="py-2.5 px-3 text-center">Coding (/60)</th>
                       <th className="py-2.5 px-3 text-center font-bold">Total</th>
                       <th className="py-2.5 px-3 text-center">Violations</th>
+                      <th className="py-2.5 px-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#DBD7C9]">
@@ -2677,6 +2647,24 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         <td className="py-2.5 px-3 text-center font-mono font-bold text-[#1E7E34] text-sm">{e.total_score}</td>
                         <td className="py-2.5 px-3 text-center font-mono">
                           <span className={e.violations > 0 ? 'text-[#A82A2A] font-bold' : 'text-[#8B93A0]'}>{e.violations}</span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <button
+                            onClick={() => setSelectedParticipantForEmergency({
+                              id: e.participant_id,
+                              participant_id: e.participant_id,
+                              roll_number: e.roll_number,
+                              name: e.name,
+                              academic_year: e.academic_year,
+                              mcq_qualified: e.mcq_qualified,
+                              email: `${e.roll_number}@codefest`
+                            })}
+                            className="px-2 py-1 bg-[#16233F] text-white rounded text-[10.5px] font-semibold hover:bg-[#25355B] inline-flex items-center space-x-1"
+                            title="Emergency Reset or Reassign L1 / L2"
+                          >
+                            <span>⚙️</span>
+                            <span>Fix / Reset</span>
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -3506,6 +3494,127 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* GLOBAL EMERGENCY REASSIGN / TECHNICAL RESET MODAL (Accessible across all tabs & roles) */}
+      {selectedParticipantForEmergency && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[6px] max-w-lg w-full p-6 shadow-2xl border border-[#DBD7C9] space-y-4 animate-in fade-in">
+            <div className="border-b border-[#DBD7C9] pb-3 flex justify-between items-start">
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-[#A82A2A] font-bold">
+                  Emergency Operations &amp; Recovery
+                </div>
+                <h3 className="font-serif text-lg font-bold text-[#16233F]">
+                  {selectedParticipantForEmergency.roll_number} — {selectedParticipantForEmergency.name}
+                </h3>
+                <div className="text-xs text-[#59626F]">
+                  Year {selectedParticipantForEmergency.academic_year} · {selectedParticipantForEmergency.email || selectedParticipantForEmergency.roll_number}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedParticipantForEmergency(null)}
+                className="text-[#8B93A0] hover:text-[#16233F] font-bold text-lg px-2"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-[#59626F]">
+              Use these recovery controls if the student experienced a power cut, system crash, network error, or needs emergency qualification/reassignment.
+            </p>
+
+            <div className="space-y-3">
+              {/* Action 1: Reset Level 1 */}
+              <div className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-bold text-xs text-[#16233F] flex items-center space-x-1.5">
+                    <span>🔄 Reset Level 1 (MCQ)</span>
+                  </div>
+                  <p className="text-[11px] text-[#59626F] mt-0.5">
+                    Clears MCQ attempt, answers &amp; violations. Gives student a fresh 30-minute timer.
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleResetLevel1(selectedParticipantForEmergency)}
+                  disabled={loading}
+                  className="px-3 py-1.5 bg-[#A82A2A] text-white font-semibold text-xs rounded hover:bg-[#8B2020] shrink-0 disabled:opacity-50"
+                >
+                  Reset Level 1
+                </button>
+              </div>
+
+              {/* Action 2: Reset Level 2 */}
+              <div className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-bold text-xs text-[#16233F] flex items-center space-x-1.5">
+                    <span>💻 Reset Level 2 (Coding)</span>
+                  </div>
+                  <p className="text-[11px] text-[#59626F] mt-0.5">
+                    Clears Coding submissions, timer &amp; violations. Re-opens coding environment.
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleResetLevel2(selectedParticipantForEmergency)}
+                  disabled={loading}
+                  className="px-3 py-1.5 bg-[#A82A2A] text-white font-semibold text-xs rounded hover:bg-[#8B2020] shrink-0 disabled:opacity-50"
+                >
+                  Reset Level 2
+                </button>
+              </div>
+
+              {/* Action 3: Qualify or Disqualify Level 2 */}
+              <div className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] flex items-center justify-between gap-3">
+                <div>
+                  <div className={`font-bold text-xs flex items-center space-x-1.5 ${selectedParticipantForEmergency.mcq_qualified ? 'text-[#A82A2A]' : 'text-[#1E7E34]'}`}>
+                    <span>{selectedParticipantForEmergency.mcq_qualified ? '❌ Revoke Level 2 Entry' : '🏆 Direct Qualify for Level 2'}</span>
+                  </div>
+                  <p className="text-[11px] text-[#59626F] mt-0.5">
+                    {selectedParticipantForEmergency.mcq_qualified ? 'Revokes Round 2 entry and marks candidate as not qualified.' : 'Manually grants immediate entry to Round 2 without requiring cutoff score.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleOverrideLevel2(selectedParticipantForEmergency, !selectedParticipantForEmergency.mcq_qualified)}
+                  disabled={loading}
+                  className={`px-3 py-1.5 text-white font-semibold text-xs rounded shrink-0 disabled:opacity-50 ${
+                    selectedParticipantForEmergency.mcq_qualified
+                      ? 'bg-[#A82A2A] hover:bg-[#8B2020]'
+                      : 'bg-[#1E7E34] hover:bg-[#166027]'
+                  }`}
+                >
+                  {selectedParticipantForEmergency.mcq_qualified ? 'Disqualify from R2' : 'Qualify for R2'}
+                </button>
+              </div>
+
+              {/* Action 4: Reset Password */}
+              <div className="bg-[#F6F6F2] p-3 rounded border border-[#DBD7C9] flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-bold text-xs text-[#16233F]">
+                    🔑 Reset Password
+                  </div>
+                  <p className="text-[11px] text-[#59626F] mt-0.5">
+                    Resets login password back to Roll Number ({selectedParticipantForEmergency.roll_number}).
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleResetPin(selectedParticipantForEmergency.id || selectedParticipantForEmergency.participant_id, selectedParticipantForEmergency.roll_number)}
+                  className="px-3 py-1.5 bg-[#16233F] text-white font-semibold text-xs rounded hover:bg-[#25355B] shrink-0"
+                >
+                  Reset Pass
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-[#DBD7C9]">
+              <button
+                onClick={() => setSelectedParticipantForEmergency(null)}
+                className="px-4 py-1.5 border border-[#C6C1B0] rounded text-xs font-medium hover:bg-[#F6F6F2]"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
