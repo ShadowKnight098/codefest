@@ -4,7 +4,7 @@ import random
 import string
 import re
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, func
 from app.db.session import get_db
@@ -452,8 +452,7 @@ async def import_participants_text(
 
 # ─── Technical Emergency Reset & Reassignment Endpoints ───
 
-@router.api_route("/{participant_id}/reset-level1", methods=["GET", "POST", "PUT"])
-@router.api_route("/{participant_id}/reset-level1/", methods=["GET", "POST", "PUT"])
+@router.post("/{participant_id}/reset-level1")
 async def reset_participant_level1(
     participant_id: str,
     db: AsyncSession = Depends(get_db),
@@ -506,8 +505,7 @@ async def reset_participant_level1(
     return {"message": f"Level 1 (MCQ Assessment) for {participant.roll_number} has been completely reset. The student can now start Level 1 fresh."}
 
 
-@router.api_route("/{participant_id}/reset-level2", methods=["GET", "POST", "PUT"])
-@router.api_route("/{participant_id}/reset-level2/", methods=["GET", "POST", "PUT"])
+@router.post("/{participant_id}/reset-level2")
 async def reset_participant_level2(
     participant_id: str,
     db: AsyncSession = Depends(get_db),
@@ -559,11 +557,10 @@ async def reset_participant_level2(
     return {"message": f"Level 2 (Coding Assessment) for {participant.roll_number} has been completely reset. The student can now start Level 2 fresh."}
 
 
-@router.api_route("/{participant_id}/override-level2-qualification", methods=["GET", "POST", "PUT"])
-@router.api_route("/{participant_id}/override-level2-qualification/", methods=["GET", "POST", "PUT"])
+@router.post("/{participant_id}/override-level2-qualification")
 async def override_level2_qualification(
     participant_id: str,
-    payload: Optional[dict] = None,
+    request: Request,
     is_qualified: Optional[bool] = None,
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_admin)
@@ -588,6 +585,13 @@ async def override_level2_qualification(
         )
     )
     r1_result = r1_res.scalar_one_or_none()
+
+    # Parse JSON body safely
+    payload = None
+    try:
+        payload = await request.json()
+    except Exception:
+        pass
 
     # Determine desired status: explicit param > explicit payload body > toggle
     target_status = is_qualified
@@ -619,4 +623,5 @@ async def override_level2_qualification(
         "is_qualified": new_status,
         "participant_id": participant_id
     }
+
 
