@@ -70,6 +70,8 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
     };
     document.addEventListener('fullscreenchange', handleFsChange);
 
+    let timerInterval: number | null = null;
+
     const loadAttempt = async () => {
       try {
         const data = await apiFetch<any>('/coding/attempt');
@@ -80,13 +82,30 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
         if (data.violations_count !== undefined) {
           setTabSwitchCount(data.violations_count);
         }
-        if (data.status === 'SUBMITTED' || data.status === 'TERMINATED') {
+
+        const isAlreadySubmitted = data.status === 'SUBMITTED' || data.status === 'TERMINATED' || data.remaining_seconds <= 0;
+        if (isAlreadySubmitted) {
+          autoSubmitRef.current = true;
           setSubmitResult({
             total_score: 0,
-            total_marks: data.questions?.reduce((acc: number, q: any) => acc + (q.marks || 1), 0) || 0,
+            total_marks: data.questions?.reduce((acc: number, q: any) => acc + (q.marks || 1), 0) || 45,
             answered_count: data.answered_count || 0,
-            total_questions: data.total_questions || data.questions?.length || 0,
+            total_questions: data.total_questions || data.questions?.length || 15,
           });
+        } else {
+          // Start timer only if assessment is strictly in progress and active
+          timerInterval = window.setInterval(() => {
+            setRemainingSeconds((prev) => {
+              if (prev <= 1) {
+                if (!autoSubmitRef.current) {
+                  autoSubmitRef.current = true;
+                  handleFinalSubmit();
+                }
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
         }
         setLoading(false);
       } catch (err: any) {
@@ -102,23 +121,10 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
 
     loadAttempt();
 
-    const timerInterval = setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev <= 1) {
-          if (!autoSubmitRef.current) {
-            autoSubmitRef.current = true;
-            handleFinalSubmit();
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
     // Visibility / Tab-switch Proctoring
     const handleVisibility = async () => {
       const currentId = attemptIdRef.current;
-      if (document.hidden && currentId) {
+      if (document.hidden && currentId && !autoSubmitRef.current) {
         try {
           const res = await apiFetch<any>('/security/violation', {
             method: 'POST',
@@ -151,7 +157,7 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
-      clearInterval(timerInterval);
+      if (timerInterval !== null) clearInterval(timerInterval);
       document.removeEventListener('fullscreenchange', handleFsChange);
       document.removeEventListener('visibilitychange', handleVisibility);
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);

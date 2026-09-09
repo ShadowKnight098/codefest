@@ -164,6 +164,42 @@ async def get_or_start_mcq_attempt(
         await _score_and_finalize_attempt(attempt, db)
         await db.commit()
 
+    # STRICT LOCKOUT: If attempt is submitted or terminated, NEVER serve question pool or options
+    if attempt.status in ("SUBMITTED", "TERMINATED") or remaining <= 0:
+        v_res = await db.execute(
+            select(func.count(SecurityEvent.id)).where(
+                SecurityEvent.attempt_id == attempt.id
+            )
+        )
+        violations_count = v_res.scalar() or 0
+
+        ans_count_res = await db.execute(
+            select(func.count(MCQAnswer.id)).where(
+                MCQAnswer.attempt_id == attempt.id,
+                MCQAnswer.selected_option.isnot(None)
+            )
+        )
+        answered = ans_count_res.scalar() or 0
+
+        tot_q_res = await db.execute(
+            select(func.count(MCQAttemptQuestion.id)).where(
+                MCQAttemptQuestion.attempt_id == attempt.id
+            )
+        )
+        total_q = tot_q_res.scalar() or 25
+
+        return AttemptStateResponse(
+            attempt_id=attempt.id,
+            status=attempt.status if attempt.status in ("SUBMITTED", "TERMINATED") else "SUBMITTED",
+            started_at=attempt.started_at,
+            duration_seconds=attempt.duration_seconds,
+            remaining_seconds=0,
+            questions=[],
+            answered_count=answered,
+            unanswered_count=max(0, total_q - answered),
+            violations_count=violations_count
+        )
+
     # Load persisted questions in assigned order
     aq_res = await db.execute(
         select(MCQAttemptQuestion, MCQQuestion)

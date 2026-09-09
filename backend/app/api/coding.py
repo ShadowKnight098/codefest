@@ -244,6 +244,42 @@ async def get_or_start_l2_attempt(
         await _score_and_finalize_attempt(attempt, current_participant.id, db)
         await db.refresh(attempt)
 
+    # STRICT LOCKOUT: If attempt is submitted or terminated, NEVER serve question pool or code
+    if attempt.status in ("SUBMITTED", "TERMINATED") or remaining <= 0:
+        v_res = await db.execute(
+            select(func.count(SecurityEvent.id)).where(
+                SecurityEvent.attempt_id == attempt.id
+            )
+        )
+        violations_count = v_res.scalar() or 0
+
+        # Count answered questions from database
+        ans_count_res = await db.execute(
+            select(func.count(L2Answer.id)).where(
+                L2Answer.participant_id == current_participant.id,
+                L2Answer.selected_option.isnot(None)
+            )
+        )
+        ans_c = ans_count_res.scalar() or 0
+
+        tot_q_res = await db.execute(
+            select(func.count(L2QuestionAssignment.id)).where(
+                L2QuestionAssignment.participant_id == current_participant.id
+            )
+        )
+        tot_q = tot_q_res.scalar() or 15
+
+        return L2AttemptResponse(
+            attempt_id=attempt.id,
+            status=attempt.status if attempt.status in ("SUBMITTED", "TERMINATED") else "SUBMITTED",
+            remaining_seconds=0,
+            duration_seconds=attempt.duration_seconds,
+            questions=[],
+            violations_count=violations_count,
+            total_questions=tot_q,
+            answered_count=ans_c
+        )
+
     # 6. Fetch or Generate Question Assignments
     assign_res = await db.execute(
         select(L2QuestionAssignment)

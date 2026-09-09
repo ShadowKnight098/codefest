@@ -46,6 +46,7 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
   const [securityToast, setSecurityToast] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(!!document.fullscreenElement);
   const attemptIdRef = useRef<string>('');
+  const autoSubmitRef = useRef<boolean>(false);
   const saveTimeoutRef = useRef<number | null>(null);
   const pendingSaveRef = useRef<{ attempt_id: string; question_id: string; option: string } | null>(null);
   const debounceTimerRef = useRef<number | null>(null);
@@ -89,7 +90,7 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
 
   // 1. Fetch or initialize attempt from backend
   useEffect(() => {
-    let timerInterval: number;
+    let timerInterval: number | null = null;
 
     const handleFsChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -101,27 +102,33 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
         const data = await apiFetch<any>('/api/mcq/attempt');
         setAttemptId(data.attempt_id);
         attemptIdRef.current = data.attempt_id;
-        setQuestions(data.questions);
+        setQuestions(data.questions || []);
         setRemainingSeconds(data.remaining_seconds);
         if (data.violations_count !== undefined) {
           setTabSwitchCount(data.violations_count);
         }
-        if (data.status === 'SUBMITTED' || data.status === 'TERMINATED') {
+
+        const isAlreadySubmitted = data.status === 'SUBMITTED' || data.status === 'TERMINATED' || data.remaining_seconds <= 0;
+        if (isAlreadySubmitted) {
+          autoSubmitRef.current = true;
           setIsSubmitted(true);
+        } else {
+          // Server-synchronized countdown only when active
+          timerInterval = window.setInterval(() => {
+            setRemainingSeconds((prev) => {
+              if (prev <= 1) {
+                // Force submit on expiry
+                if (!autoSubmitRef.current) {
+                  autoSubmitRef.current = true;
+                  handleFinalSubmit();
+                }
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
         }
         setLoading(false);
-
-        // Server-synchronized countdown
-        timerInterval = window.setInterval(() => {
-          setRemainingSeconds((prev) => {
-            if (prev <= 1) {
-              // Force submit on expiry
-              handleFinalSubmit();
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
       } catch (err) {
         console.error('Failed to load MCQ attempt:', err);
         if (err instanceof ApiError) {
@@ -138,7 +145,7 @@ export const MCQPage: React.FC<MCQPageProps> = ({ onComplete, onTerminated }) =>
     // Visibility change / tab switch proctoring listener
     const handleVisibility = async () => {
       const currentId = attemptIdRef.current;
-      if (document.hidden && currentId) {
+      if (document.hidden && currentId && !autoSubmitRef.current) {
         try {
           const res = await apiFetch<any>('/security/violation', {
             method: 'POST',
