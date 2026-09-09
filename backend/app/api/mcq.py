@@ -123,10 +123,20 @@ async def get_or_start_mcq_attempt(
             all_q_res = await db.execute(select(MCQQuestion).where(MCQQuestion.is_active == True))
             pool = all_q_res.scalars().all()
 
-        if len(pool) < 25:
-            selected_pool = pool
-        else:
-            selected_pool = random.sample(pool, 25)
+        # Deduplicate pool: ensure every question has a unique ID and unique question text
+        unique_pool = []
+        seen_texts = set()
+        seen_ids = set()
+        for q in pool:
+            norm_txt = q.question_text.strip().lower()
+            if q.id not in seen_ids and norm_txt not in seen_texts:
+                seen_ids.add(q.id)
+                seen_texts.add(norm_txt)
+                unique_pool.append(q)
+
+        # Sample at most 25 unique questions without repetition
+        sample_count = min(len(unique_pool), 25)
+        selected_pool = random.sample(unique_pool, sample_count)
 
         # Persist assignment order
         for idx, q in enumerate(selected_pool, start=1):

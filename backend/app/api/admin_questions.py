@@ -69,11 +69,25 @@ async def create_mcq_question(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_admin)
 ):
+    text = payload.question_text.strip()
+    # Deduplication check: prevent identical question for the same academic year
+    existing = await db.execute(
+        select(MCQQuestion).where(
+            MCQQuestion.academic_year == payload.academic_year,
+            func.lower(func.trim(MCQQuestion.question_text)) == text.lower()
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Duplicate question detected: This exact question already exists for Year {payload.academic_year}."
+        )
+
     q = MCQQuestion(
         academic_year=payload.academic_year,
         topic=payload.topic.strip(),
         difficulty=payload.difficulty,
-        question_text=payload.question_text.strip(),
+        question_text=text,
         option_a=payload.option_a.strip(),
         option_b=payload.option_b.strip(),
         option_c=payload.option_c.strip(),
@@ -173,6 +187,10 @@ async def import_mcq_questions_csv(
     imported = 0
     skipped = 0
 
+    # Load existing question texts from database to prevent repetition
+    existing_res = await db.execute(select(MCQQuestion.academic_year, func.lower(func.trim(MCQQuestion.question_text))))
+    existing_set = {(r[0], r[1]) for r in existing_res.all()}
+
     for row in reader:
         row_norm = {normalize_header_key(k): (v or "").strip() for k, v in row.items() if k}
 
@@ -235,6 +253,13 @@ async def import_mcq_questions_csv(
 
         year_raw = row_norm.get("academicyear") or row_norm.get("year") or row_norm.get("class")
         year = parse_academic_year(year_raw)
+
+        # Skip repetition/duplicates
+        key = (year, text.strip().lower())
+        if key in existing_set:
+            skipped += 1
+            continue
+        existing_set.add(key)
 
         q = MCQQuestion(
             academic_year=year,

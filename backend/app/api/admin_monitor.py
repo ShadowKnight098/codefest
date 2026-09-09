@@ -139,6 +139,7 @@ async def get_leaderboard(
             "participant_id": p.id,
             "roll_number": p.roll_number,
             "name": p.name,
+            "email": p.email,
             "academic_year": p.academic_year,
             "mcq_score": mcq_s,
             "mcq_qualified": mcq_q,
@@ -165,12 +166,13 @@ async def export_results_csv(
     entries = await get_leaderboard(db=db, _=None)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Rank", "Roll Number", "Name", "Year", "MCQ Score (/25)", "Qualified L2", "Coding Score (/60)", "Presentation Score (/50)", "Total Score", "Violations"])
+    writer.writerow(["Rank", "Roll Number", "Name", "Email", "Year", "MCQ Score (/25)", "Qualified L2", "Coding Score (/45)", "Presentation Score (/50)", "Total Score", "Violations"])
     for e in entries:
         writer.writerow([
             e.rank,
             e.roll_number,
             e.name,
+            e.email or "",
             e.academic_year,
             e.mcq_score if e.mcq_score is not None else "N/A",
             "Yes" if e.mcq_qualified else "No",

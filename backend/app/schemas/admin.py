@@ -276,6 +276,7 @@ class LeaderboardEntry(BaseModel):
     participant_id: str
     roll_number: str
     name: str
+    email: Optional[str] = None
     academic_year: int
     mcq_score: Optional[int] = None
     mcq_qualified: Optional[bool] = None
