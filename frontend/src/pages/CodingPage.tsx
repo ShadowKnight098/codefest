@@ -47,6 +47,7 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
   const attemptIdRef = useRef<string>('');
   const autoSubmitRef = useRef<boolean>(false);
   const saveTimeoutRef = useRef<number | null>(null);
+  const lastViolationTimeRef = useRef<number>(0);
 
   const showToast = (msg: string) => {
     setSecurityToast(msg);
@@ -121,45 +122,96 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
 
     loadAttempt();
 
-    // Visibility / Tab-switch Proctoring
-    const handleVisibility = async () => {
+    // Universal Proctoring: Detect Tab switches, App switches (Alt+Tab/Win key/Window blur), and Fullscreen exits
+    const triggerSecurityViolation = async (eventType: string, reason: string) => {
       const currentId = attemptIdRef.current;
-      if (document.hidden && currentId && !autoSubmitRef.current) {
-        try {
-          const res = await apiFetch<any>('/security/violation', {
-            method: 'POST',
-            body: JSON.stringify({
-              attempt_type: 'CODING',
-              attempt_id: currentId,
-              idempotency_key: `${currentId}-${Date.now()}`,
-              event_type: 'TAB_HIDDEN',
-            }),
-          });
-          if (res.violation_count !== undefined) {
-            setTabSwitchCount(res.violation_count);
-          }
-          if (res.max_violations) {
-            setMaxViolations(res.max_violations);
-          }
-          if (res.terminated) {
-            window.location.href = '/terminated';
-          } else {
-            showToast(
-              `Security Alert: Tab switch recorded (${res.violation_count}/${res.max_violations || 5} strikes). Assessment will terminate on the 5th strike.`
-            );
-          }
-        } catch (e) {
-          console.error('Failed to report tab switch violation:', e);
+      if (!currentId || autoSubmitRef.current) return;
+
+      // Debounce violations by 1.5s to avoid duplicate strikes when both blur and visibilitychange fire together
+      const now = Date.now();
+      if (now - lastViolationTimeRef.current < 1500) {
+        return;
+      }
+      lastViolationTimeRef.current = now;
+
+      try {
+        const res = await apiFetch<any>('/security/violation', {
+          method: 'POST',
+          body: JSON.stringify({
+            attempt_type: 'CODING',
+            attempt_id: currentId,
+            idempotency_key: `${currentId}-${now}`,
+            event_type: eventType,
+          }),
+        });
+        if (res.violation_count !== undefined) {
+          setTabSwitchCount(res.violation_count);
         }
+        if (res.max_violations) {
+          setMaxViolations(res.max_violations);
+        }
+        if (res.terminated) {
+          window.location.href = '/terminated';
+        } else {
+          showToast(
+            `Security Alert: ${reason}! (${res.violation_count}/${res.max_violations || 5} strikes). Assessment will terminate on the 5th strike.`
+          );
+        }
+      } catch (e) {
+        console.error('Failed to report tab switch violation:', e);
+      }
+    };
+
+    // 1. Tab hidden or browser minimized
+    const handleVisibility = () => {
+      if (document.hidden) {
+        triggerSecurityViolation('TAB_HIDDEN', 'Tab switch or window minimize detected');
+      }
+    };
+
+    // 2. Switched to any other application (Alt+Tab, clicking outside, opening Discord/WhatsApp/VS Code)
+    const handleWindowBlur = () => {
+      triggerSecurityViolation('WINDOW_BLUR', 'Focus lost: switched to another app or window');
+    };
+
+    // 3. Exited fullscreen mode
+    const handleFullscreenViolation = () => {
+      const fsActive = !!document.fullscreenElement;
+      setIsFullscreen(fsActive);
+      if (!fsActive && !autoSubmitRef.current) {
+        triggerSecurityViolation('FULLSCREEN_EXIT', 'Fullscreen exited');
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('blur', handleWindowBlur);
+    document.addEventListener('fullscreenchange', handleFullscreenViolation);
+
+    // Strict Anti-Cheat: Disable Copy, Cut, Paste, and Right-Click Context Menu
+    const preventCopy = (e: Event) => {
+      e.preventDefault();
+      showToast('🚫 Action Blocked: Copy & Paste is strictly disabled.');
+      return false;
+    };
+    const preventContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    document.addEventListener('copy', preventCopy);
+    document.addEventListener('cut', preventCopy);
+    document.addEventListener('paste', preventCopy);
+    document.addEventListener('contextmenu', preventContextMenu);
 
     return () => {
       if (timerInterval !== null) clearInterval(timerInterval);
-      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('fullscreenchange', handleFullscreenViolation);
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('blur', handleWindowBlur);
+      document.removeEventListener('copy', preventCopy);
+      document.removeEventListener('cut', preventCopy);
+      document.removeEventListener('paste', preventCopy);
+      document.removeEventListener('contextmenu', preventContextMenu);
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [participant]);
@@ -168,6 +220,11 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'v' || e.key === 'x' || e.key === 'C' || e.key === 'V' || e.key === 'X')) {
+        e.preventDefault();
+        showToast('🚫 Action Blocked: Clipboard shortcuts are disabled.');
+        return;
+      }
       if (['1', 'a', 'A'].includes(e.key)) handleSelectOption('a');
       else if (['2', 'b', 'B'].includes(e.key)) handleSelectOption('b');
       else if (['3', 'c', 'C'].includes(e.key)) handleSelectOption('c');
@@ -178,8 +235,8 @@ export const CodingPage: React.FC<CodingPageProps> = ({ onComplete }) => {
         setCurrentIndex((prev) => Math.max(0, prev - 1));
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [questions, currentIndex, submitResult]);
 
   const pendingSaveRef = useRef<{ question_id: string; selected_option: string | null } | null>(null);
