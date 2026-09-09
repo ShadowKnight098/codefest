@@ -3603,16 +3603,16 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   <div className="bg-[#F6F6F2] p-3.5 rounded border border-[#DBD7C9] space-y-2">
                     <div className="font-bold text-[#16233F] flex items-center space-x-1.5">
                       <span className="w-5 h-5 rounded-full bg-[#16233F] text-white text-[10px] inline-flex items-center justify-center font-bold">2</span>
-                      <span>Start Judge0 Container</span>
+                      <span>Start Judge0 via Docker Compose</span>
                     </div>
                     <p className="text-[#59626F] text-[11.5px] leading-relaxed">
-                      Open PowerShell or Terminal on that machine and run:
+                      Judge0 requires Redis &amp; DB to evaluate code. On the worker machine, open PowerShell and run:
                     </p>
-                    <pre className="p-2 bg-[#16233F] text-[#E8F3EC] rounded text-[10px] font-mono overflow-x-auto select-all">
-                      docker run -d -p 2358:2358 judge0/judge0:v1.13.1
+                    <pre className="p-2.5 bg-[#16233F] text-[#E8F3EC] rounded text-[10.5px] font-mono overflow-x-auto select-all whitespace-pre-wrap">
+                      curl.exe -sSL https://github.com/judge0/judge0/releases/download/v1.13.1/judge0-v1.13.1.zip -o judge0.zip; tar.exe -xf judge0.zip; cd judge0-v1.13.1; docker compose up -d db redis; Start-Sleep 5; docker compose up -d
                     </pre>
                     <p className="text-[10.5px] text-[#59626F]">
-                      (Port 2358 will now be listening for code evaluation requests)
+                      Or if inside this repo: <code className="font-bold text-[#16233F] font-mono">cd judge0-deployment; docker compose up -d</code>
                     </p>
                   </div>
 

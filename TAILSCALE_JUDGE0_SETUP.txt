@@ -41,21 +41,18 @@ On each laptop / PC that will act as a Judge0 worker node:
 3. STEP-BY-STEP WORKER NODE SETUP (RUN ON EACH LAPTOP)
 -------------------------------------------------------------------------------
 
-STEP 3.1: Start Judge0 Container
-Open PowerShell (Windows) or Terminal (Mac/Linux) and run:
+STEP 3.1: Start Judge0 via Docker Compose (Recommended)
+Judge0 requires Redis & PostgreSQL to manage and isolate code submissions.
+Open PowerShell on the worker machine and run:
 
-    docker run -d --name judge0-node --restart always -p 2358:2358 judge0/judge0:v1.13.1
-
-(This runs the lightweight Judge0 CE container and binds it to port 2358).
-
-Optional Production Compose Setup (for 100+ concurrent users):
-If you want to use the full official stack with dedicated Redis and Postgres:
-    curl -sSL https://github.com/judge0/judge0/releases/download/v1.13.1/judge0-v1.13.1.zip -o judge0.zip
-    tar -xf judge0.zip
+    curl.exe -sSL https://github.com/judge0/judge0/releases/download/v1.13.1/judge0-v1.13.1.zip -o judge0.zip
+    tar.exe -xf judge0.zip
     cd judge0-v1.13.1
     docker compose up -d db redis
-    # Wait 10 seconds, then start Judge0:
+    # Wait 10 seconds, then start Judge0 server & workers:
     docker compose up -d
+
+(Or if inside the codefest repository: cd judge0-deployment; docker compose up -d)
 
 STEP 3.2: Allow Port 2358 in Windows Firewall (Windows Only)
 Open PowerShell as Administrator and run:
