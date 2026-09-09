@@ -121,6 +121,24 @@ async def update_mcq_question(
     await db.refresh(q)
     return q
 
+@router.delete("")
+async def bulk_delete_mcq_questions(
+    academic_year: Optional[int] = Query(None, ge=1, le=4),
+    confirm: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_admin)
+):
+    """Bulk delete MCQ questions (optionally filtered by academic year). Requires confirm=true."""
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Set confirm=true to confirm bulk deletion.")
+
+    stmt = delete(MCQQuestion)
+    if academic_year:
+        stmt = stmt.where(MCQQuestion.academic_year == academic_year)
+    result = await db.execute(stmt)
+    await db.commit()
+    return {"message": f"Deleted {result.rowcount} MCQ questions."}
+
 @router.delete("/{question_id}")
 async def delete_mcq_question(
     question_id: str,

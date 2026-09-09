@@ -547,6 +547,22 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
     }
   };
 
+  const handleBulkDeleteMCQQuestions = async () => {
+    const yearText = qYearFilter ? `Year ${qYearFilter}` : 'ALL academic years';
+    if (!confirm(`Are you sure you want to delete all MCQ questions for ${yearText}? This action cannot be undone!`)) return;
+    setLoading(true);
+    try {
+      const url = qYearFilter ? `/admin/mcq-questions?academic_year=${qYearFilter}&confirm=true` : `/admin/mcq-questions?confirm=true`;
+      const res = await apiFetch<any>(url, { method: 'DELETE' });
+      setMessage(res.message || 'Questions deleted successfully.');
+      fetchQuestions();
+    } catch (e: any) {
+      alert(`Delete failed: ${e?.detail || e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Level 2 Debugging Challenge Handlers
   const handlePreviewL2Upload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1471,20 +1487,33 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                 </form>
               </div>
 
-              {/* Year Filter */}
-              <div className="flex items-center space-x-3">
-                <select
-                  value={qYearFilter}
-                  onChange={(e) => setQYearFilter(e.target.value ? Number(e.target.value) : '')}
-                  className="h-8 px-2 text-xs border border-[#C6C1B0] rounded-[3px] bg-white"
-                >
-                  <option value="">All Academic Years</option>
-                  <option value="1">Year 1</option>
-                  <option value="2">Year 2</option>
-                  <option value="3">Year 3</option>
-                  <option value="4">Year 4</option>
-                </select>
-                <span className="text-xs text-[#8B93A0]">{questions.length} questions loaded</span>
+              {/* Year Filter & Bulk Delete */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <select
+                    value={qYearFilter}
+                    onChange={(e) => setQYearFilter(e.target.value ? Number(e.target.value) : '')}
+                    className="h-8 px-2 text-xs border border-[#C6C1B0] rounded-[3px] bg-white"
+                  >
+                    <option value="">All Academic Years</option>
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3">Year 3</option>
+                    <option value="4">Year 4</option>
+                  </select>
+                  <span className="text-xs text-[#8B93A0]">{questions.length} questions loaded</span>
+                </div>
+                {questions.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleBulkDeleteMCQQuestions}
+                    disabled={loading}
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-[3px] flex items-center space-x-1.5 disabled:opacity-50 transition"
+                  >
+                    <span>🗑️</span>
+                    <span>Delete {qYearFilter ? `Year ${qYearFilter}` : 'All'} Questions</span>
+                  </button>
+                )}
               </div>
 
               {/* Questions List */}
