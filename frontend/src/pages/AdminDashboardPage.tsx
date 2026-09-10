@@ -3425,10 +3425,10 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <div className="font-bold text-[#16233F] text-sm">{w?.name}</div>
                       <div className="text-[11px] text-[#59626F] font-mono">{w?.roll_number}</div>
                       <div className="text-xl font-bold font-mono text-[#1E7A46] mt-2">
-                        {w?.grand_total_score}<span className="text-xs text-[#8B93A0]"> / 135 pts</span>
+                        {w?.grand_total_score}<span className="text-xs text-[#8B93A0]"> / 100 pts</span>
                       </div>
                       <div className="text-[10px] text-[#59626F] mt-0.5">
-                        L3: {w?.evaluation?.total_score || 0}/50 · Prev: {w?.total_previous_score}/85
+                        L3: {w?.evaluation?.total_score || 0}/30 · Prev: {w?.total_previous_score}/70
                       </div>
                     </div>
                   ))}
@@ -3446,12 +3446,12 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <th className="py-2.5 px-3">Email</th>
                       <th className="py-2.5 px-3 text-center">Year</th>
                       <th className="py-2.5 px-3 text-center">MCQ (/25)</th>
-                      <th className="py-2.5 px-3 text-center">Code (/60)</th>
-                      <th className="py-2.5 px-3 text-center">Pres. (/15)</th>
-                      <th className="py-2.5 px-3 text-center">Tech. (/20)</th>
-                      <th className="py-2.5 px-3 text-center">Viva (/15)</th>
-                      <th className="py-2.5 px-3 text-center font-bold text-[#16233F]">L3 Total (/50)</th>
-                      <th className="py-2.5 px-3 text-center font-bold text-[#1E7A46]">Grand Total (/135)</th>
+                      <th className="py-2.5 px-3 text-center">Code (/45)</th>
+                      <th className="py-2.5 px-3 text-center">Pres. (/10)</th>
+                      <th className="py-2.5 px-3 text-center">Tech. (/10)</th>
+                      <th className="py-2.5 px-3 text-center">Viva (/10)</th>
+                      <th className="py-2.5 px-3 text-center font-bold text-[#16233F]">L3 Total (/30)</th>
+                      <th className="py-2.5 px-3 text-center font-bold text-[#1E7A46]">Grand Total (/100)</th>
                       <th className="py-2.5 px-3 text-center">Status</th>
                       <th className="py-2.5 px-3 text-center">Action</th>
                     </tr>
@@ -3550,16 +3550,16 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
               <div className="space-y-3 bg-[#F6F6F2] p-4 rounded-[4px] border border-[#DBD7C9]">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="font-semibold text-[#16233F]">1. Presentation &amp; Communication Skills (0 – 15):</label>
-                    <span className="font-mono font-bold text-[#16233F]">{gradeForm.presentation_score} / 15</span>
+                    <label className="font-semibold text-[#16233F]">1. Presentation &amp; Communication Skills (0 – 10):</label>
+                    <span className="font-mono font-bold text-[#16233F]">{gradeForm.presentation_score} / 10</span>
                   </div>
                   <input
                     type="number"
                     min="0"
-                    max="15"
+                    max="10"
                     required
                     value={gradeForm.presentation_score}
-                    onChange={(e) => setGradeForm({ ...gradeForm, presentation_score: Math.min(15, Math.max(0, Number(e.target.value) || 0)) })}
+                    onChange={(e) => setGradeForm({ ...gradeForm, presentation_score: Math.min(10, Math.max(0, Number(e.target.value) || 0)) })}
                     className="w-full h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-mono"
                   />
                   <p className="text-[10.5px] text-[#59626F] mt-0.5">Clarity of explanation, slide deck / demo flow, articulation.</p>
@@ -3567,16 +3567,16 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="font-semibold text-[#16233F]">2. Technical Architecture &amp; Code Defense (0 – 20):</label>
-                    <span className="font-mono font-bold text-[#16233F]">{gradeForm.technical_score} / 20</span>
+                    <label className="font-semibold text-[#16233F]">2. Technical Architecture &amp; Code Defense (0 – 10):</label>
+                    <span className="font-mono font-bold text-[#16233F]">{gradeForm.technical_score} / 10</span>
                   </div>
                   <input
                     type="number"
                     min="0"
-                    max="20"
+                    max="10"
                     required
                     value={gradeForm.technical_score}
-                    onChange={(e) => setGradeForm({ ...gradeForm, technical_score: Math.min(20, Math.max(0, Number(e.target.value) || 0)) })}
+                    onChange={(e) => setGradeForm({ ...gradeForm, technical_score: Math.min(10, Math.max(0, Number(e.target.value) || 0)) })}
                     className="w-full h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-mono"
                   />
                   <p className="text-[10.5px] text-[#59626F] mt-0.5">Algorithm explanation, time/space complexity analysis, code robustness.</p>
@@ -3584,16 +3584,16 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="font-semibold text-[#16233F]">3. Viva Q&amp;A &amp; Conceptual Depth (0 – 15):</label>
-                    <span className="font-mono font-bold text-[#16233F]">{gradeForm.viva_score} / 15</span>
+                    <label className="font-semibold text-[#16233F]">3. Viva Q&amp;A &amp; Conceptual Depth (0 – 10):</label>
+                    <span className="font-mono font-bold text-[#16233F]">{gradeForm.viva_score} / 10</span>
                   </div>
                   <input
                     type="number"
                     min="0"
-                    max="15"
+                    max="10"
                     required
                     value={gradeForm.viva_score}
-                    onChange={(e) => setGradeForm({ ...gradeForm, viva_score: Math.min(15, Math.max(0, Number(e.target.value) || 0)) })}
+                    onChange={(e) => setGradeForm({ ...gradeForm, viva_score: Math.min(10, Math.max(0, Number(e.target.value) || 0)) })}
                     className="w-full h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-mono"
                   />
                   <p className="text-[10.5px] text-[#59626F] mt-0.5">Response to impromptu faculty questions, CS fundamentals, problem-solving depth.</p>
@@ -3603,7 +3603,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                 <div className="pt-2 border-t border-[#DBD7C9] flex items-center justify-between font-bold text-sm">
                   <span className="text-[#16233F]">Level 3 Awarded Total:</span>
                   <span className="font-mono text-[#1E7A46] text-base">
-                    {Number(gradeForm.presentation_score || 0) + Number(gradeForm.technical_score || 0) + Number(gradeForm.viva_score || 0)} / 50 Marks
+                    {Number(gradeForm.presentation_score || 0) + Number(gradeForm.technical_score || 0) + Number(gradeForm.viva_score || 0)} / 30 Marks
                   </span>
                 </div>
               </div>

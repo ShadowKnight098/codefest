@@ -166,7 +166,7 @@ async def export_results_csv(
     entries = await get_leaderboard(db=db, _=None)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Rank", "Roll Number", "Name", "Email", "Year", "MCQ Score (/25)", "Qualified L2", "Coding Score (/45)", "Presentation Score (/50)", "Total Score", "Violations"])
+    writer.writerow(["Rank", "Roll Number", "Name", "Email", "Year", "MCQ Score (/25)", "Qualified L2", "Coding Score (/45)", "Presentation Score (/30)", "Total Score (/100)", "Violations"])
     for e in entries:
         writer.writerow([
             e.rank,

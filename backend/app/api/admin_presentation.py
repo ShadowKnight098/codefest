@@ -17,9 +17,9 @@ router = APIRouter(prefix="/admin/presentation", tags=["Admin Presentation Evalu
 
 class EvaluationRequest(BaseModel):
     participant_id: str
-    presentation_score: int = Field(0, ge=0, le=15, description="Presentation & communication skills (0-15)")
-    technical_score: int = Field(0, ge=0, le=20, description="Code defense & complexity analysis (0-20)")
-    viva_score: int = Field(0, ge=0, le=15, description="Viva Q&A & conceptual depth (0-15)")
+    presentation_score: int = Field(0, ge=0, le=10, description="Presentation & communication skills (0-10)")
+    technical_score: int = Field(0, ge=0, le=10, description="Code defense & complexity analysis (0-10)")
+    viva_score: int = Field(0, ge=0, le=10, description="Viva Q&A & conceptual depth (0-10)")
     remarks: Optional[str] = None
 
 class EvaluationDetail(BaseModel):
@@ -234,7 +234,7 @@ async def evaluate_presentation(
     memory_cache.delete(f"part:{payload.participant_id}")
 
     return {
-        "message": f"Successfully evaluated {participant.roll_number} ({participant.name}) with {total_eval}/50 marks.",
+        "message": f"Successfully evaluated {participant.roll_number} ({participant.name}) with {total_eval}/30 marks.",
         "participant_id": participant.id,
         "total_score": total_eval,
         "evaluator": evaluator_display
