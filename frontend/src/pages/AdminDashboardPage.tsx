@@ -131,7 +131,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
   const [presFilter, setPresFilter] = useState<'ALL' | 'EVALUATED' | 'PENDING'>('ALL');
   const [presYearFilter, setPresYearFilter] = useState<number | ''>('');
   const [presSearch, setPresSearch] = useState<string>('');
-  const [presTopLimit, setPresTopLimit] = useState<number | ''>('');
+  const [presTopLimit, setPresTopLimit] = useState<number | ''>(11);
   const [selectedFinalistForGrade, setSelectedFinalistForGrade] = useState<any | null>(null);
   const [gradeForm, setGradeForm] = useState({
     presentation_score: 0,
@@ -3390,9 +3390,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     onChange={(e) => setPresTopLimit(e.target.value ? Number(e.target.value) : '')}
                     className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
                   >
-                    <option value="">All Records</option>
+                    <option value="11">Top 11 Finalists (Default)</option>
+                    <option value="">All Finalists</option>
                     <option value="10">Top 10</option>
-                    <option value="11">Top 11 Finalists</option>
                     <option value="25">Top 25</option>
                     <option value="50">Top 50</option>
                     <option value="100">Top 100</option>
