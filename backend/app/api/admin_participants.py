@@ -140,28 +140,39 @@ async def reset_participant_pin(
 
 def parse_academic_year(val: any) -> int:
     if val is None:
-        return 3
+        return 2
     s = str(val).strip().upper()
     if not s:
+        return 2
+    # 1. Exact or substring keyword checks
+    if "SECOND" in s or "2ND" in s or "SOPHOMORE" in s:
+        return 2
+    if "THIRD" in s or "3RD" in s or "JUNIOR" in s:
         return 3
+    if "FIRST" in s or "1ST" in s or "FRESHMAN" in s:
+        return 1
+    if "FOURTH" in s or "4TH" in s or "FINAL" in s or "SENIOR" in s:
+        return 4
+    # 2. Strict Roman numerals
+    if re.search(r'\bIV\b', s):
+        return 4
+    if re.search(r'\bIII\b', s):
+        return 3
+    if re.search(r'\bII\b', s):
+        return 2
+    if re.search(r'\bI\b', s):
+        return 1
+    # 3. Numeric patterns with word boundary
     m = re.search(r'\b([1-4])\b', s)
     if m:
         return int(m.group(1))
     m2 = re.search(r'([1-4])(?:ST|ND|RD|TH)?\s*(?:YEAR|YR)?', s)
     if m2:
         return int(m2.group(1))
-    if "IV" in s:
-        return 4
-    if "III" in s:
-        return 3
-    if "II" in s:
-        return 2
-    if "I" in s:
-        return 1
     for ch in s:
         if ch in "1234":
             return int(ch)
-    return 3
+    return 2
 
 def normalize_header_key(k: any) -> str:
     return re.sub(r'[^a-z0-9]', '', str(k).lower())

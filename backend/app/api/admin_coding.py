@@ -78,11 +78,38 @@ def normalize_header(h: str) -> str:
     """Normalize CSV headers removing underscores, spaces, hyphens and lowercasing."""
     return re.sub(r'[^a-z0-9]', '', str(h).lower()) if h else ""
 
-def parse_int_safe(val: Any, default: int = 1) -> int:
-    try:
-        return int(float(str(val).strip()))
-    except Exception:
-        return default
+def parse_academic_year(val: Any) -> int:
+    if val is None:
+        return 2
+    s = str(val).strip().upper()
+    if not s:
+        return 2
+    if "SECOND" in s or "2ND" in s or "SOPHOMORE" in s:
+        return 2
+    if "THIRD" in s or "3RD" in s or "JUNIOR" in s:
+        return 3
+    if "FIRST" in s or "1ST" in s or "FRESHMAN" in s:
+        return 1
+    if "FOURTH" in s or "4TH" in s or "FINAL" in s or "SENIOR" in s:
+        return 4
+    if re.search(r'\bIV\b', s):
+        return 4
+    if re.search(r'\bIII\b', s):
+        return 3
+    if re.search(r'\bII\b', s):
+        return 2
+    if re.search(r'\bI\b', s):
+        return 1
+    m = re.search(r'\b([1-4])\b', s)
+    if m:
+        return int(m.group(1))
+    m2 = re.search(r'([1-4])(?:ST|ND|RD|TH)?\s*(?:YEAR|YR)?', s)
+    if m2:
+        return int(m2.group(1))
+    for ch in s:
+        if ch in "1234":
+            return int(ch)
+    return 2
 
 
 # ─── Endpoints ───
@@ -311,13 +338,9 @@ def parse_questions_content(
         else:
             seen_batch_ids.add(qid)
 
-        try:
-            year = int(float(year_raw))
-            if year not in (2, 3):
-                row_errors.append(f"academic_year must be 2 or 3 (got '{year_raw}')")
-        except Exception:
-            row_errors.append(f"Invalid academic_year '{year_raw}'. Must be 2 or 3")
-            year = 2
+        year = parse_academic_year(year_raw)
+        if year not in (2, 3):
+            row_errors.append(f"academic_year must be 2 or 3 (got '{year_raw}')")
 
         if diff not in ("easy", "medium", "hard"):
             row_errors.append(f"Invalid difficulty '{diff}'. Must be easy, medium, or hard")

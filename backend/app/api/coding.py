@@ -103,9 +103,10 @@ async def _score_and_finalize_attempt(attempt: CodingAttempt, participant_id: st
             if ans.selected_option.strip().lower() == q.correct_answer.strip().lower():
                 total_score += q.marks
 
+    final_score = min(total_score, 45)
     attempt.status = "SUBMITTED"
     attempt.submitted_at = datetime.now(timezone.utc)
-    attempt.score = total_score
+    attempt.score = final_score
 
     # Sync RoundResult for Round 2
     round_2 = (await db.execute(select(Round).where(Round.round_number == 2))).scalar_one_or_none()
@@ -118,15 +119,16 @@ async def _score_and_finalize_attempt(attempt: CodingAttempt, participant_id: st
         )
         existing_rr = rr_check.scalar_one_or_none()
         if existing_rr:
-            existing_rr.score = total_score
+            existing_rr.score = final_score
         else:
             db.add(RoundResult(
                 participant_id=participant_id,
                 round_id=round_2.id,
-                score=total_score,
-                is_qualified=False
+                score=final_score,
+                is_qualified=True,
+                completed_at=datetime.now(timezone.utc)
             ))
-
+    
     await db.commit()
     memory_cache.delete("admin_leaderboard")
     memory_cache.delete("admin_live_stats")

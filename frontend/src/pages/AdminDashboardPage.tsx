@@ -1231,11 +1231,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   onChange={(e) => setYearFilter(e.target.value ? Number(e.target.value) : '')}
                   className="h-8 px-2 text-xs border border-[#C6C1B0] rounded-[3px] bg-white"
                 >
-                  <option value="">All Years</option>
-                  <option value="1">Year 1</option>
+                  <option value="">All Eligible Years (2 & 3)</option>
                   <option value="2">Year 2</option>
                   <option value="3">Year 3</option>
-                  <option value="4">Year 4</option>
                 </select>
                 <span className="text-xs text-[#8B93A0]">{participants.length} records</span>
               </div>
@@ -1349,10 +1347,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                           onChange={(e) => setNewPart({ ...newPart, academic_year: Number(e.target.value) })}
                           className="w-full border border-[#C6C1B0] p-2 rounded bg-white"
                         >
-                          <option value={1}>Year 1</option>
                           <option value={2}>Year 2</option>
                           <option value={3}>Year 3</option>
-                          <option value={4}>Year 4</option>
                         </select>
                       </div>
 
@@ -1498,11 +1494,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     onChange={(e) => setQYearFilter(e.target.value ? Number(e.target.value) : '')}
                     className="h-8 px-2 text-xs border border-[#C6C1B0] rounded-[3px] bg-white"
                   >
-                    <option value="">All Academic Years</option>
-                    <option value="1">Year 1</option>
+                    <option value="">All Academic Years (2 & 3)</option>
                     <option value="2">Year 2</option>
                     <option value="3">Year 3</option>
-                    <option value="4">Year 4</option>
                   </select>
                   <span className="text-xs text-[#8B93A0]">{questions.length} questions loaded</span>
                 </div>
@@ -1564,10 +1558,8 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                             onChange={(e) => setNewQ({ ...newQ, academic_year: Number(e.target.value) })}
                             className="w-full border border-[#C6C1B0] p-1 rounded"
                           >
-                            <option value="1">Year 1</option>
                             <option value="2">Year 2</option>
                             <option value="3">Year 3</option>
-                            <option value="4">Year 4</option>
                           </select>
                         </div>
                         <div>
@@ -2864,11 +2856,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     onChange={(e) => setLbYearFilter(e.target.value ? Number(e.target.value) : '')}
                     className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
                   >
-                    <option value="">All Years (1–4)</option>
-                    <option value="1">Year 1</option>
+                    <option value="">All Years (2 & 3)</option>
                     <option value="2">Year 2</option>
                     <option value="3">Year 3</option>
-                    <option value="4">Year 4</option>
                   </select>
                 </div>
 
@@ -3028,11 +3018,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     onChange={(e) => setR1YearFilter(e.target.value ? Number(e.target.value) : '')}
                     className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
                   >
-                    <option value="">All Years (1–4)</option>
-                    <option value="1">Year 1</option>
+                    <option value="">All Years (2 & 3)</option>
                     <option value="2">Year 2</option>
                     <option value="3">Year 3</option>
-                    <option value="4">Year 4</option>
                   </select>
                 </div>
 
@@ -3196,11 +3184,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     onChange={(e) => setR2YearFilter(e.target.value ? Number(e.target.value) : '')}
                     className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
                   >
-                    <option value="">All Years (1–4)</option>
-                    <option value="1">Year 1</option>
+                    <option value="">All Years (2 & 3)</option>
                     <option value="2">Year 2</option>
                     <option value="3">Year 3</option>
-                    <option value="4">Year 4</option>
                   </select>
                 </div>
 
@@ -3213,6 +3199,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   >
                     <option value="">All Records</option>
                     <option value="10">Top 10</option>
+                    <option value="11">Top 11 (Level 3 Finalists)</option>
                     <option value="25">Top 25</option>
                     <option value="50">Top 50</option>
                     <option value="100">Top 100</option>
@@ -3390,11 +3377,9 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     onChange={(e) => setPresYearFilter(e.target.value ? Number(e.target.value) : '')}
                     className="h-8 px-2.5 text-xs border border-[#C6C1B0] rounded-[3px] bg-white font-medium text-[#16233F]"
                   >
-                    <option value="">All Years (1–4)</option>
-                    <option value="1">Year 1</option>
+                    <option value="">All Years (2 & 3)</option>
                     <option value="2">Year 2</option>
                     <option value="3">Year 3</option>
-                    <option value="4">Year 4</option>
                   </select>
                 </div>
 
@@ -3407,6 +3392,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                   >
                     <option value="">All Records</option>
                     <option value="10">Top 10</option>
+                    <option value="11">Top 11 Finalists</option>
                     <option value="25">Top 25</option>
                     <option value="50">Top 50</option>
                     <option value="100">Top 100</option>
