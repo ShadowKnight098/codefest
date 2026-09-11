@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api/client';
-import type { DashboardState } from '../types/auth';
+import type { DashboardState, ParticipantMarks } from '../types/auth';
 
 interface DashboardPageProps {
   onStartMCQ?: () => void;
@@ -127,7 +127,10 @@ const formatAcademicYear = (year: number | undefined): string => {
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStartCoding }) => {
   const { participant, logout } = useAuth();
   const [backendState, setBackendState] = useState<DashboardState | null>(null);
+  const [marksData, setMarksData] = useState<ParticipantMarks | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'marks'>('overview');
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadingMarks, setLoadingMarks] = useState<boolean>(false);
 
   // Fetch live server-authoritative state
   const fetchState = async () => {
@@ -141,9 +144,25 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
     }
   };
 
+  const fetchMarks = async () => {
+    setLoadingMarks(true);
+    try {
+      const data = await apiFetch<ParticipantMarks>('/api/dashboard/marks');
+      setMarksData(data);
+    } catch (err) {
+      console.error('Failed to load participant marks:', err);
+    } finally {
+      setLoadingMarks(false);
+    }
+  };
+
   useEffect(() => {
     fetchState();
-    const interval = setInterval(fetchState, 10000);
+    fetchMarks();
+    const interval = setInterval(() => {
+      fetchState();
+      fetchMarks();
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -184,26 +203,26 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
 
   return (
     <div className="min-h-screen bg-[#F6F6F2] pb-24">
-      <div className="max-w-[880px] mx-auto pt-10 px-4 sm:px-6">
+      <div className="max-w-[880px] mx-auto pt-6 sm:pt-10 px-4 sm:px-6">
 
-        {/* TOPBAR */}
-        <div className="flex items-center justify-between pb-6 border-b border-[#DBD7C9]">
+        {/* TOPBAR - MOBILE OPTIMIZED */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-5 border-b border-[#DBD7C9] gap-3">
           <div>
-            <div className="text-[11.5px] font-bold tracking-[0.08em] text-[#59626F] uppercase">
+            <div className="text-[11px] sm:text-[11.5px] font-bold tracking-[0.08em] text-[#59626F] uppercase">
               CSE (AI &amp; ML)
             </div>
-            <div className="font-serif text-[18px] font-bold text-[#1B2029] leading-tight">
+            <div className="font-serif text-[20px] sm:text-[22px] font-bold text-[#1B2029] leading-tight">
               CodeFest 2026
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
-            <span className="text-[13.5px] text-[#59626F]">
+          <div className="flex items-center justify-between sm:justify-end space-x-3 pt-1 sm:pt-0">
+            <span className="text-[13px] sm:text-[13.5px] text-[#59626F]">
               Signed in as <strong className="font-semibold text-[#1B2029]">{participantName}</strong>
             </span>
             <button
               onClick={() => logout()}
-              className="btn-ghost"
+              className="btn-ghost text-xs px-3 py-1.5 min-h-[36px]"
               type="button"
             >
               Log out
@@ -211,183 +230,420 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
           </div>
         </div>
 
-        {/* CREDENTIAL STRIP */}
-        <div className="mt-6 mb-8 bg-white border border-[#DBD7C9] rounded-[6px] grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[#DBD7C9]">
-          <div className="p-[18px_22px]">
-            <div className="text-[12px] font-semibold text-[#59626F] uppercase tracking-[0.04em]">
+        {/* CREDENTIAL STRIP - MOBILE RESPONSIVE */}
+        <div className="mt-5 mb-6 bg-white border border-[#DBD7C9] rounded-[6px] grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[#DBD7C9] shadow-sm">
+          <div className="p-3.5 sm:p-[18px_22px]">
+            <div className="text-[11px] sm:text-[12px] font-semibold text-[#59626F] uppercase tracking-[0.04em]">
               Name
             </div>
-            <div className="text-[15px] font-semibold text-[#1B2029] mt-0.5 font-sans">
+            <div className="text-[14.5px] sm:text-[15px] font-semibold text-[#1B2029] mt-0.5 font-sans truncate">
               {participantName}
             </div>
           </div>
 
-          <div className="p-[18px_22px]">
-            <div className="text-[12px] font-semibold text-[#59626F] uppercase tracking-[0.04em]">
+          <div className="p-3.5 sm:p-[18px_22px]">
+            <div className="text-[11px] sm:text-[12px] font-semibold text-[#59626F] uppercase tracking-[0.04em]">
               Roll number
             </div>
-            <div className="text-[14.5px] font-medium text-[#1B2029] mt-0.5 font-mono">
+            <div className="text-[14px] sm:text-[14.5px] font-medium text-[#1B2029] mt-0.5 font-mono">
               {rollNumber}
             </div>
           </div>
 
-          <div className="p-[18px_22px]">
-            <div className="text-[12px] font-semibold text-[#59626F] uppercase tracking-[0.04em]">
+          <div className="p-3.5 sm:p-[18px_22px]">
+            <div className="text-[11px] sm:text-[12px] font-semibold text-[#59626F] uppercase tracking-[0.04em]">
               Academic year
             </div>
-            <div className="text-[15px] font-semibold text-[#1B2029] mt-0.5 font-sans">
+            <div className="text-[14.5px] sm:text-[15px] font-semibold text-[#1B2029] mt-0.5 font-sans">
               {academicYear}
             </div>
           </div>
         </div>
 
-        {/* COMPETITION PROGRESS SECTION */}
-        <div>
-          <h2 className="font-serif text-[19px] font-bold text-[#1B2029] mb-3.5">
-            Competition progress
-          </h2>
-
-          <div className="space-y-3">
-            {/* ROUND ROW 01 */}
-            <div className={`rounded-[6px] p-[18px_20px] flex flex-col sm:flex-row sm:items-center justify-between gap-4 border ${
-              backendState?.level1_result?.status_label === 'Directly Qualified'
-                ? 'bg-[#FAFAFA] border-[#DBD7C9] opacity-85'
-                : 'bg-white border-[#DBD7C9]'
-            }`}>
-              <div className="flex items-center space-x-3.5">
-                <div className="w-[30px] h-[30px] border border-[#C6C1B0] rounded-[3px] flex items-center justify-center font-mono text-[13px] font-semibold text-[#59626F] shrink-0">
-                  01
-                </div>
-                <div>
-                  <div className="text-[15px] font-semibold text-[#1B2029]">
-                    MCQ Assessment
-                  </div>
-                  <div className="text-[12.5px] text-[#59626F] mt-0.5">
-                    {backendState?.level1_result?.status_label === 'Directly Qualified'
-                      ? 'Directly Qualified by Admin · Level 1 Exempted'
-                      : backendState?.level1_result
-                      ? 'Assessment Submitted · Shortlisted candidates will be announced in the official group'
-                      : displayConfig.r1.sub}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-3 self-end sm:self-center">
-                {backendState?.level1_result?.status_label === 'Directly Qualified' ? (
-                  <span className="badge-status badge-completed">Directly Qualified</span>
-                ) : (
-                  renderBadge(displayConfig.r1.status)
-                )}
-                {displayConfig.r1.action && (backendState?.can_start_level1 || backendState?.can_resume_level1) && (
-                  <button
-                    onClick={() => {
-                      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-                        document.documentElement.requestFullscreen().catch(() => {});
-                      }
-                      onStartMCQ?.();
-                    }}
-                    className="btn-primary h-[36px] px-4 text-[13px] font-semibold flex items-center space-x-1.5"
-                    type="button"
-                  >
-                    <span>{displayConfig.r1.action}</span>
-                    <span>→</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* ROUND ROW 02 */}
-            <div className={`rounded-[6px] p-[18px_20px] flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
-              backendState?.can_start_level2 || backendState?.can_resume_level2
-                ? 'bg-white border-2 border-[#16233F] shadow-sm'
-                : 'bg-white border border-[#DBD7C9]'
-            }`}>
-              <div className="flex items-center space-x-3.5">
-                <div className={`w-[30px] h-[30px] rounded-[3px] flex items-center justify-center font-mono text-[13px] font-semibold shrink-0 ${
-                  backendState?.can_start_level2 || backendState?.can_resume_level2
-                    ? 'bg-[#16233F] text-white'
-                    : 'border border-[#C6C1B0] text-[#59626F]'
-                }`}>
-                  02
-                </div>
-                <div>
-                  <div className="text-[15px] font-semibold text-[#1B2029]">
-                    Debugging Assessment
-                  </div>
-                  <div className="text-[12.5px] text-[#59626F] mt-0.5">
-                    {backendState?.level2_result
-                      ? 'Assessment Submitted · Shortlisted candidates will be announced in the official group'
-                      : backendState?.can_start_level2
-                      ? 'Debugging Challenge · 15 Questions · 45 Marks · 60 minutes'
-                      : displayConfig.r2.sub}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-3 self-end sm:self-center">
-                {backendState?.can_start_level2 ? renderBadge('Available') : renderBadge(displayConfig.r2.status)}
-                {(backendState?.can_start_level2 || backendState?.can_resume_level2) && (
-                  <button
-                    onClick={() => {
-                      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-                        document.documentElement.requestFullscreen().catch(() => {});
-                      }
-                      onStartCoding?.();
-                    }}
-                    className="btn-primary h-[36px] px-4 text-[13px] font-semibold flex items-center space-x-1.5 shadow-sm"
-                    type="button"
-                  >
-                    <span>{backendState?.can_resume_level2 ? 'Resume' : 'Enter Assessment'}</span>
-                    <span>→</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* ROUND ROW 03 */}
-            <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-[18px_20px] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center space-x-3.5">
-                <div className="w-[30px] h-[30px] border border-[#C6C1B0] rounded-[3px] flex items-center justify-center font-mono text-[13px] font-semibold text-[#59626F] shrink-0">
-                  03
-                </div>
-                <div>
-                  <div className="text-[15px] font-semibold text-[#1B2029]">
-                    Presentation &amp; Viva
-                  </div>
-                  <div className="text-[12.5px] text-[#59626F] mt-0.5">
-                    Presentation &amp; Viva · Shortlisted finalists will receive schedule via email
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-3 self-end sm:self-center">
-                {renderBadge(displayConfig.r3.status)}
-              </div>
-            </div>
-          </div>
-
-          {/* STATUS PANEL */}
-          <div
-            className={`mt-5 rounded-[6px] p-[18px_22px] border ${
-              displayConfig.panel.type === 'warn'
-                ? 'bg-[#FBF1DD] border-[#E9D6A3] text-[#8A5A00]'
-                : displayConfig.panel.type === 'error'
-                ? 'bg-[#FBEAE8] border-[#EFC5BF] text-[#AE2E22]'
-                : (displayConfig.panel.type === 'success' || backendState?.state_headline?.includes('Qualified'))
-                ? 'bg-[#E8F3EC] border-[#BEDFCB] text-[#1E7A46]'
-                : 'bg-white border-[#DBD7C9] text-[#1B2029]'
+        {/* NAVIGATION TABS - MOBILE OPTIMIZED */}
+        <div className="flex items-center space-x-2 border-b border-[#DBD7C9] mb-6 pb-2">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-[4px] transition-all flex items-center space-x-2 ${
+              activeTab === 'overview'
+                ? 'bg-[#16233F] text-white shadow-sm'
+                : 'bg-white text-[#59626F] hover:text-[#16233F] border border-[#DBD7C9]'
             }`}
           >
-            <div className="text-[14px] font-bold">
-              {backendState?.state_headline || displayConfig.panel.title}
+            <span>📊</span>
+            <span>Competition Overview</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('marks')}
+            className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-[4px] transition-all flex items-center space-x-2 relative ${
+              activeTab === 'marks'
+                ? 'bg-[#16233F] text-white shadow-sm'
+                : 'bg-white text-[#59626F] hover:text-[#16233F] border border-[#DBD7C9]'
+            }`}
+          >
+            <span>🎯</span>
+            <span>My Marks</span>
+            {marksData && (marksData.total_score > 0 || marksData.mcq_score !== null) && (
+              <span className="w-2 h-2 rounded-full bg-[#1E7A46]"></span>
+            )}
+          </button>
+        </div>
+
+        {/* TAB 1: OVERVIEW */}
+        {activeTab === 'overview' && (
+          <div>
+            <h2 className="font-serif text-[18px] sm:text-[19px] font-bold text-[#1B2029] mb-3.5">
+              Competition progress
+            </h2>
+
+            <div className="space-y-3">
+              {/* ROUND ROW 01 */}
+              <div className={`rounded-[6px] p-4 sm:p-[18px_20px] flex flex-col sm:flex-row sm:items-center justify-between gap-4 border ${
+                backendState?.level1_result?.status_label === 'Directly Qualified'
+                  ? 'bg-[#FAFAFA] border-[#DBD7C9] opacity-85'
+                  : 'bg-white border-[#DBD7C9]'
+              }`}>
+                <div className="flex items-start sm:items-center space-x-3.5">
+                  <div className="w-[30px] h-[30px] border border-[#C6C1B0] rounded-[3px] flex items-center justify-center font-mono text-[13px] font-semibold text-[#59626F] shrink-0 mt-0.5 sm:mt-0">
+                    01
+                  </div>
+                  <div>
+                    <div className="text-[14.5px] sm:text-[15px] font-semibold text-[#1B2029]">
+                      MCQ Assessment
+                    </div>
+                    <div className="text-[12px] sm:text-[12.5px] text-[#59626F] mt-0.5 leading-snug">
+                      {backendState?.level1_result?.status_label === 'Directly Qualified'
+                        ? 'Directly Qualified by Admin · Level 1 Exempted'
+                        : backendState?.level1_result
+                        ? 'Assessment Submitted · Shortlisted candidates will be announced in the official group'
+                        : displayConfig.r1.sub}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:space-x-3 w-full sm:w-auto">
+                  <div className="flex justify-end sm:justify-start">
+                    {backendState?.level1_result?.status_label === 'Directly Qualified' ? (
+                      <span className="badge-status badge-completed">Directly Qualified</span>
+                    ) : (
+                      renderBadge(displayConfig.r1.status)
+                    )}
+                  </div>
+                  {displayConfig.r1.action && (backendState?.can_start_level1 || backendState?.can_resume_level1) && (
+                    <button
+                      onClick={() => {
+                        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+                          document.documentElement.requestFullscreen().catch(() => {});
+                        }
+                        onStartMCQ?.();
+                      }}
+                      className="btn-primary h-[38px] px-4 text-[13px] font-semibold flex items-center justify-center space-x-1.5 w-full sm:w-auto"
+                      type="button"
+                    >
+                      <span>{displayConfig.r1.action}</span>
+                      <span>→</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* ROUND ROW 02 */}
+              <div className={`rounded-[6px] p-4 sm:p-[18px_20px] flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
+                backendState?.can_start_level2 || backendState?.can_resume_level2
+                  ? 'bg-white border-2 border-[#16233F] shadow-sm'
+                  : 'bg-white border border-[#DBD7C9]'
+              }`}>
+                <div className="flex items-start sm:items-center space-x-3.5">
+                  <div className={`w-[30px] h-[30px] rounded-[3px] flex items-center justify-center font-mono text-[13px] font-semibold shrink-0 mt-0.5 sm:mt-0 ${
+                    backendState?.can_start_level2 || backendState?.can_resume_level2
+                      ? 'bg-[#16233F] text-white'
+                      : 'border border-[#C6C1B0] text-[#59626F]'
+                  }`}>
+                    02
+                  </div>
+                  <div>
+                    <div className="text-[14.5px] sm:text-[15px] font-semibold text-[#1B2029]">
+                      Debugging Assessment
+                    </div>
+                    <div className="text-[12px] sm:text-[12.5px] text-[#59626F] mt-0.5 leading-snug">
+                      {backendState?.level2_result
+                        ? 'Assessment Submitted · Shortlisted candidates will be announced in the official group'
+                        : backendState?.can_start_level2
+                        ? 'Debugging Challenge · 15 Questions · 45 Marks · 60 minutes'
+                        : displayConfig.r2.sub}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:space-x-3 w-full sm:w-auto">
+                  <div className="flex justify-end sm:justify-start">
+                    {backendState?.can_start_level2 ? renderBadge('Available') : renderBadge(displayConfig.r2.status)}
+                  </div>
+                  {(backendState?.can_start_level2 || backendState?.can_resume_level2) && (
+                    <button
+                      onClick={() => {
+                        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+                          document.documentElement.requestFullscreen().catch(() => {});
+                        }
+                        onStartCoding?.();
+                      }}
+                      className="btn-primary h-[38px] px-4 text-[13px] font-semibold flex items-center justify-center space-x-1.5 shadow-sm w-full sm:w-auto"
+                      type="button"
+                    >
+                      <span>{backendState?.can_resume_level2 ? 'Resume' : 'Enter Assessment'}</span>
+                      <span>→</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* ROUND ROW 03 */}
+              <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-4 sm:p-[18px_20px] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start sm:items-center space-x-3.5">
+                  <div className="w-[30px] h-[30px] border border-[#C6C1B0] rounded-[3px] flex items-center justify-center font-mono text-[13px] font-semibold text-[#59626F] shrink-0 mt-0.5 sm:mt-0">
+                    03
+                  </div>
+                  <div>
+                    <div className="text-[14.5px] sm:text-[15px] font-semibold text-[#1B2029]">
+                      Presentation &amp; Viva
+                    </div>
+                    <div className="text-[12px] sm:text-[12.5px] text-[#59626F] mt-0.5 leading-snug">
+                      Presentation &amp; Viva · Shortlisted finalists will receive schedule via email
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end sm:justify-start">
+                  {renderBadge(displayConfig.r3.status)}
+                </div>
+              </div>
             </div>
-            <div className={`text-[13px] mt-1 leading-[1.5] ${
-              (displayConfig.panel.type === 'default' && !backendState?.state_headline?.includes('Qualified')) ? 'text-[#59626F]' : ''
-            }`}>
-              {backendState?.state_description || displayConfig.panel.message}
+
+            {/* STATUS PANEL */}
+            <div
+              className={`mt-5 rounded-[6px] p-4 sm:p-[18px_22px] border ${
+                displayConfig.panel.type === 'warn'
+                  ? 'bg-[#FBF1DD] border-[#E9D6A3] text-[#8A5A00]'
+                  : displayConfig.panel.type === 'error'
+                  ? 'bg-[#FBEAE8] border-[#EFC5BF] text-[#AE2E22]'
+                  : (displayConfig.panel.type === 'success' || backendState?.state_headline?.includes('Qualified'))
+                  ? 'bg-[#E8F3EC] border-[#BEDFCB] text-[#1E7A46]'
+                  : 'bg-white border-[#DBD7C9] text-[#1B2029]'
+              }`}
+            >
+              <div className="text-[13.5px] sm:text-[14px] font-bold">
+                {backendState?.state_headline || displayConfig.panel.title}
+              </div>
+              <div className={`text-[12.5px] sm:text-[13px] mt-1 leading-[1.5] ${
+                (displayConfig.panel.type === 'default' && !backendState?.state_headline?.includes('Qualified')) ? 'text-[#59626F]' : ''
+              }`}>
+                {backendState?.state_description || displayConfig.panel.message}
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* TAB 2: MY MARKS SECTION */}
+        {activeTab === 'marks' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-serif text-[18px] sm:text-[19px] font-bold text-[#1B2029]">
+                My Performance &amp; Marks
+              </h2>
+              {loadingMarks && (
+                <span className="text-xs text-[#59626F] animate-pulse">Updating marks…</span>
+              )}
+            </div>
+
+            {/* SCORE HIGHLIGHT CARDS (3-COLUMN RESPONSIVE GRID) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-6">
+              {/* Card 1: Total Evaluated Score */}
+              <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-4 sm:p-5 shadow-sm relative overflow-hidden">
+                <div className="text-xs font-semibold text-[#59626F] uppercase tracking-wider">
+                  Total Evaluated Score
+                </div>
+                <div className="text-2xl sm:text-3xl font-bold font-mono text-[#1E7A46] mt-2">
+                  {marksData?.total_score ?? 0}
+                  <span className="text-xs sm:text-sm font-normal text-[#59626F]"> / 70 pts</span>
+                </div>
+                {/* Progress Bar */}
+                <div className="w-full bg-[#EFECE6] h-2 rounded-full mt-3 overflow-hidden">
+                  <div
+                    className="bg-[#1E7A46] h-full rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(((marksData?.total_score || 0) / 70) * 100, 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Card 2: Overall Rank */}
+              <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-4 sm:p-5 shadow-sm">
+                <div className="text-xs font-semibold text-[#59626F] uppercase tracking-wider">
+                  Leaderboard Rank
+                </div>
+                <div className="text-2xl sm:text-3xl font-bold font-mono text-[#16233F] mt-2 flex items-baseline space-x-1">
+                  <span>{marksData?.rank ? `#${marksData.rank}` : '—'}</span>
+                  {marksData?.total_participants ? (
+                    <span className="text-xs sm:text-sm font-normal text-[#59626F]">
+                      of {marksData.total_participants} candidates
+                    </span>
+                  ) : null}
+                </div>
+                <div className="text-[11.5px] text-[#59626F] mt-3">
+                  {marksData?.rank ? 'Ranked based on total verified marks' : 'Rank will appear after evaluation'}
+                </div>
+              </div>
+
+              {/* Card 3: Qualification Status */}
+              <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="text-xs font-semibold text-[#59626F] uppercase tracking-wider">
+                    Current Status
+                  </div>
+                  <div className="text-sm sm:text-[15px] font-bold text-[#1B2029] mt-2 leading-snug">
+                    {marksData?.qualification_status || 'Registered'}
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded bg-[#E8F3EC] text-[#1E7A46] border border-[#BEDFCB]">
+                    ✓ Official Verification Active
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* DETAILED ROUND BREAKDOWN CARDS */}
+            <div className="space-y-4">
+              {/* ROUND 1: MCQ ASSESSMENT */}
+              <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-4 sm:p-5 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#EFECE6]">
+                  <div className="flex items-center space-x-2.5">
+                    <span className="px-2 py-0.5 text-xs font-mono font-bold bg-[#F6F6F2] border border-[#DBD7C9] rounded text-[#16233F]">
+                      ROUND 01
+                    </span>
+                    <h3 className="font-semibold text-sm sm:text-base text-[#1B2029]">
+                      Level 1: MCQ Assessment
+                    </h3>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs text-[#59626F] font-mono">Status:</span>
+                    <span className="badge-status badge-completed">
+                      {marksData?.mcq_status || 'Submitted'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 items-center">
+                  <div>
+                    <div className="text-xs text-[#59626F]">Assessed Score</div>
+                    <div className="text-xl sm:text-2xl font-bold font-mono text-[#16233F] mt-0.5">
+                      {marksData?.mcq_score !== null && marksData?.mcq_score !== undefined
+                        ? `${marksData.mcq_score} / 25`
+                        : (marksData?.mcq_status?.includes('Directly') ? '25 / 25 (Exempted)' : '— / 25')}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-xs text-[#59626F] mb-1 font-mono">
+                      <span>Performance Ratio</span>
+                      <span>
+                        {marksData?.mcq_score !== null && marksData?.mcq_score !== undefined
+                          ? `${Math.round(((marksData.mcq_score || 0) / 25) * 100)}%`
+                          : '100%'}
+                      </span>
+                    </div>
+                    <div className="w-full bg-[#EFECE6] h-2.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-[#16233F] h-full rounded-full transition-all"
+                        style={{
+                          width: `${
+                            marksData?.mcq_score !== null && marksData?.mcq_score !== undefined
+                              ? Math.min(((marksData.mcq_score || 0) / 25) * 100, 100)
+                              : 100
+                          }%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ROUND 2: DEBUGGING ASSESSMENT */}
+              <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-4 sm:p-5 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#EFECE6]">
+                  <div className="flex items-center space-x-2.5">
+                    <span className="px-2 py-0.5 text-xs font-mono font-bold bg-[#F6F6F2] border border-[#DBD7C9] rounded text-[#16233F]">
+                      ROUND 02
+                    </span>
+                    <h3 className="font-semibold text-sm sm:text-base text-[#1B2029]">
+                      Level 2: Debugging Challenge
+                    </h3>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs text-[#59626F] font-mono">Status:</span>
+                    <span className={`badge-status ${
+                      marksData?.coding_status === 'Completed' ? 'badge-completed' : 'badge-available'
+                    }`}>
+                      {marksData?.coding_status || 'In Progress'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 items-center">
+                  <div>
+                    <div className="text-xs text-[#59626F]">Assessed Score (Max 45 Marks)</div>
+                    <div className="text-xl sm:text-2xl font-bold font-mono text-[#16233F] mt-0.5">
+                      {marksData?.coding_score !== null && marksData?.coding_score !== undefined
+                        ? `${marksData.coding_score} / 45`
+                        : '— / 45'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-xs text-[#59626F] mb-1 font-mono">
+                      <span>Performance Ratio</span>
+                      <span>
+                        {marksData?.coding_score !== null && marksData?.coding_score !== undefined
+                          ? `${Math.round(((marksData.coding_score || 0) / 45) * 100)}%`
+                          : '0%'}
+                      </span>
+                    </div>
+                    <div className="w-full bg-[#EFECE6] h-2.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-[#16233F] h-full rounded-full transition-all"
+                        style={{
+                          width: `${
+                            marksData?.coding_score !== null && marksData?.coding_score !== undefined
+                              ? Math.min(((marksData.coding_score || 0) / 45) * 100, 100)
+                              : 0
+                          }%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* TOTAL SUMMARY BANNER */}
+            <div className="mt-6 bg-[#16233F] text-white rounded-[6px] p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <div className="text-xs font-mono text-[#EFECE6] uppercase tracking-wider">
+                  Evaluated Rounds Summary
+                </div>
+                <div className="text-sm sm:text-base font-semibold mt-1">
+                  Level 1 MCQ (25 Marks) + Level 2 Debugging (45 Marks) = 70 Marks Total
+                </div>
+              </div>
+              <div className="text-right w-full sm:w-auto flex sm:block justify-between items-center border-t sm:border-t-0 border-[#2D3A5D] pt-2 sm:pt-0">
+                <span className="text-xs text-[#DBD7C9] block sm:inline">Your Total:</span>
+                <span className="text-2xl font-bold font-mono text-[#3FB950] ml-2">
+                  {marksData?.total_score ?? 0} / 70
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

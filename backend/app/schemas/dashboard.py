@@ -47,3 +47,21 @@ class DashboardStateResponse(BaseModel):
     level1_result: Optional[ResultSummary] = None
     level2_result: Optional[ResultSummary] = None
     violations_count: int = 0
+class ParticipantMarksResponse(BaseModel):
+    participant_name: str
+    roll_number: str
+    academic_year: int
+    email: str
+    mcq_score: Optional[int] = None
+    mcq_max_marks: int = 25
+    mcq_status: str
+    coding_score: Optional[int] = None
+    coding_max_marks: int = 45
+    coding_status: str
+    total_score: int = 0
+    max_total_marks: int = 70
+    rank: Optional[int] = None
+    total_participants: int = 0
+    qualification_status: str
+
+

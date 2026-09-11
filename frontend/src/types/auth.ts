@@ -56,3 +56,22 @@ export interface DashboardState {
   level2_result?: ResultSummary | null;
   violations_count: number;
 }
+
+export interface ParticipantMarks {
+  participant_name: string;
+  roll_number: string;
+  academic_year: number;
+  email: string;
+  mcq_score?: number | null;
+  mcq_max_marks: number;
+  mcq_status: string;
+  coding_score?: number | null;
+  coding_max_marks: number;
+  coding_status: string;
+  total_score: number;
+  max_total_marks: number;
+  rank?: number | null;
+  total_participants: number;
+  qualification_status: string;
+}
+

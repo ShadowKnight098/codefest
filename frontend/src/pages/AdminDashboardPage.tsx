@@ -2824,7 +2824,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                     onClick={() => downloadCSV(
                       filteredLeaderboard,
                       `leaderboard_${lbFilter.toLowerCase()}${lbYearFilter ? `_y${lbYearFilter}` : ''}${lbTopLimit ? `_top${lbTopLimit}` : ''}.csv`,
-                      ['Rank','Roll Number','Name','Email','Year','MCQ Score (/25)','Qualified L2','Debugging Score (/45)','Presentation (/50)','Total Score','Violations'],
+                      ['Rank','Roll Number','Name','Email','Year','MCQ Score (/25)','Qualified L2','Debugging Score (/45)','Presentation (/30)','Total Score','Violations'],
                       ['rank','roll_number','name','email','academic_year','mcq_score','mcq_qualified','coding_score','presentation_score','total_score','violations']
                     )}
                     className="px-4 py-2 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] transition-colors flex items-center space-x-1.5"
@@ -2903,7 +2903,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                       <th className="py-2.5 px-3 text-center">Year</th>
                       <th className="py-2.5 px-3 text-center">MCQ Score</th>
                       <th className="py-2.5 px-3 text-center">Debugging (/45)</th>
-                      <th className="py-2.5 px-3 text-center">Presentation (/50)</th>
+                      <th className="py-2.5 px-3 text-center">Presentation (/30)</th>
                       <th className="py-2.5 px-3 text-center font-bold">Total Score</th>
                       <th className="py-2.5 px-3 text-center">Violations</th>
                       <th className="py-2.5 px-3 text-right">Actions</th>
@@ -3345,7 +3345,7 @@ export const AdminDashboardPage: React.FC<{ onLogout: () => void }> = ({ onLogou
                         remarks: f.evaluation?.remarks ?? ''
                       })),
                       `level3_presentation_evaluations${presTopLimit ? `_top${presTopLimit}` : ''}.csv`,
-                      ['Rank','Roll Number','Name','Email','Year','MCQ (/25)','Coding (/60)','Prev Total (/85)','Presentation (/15)','Technical (/20)','Viva (/15)','Level 3 Total (/50)','Grand Total (/135)','Status','Evaluator','Remarks'],
+                      ['Rank','Roll Number','Name','Email','Year','MCQ (/25)','Coding (/45)','Prev Total (/70)','Presentation (/10)','Technical (/10)','Viva (/10)','Level 3 Total (/30)','Grand Total (/100)','Status','Evaluator','Remarks'],
                       ['rank','roll_number','name','email','academic_year','mcq_score','coding_score','total_previous_score','presentation_score','technical_score','viva_score','level3_total','grand_total_score','status','evaluator','remarks']
                     )}
                     className="px-4 py-2 bg-[#16233F] text-white text-xs font-bold rounded-[3px] hover:bg-[#25355B] transition-colors flex items-center space-x-1.5"

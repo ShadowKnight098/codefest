@@ -6,11 +6,12 @@ from typing import Optional
 from app.db.session import get_db
 from app.db.models import (
     Participant, Round, MCQAttempt, CodingAttempt, 
-    RoundResult, SecurityEvent, CodingSubmission
+    RoundResult, SecurityEvent, CodingSubmission, PresentationEvaluation
 )
 from app.api.deps import get_current_participant
 from app.schemas.dashboard import (
-    DashboardStateResponse, ParticipantState, RoundInfo, ResultSummary
+    DashboardStateResponse, ParticipantState, RoundInfo, ResultSummary,
+    ParticipantMarksResponse
 )
 from app.core.cache import memory_cache
 
@@ -357,3 +358,118 @@ async def get_dashboard_state(
             level2_result=None,
             violations_count=0
         )
+
+
+@router.get("/marks", response_model=ParticipantMarksResponse)
+async def get_participant_marks(
+    current_participant: Participant = Depends(get_current_participant),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Fetch comprehensive marks breakdown for the logged-in participant across all rounds.
+    Includes MCQ (/25), Debugging (/45), Presentation/Viva (/30), Grand Total (/100), Rank, and Status.
+    """
+    participant_id = current_participant.id
+
+    # 1. Fetch Rounds
+    rounds = (await db.execute(select(Round).order_by(Round.round_number.asc()))).scalars().all()
+    r1 = next((r for r in rounds if r.round_number == 1), None)
+    r2 = next((r for r in rounds if r.round_number == 2), None)
+
+    # 2. Fetch RoundResults for candidate
+    rr_res = await db.execute(
+        select(RoundResult).where(RoundResult.participant_id == participant_id)
+    )
+    all_rr = {r.round_id: r for r in rr_res.scalars().all()}
+    
+    r1_rr = all_rr.get(r1.id) if r1 else None
+    r2_rr = all_rr.get(r2.id) if r2 else None
+
+    # 3. MCQ Status & Score
+    mcq_score = r1_rr.score if r1_rr else None
+    if r1_rr and r1_rr.is_qualified and (mcq_score is None or mcq_score == 0):
+        mcq_att_res = await db.execute(
+            select(MCQAttempt).where(MCQAttempt.participant_id == participant_id)
+        )
+        mcq_att = mcq_att_res.scalar_one_or_none()
+        if not mcq_att or mcq_att.status != "SUBMITTED":
+            mcq_status = "Directly Qualified (Exempted)"
+        else:
+            mcq_status = "Completed"
+    elif r1_rr:
+        mcq_status = "Completed"
+    else:
+        mcq_status = "Not Attempted"
+
+    # 4. Coding / Debugging Score
+    coding_att_res = await db.execute(
+        select(CodingAttempt).where(CodingAttempt.participant_id == participant_id)
+    )
+    coding_att = coding_att_res.scalar_one_or_none()
+    
+    coding_score_live = 0
+    if coding_att:
+        sub_res = await db.execute(
+            select(func.max(CodingSubmission.score))
+            .where(CodingSubmission.attempt_id == coding_att.id)
+            .group_by(CodingSubmission.problem_id)
+        )
+        coding_score_live = sum(row[0] or 0 for row in sub_res.all())
+
+    if r2_rr:
+        coding_score = max(r2_rr.score, coding_score_live)
+        coding_score = min(coding_score, 45) # Capped at 45
+        coding_status = "Completed"
+    elif coding_att:
+        coding_score = min(coding_score_live, 45)
+        coding_status = "In Progress" if coding_att.status == "IN_PROGRESS" else "Submitted"
+    else:
+        coding_score = None
+        coding_status = "Not Unlocked"
+
+    total_eval_score = (mcq_score or 0) + (coding_score or 0)
+
+    # 5. Overall Rank Calculation
+    all_parts = (await db.execute(select(Participant))).scalars().all()
+    all_results = (await db.execute(select(RoundResult))).scalars().all()
+    
+    scores_per_participant = {p.id: 0 for p in all_parts}
+
+    for rr in all_results:
+        if rr.round_id in (r1.id if r1 else "", r2.id if r2 else ""):
+            scores_per_participant[rr.participant_id] = scores_per_participant.get(rr.participant_id, 0) + rr.score
+
+    sorted_p_ids = sorted(scores_per_participant.keys(), key=lambda pid: scores_per_participant[pid], reverse=True)
+    
+    p_rank = None
+    if participant_id in sorted_p_ids and (mcq_score is not None or coding_score is not None):
+        p_rank = sorted_p_ids.index(participant_id) + 1
+
+    # 6. Qualification Status Label
+    if r2_rr and r2_rr.is_qualified:
+        qual_status = "Qualified for Round 3 Presentation & Viva"
+    elif r1_rr and r1_rr.is_qualified:
+        qual_status = "Qualified for Round 2 Debugging"
+    elif r1_rr or coding_att:
+        qual_status = "Assessment Completed (Under Review)"
+    else:
+        qual_status = "Registered Participant"
+
+    return ParticipantMarksResponse(
+        participant_name=current_participant.name,
+        roll_number=current_participant.roll_number,
+        academic_year=current_participant.academic_year,
+        email=current_participant.email,
+        mcq_score=mcq_score,
+        mcq_max_marks=25,
+        mcq_status=mcq_status,
+        coding_score=coding_score,
+        coding_max_marks=45,
+        coding_status=coding_status,
+        total_score=total_eval_score,
+        max_total_marks=70,
+        rank=p_rank,
+        total_participants=len(all_parts),
+        qualification_status=qual_status
+    )
+
