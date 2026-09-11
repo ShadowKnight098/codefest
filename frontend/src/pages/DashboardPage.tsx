@@ -650,7 +650,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
               </div>
             </div>
 
-            {/* THANK YOU LETTER & STUDENT FEEDBACK SECTION */}
+            {/* THANK YOU LETTER SECTION */}
             <div className="mt-8 bg-white border border-[#DBD7C9] rounded-[6px] p-6 sm:p-8 shadow-sm">
               <div className="flex items-center space-x-2.5 pb-4 border-b border-[#EFECE6] mb-5">
                 <span className="text-2xl">📜</span>
@@ -664,39 +664,103 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                 </div>
               </div>
 
-              {/* Appreciation Letter Body */}
-              <div className="space-y-3.5 text-xs sm:text-sm text-[#1B2029] leading-relaxed font-sans">
-                <p>
-                  Dear <strong className="font-semibold text-[#16233F]">{participantName}</strong>,
-                </p>
-                <p>
-                  Thank you for your active participation in <strong>CodeFest 2026</strong>! Your hard work, dedication, and technical spirit throughout the assessment rounds represent the core values of our academic community.
-                </p>
-                <p>
-                  Every challenge attempted and problem tackled is an important step forward in your engineering journey. The Department of CSE (AI &amp; ML) extends its warmest congratulations and appreciation to you.
-                </p>
-                <div className="bg-[#F9F8F5] border border-[#DBD7C9] rounded p-3.5 text-xs sm:text-sm italic text-[#59626F] leading-relaxed">
-                  "Success is not final, failure is not fatal: it is the courage to continue that counts." — Keep coding, building, and aiming high!
-                </div>
-              </div>
-
-              {/* Signature Block */}
-              <div className="mt-6 pt-4 border-t border-[#EFECE6] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div>
-                  <div className="font-semibold text-xs sm:text-sm text-[#1B2029]">
-                    Organizing Committee &amp; Faculty
-                  </div>
-                  <div className="text-xs text-[#59626F]">
-                    Department of CSE (AI &amp; ML) · RGMCET, Nandyal
+              {/* DYNAMIC APPRECIATION LETTER BODY */}
+              {isL2Unlocked ? (
+                /* Round 2 Qualified Candidate Letter */
+                <div className="space-y-3.5 text-xs sm:text-sm text-[#1B2029] leading-relaxed font-sans">
+                  <p>
+                    Dear <strong className="font-semibold text-[#16233F]">{participantName}</strong>,
+                  </p>
+                  <p>
+                    <strong className="text-[#1E7A46]">Heartiest congratulations on qualifying for Round 2 of CodeFest 2026!</strong> Your exemplary performance in the Level 1 Assessment demonstrates outstanding analytical capabilities, programming fundamentals, and technical acumen.
+                  </p>
+                  <p>
+                    Advancing to the <strong>Debugging Challenge (Round 2)</strong> is a remarkable achievement. The Department of CSE (AI &amp; ML) commends your dedication and encourages you to bring the same enthusiasm and technical rigor into the upcoming rounds.
+                  </p>
+                  <p className="bg-[#E8F3EC] border border-[#BEDFCB] rounded p-3 text-xs sm:text-sm text-[#1E7A46] font-medium leading-relaxed">
+                    🤝 <strong>Continued Engagement:</strong> We warmly request your continued support, active engagement, and participation in all our upcoming departmental events, technical workshops, symposiums, and coding hackathons. Your passion drives our technical community forward!
+                  </p>
+                  <div className="bg-[#F9F8F5] border border-[#DBD7C9] rounded p-3.5 text-xs sm:text-sm italic text-[#59626F] leading-relaxed mt-2">
+                    "Excellence is not a skill, it is an attitude." — Keep coding, debugging, and aiming for the top!
                   </div>
                 </div>
+              ) : (
+                /* Level 1 Participant Letter */
+                <div className="space-y-3.5 text-xs sm:text-sm text-[#1B2029] leading-relaxed font-sans">
+                  <p>
+                    Dear <strong className="font-semibold text-[#16233F]">{participantName}</strong>,
+                  </p>
+                  <p>
+                    Thank you for your active participation in <strong>CodeFest 2026</strong>! Your hard work, enthusiasm, and competitive spirit in attempting the assessment represent the true core values of our academic community.
+                  </p>
+                  <p>
+                    Every challenge tackled and problem attempted is an invaluable learning milestone in your engineering career. The Department of CSE (AI &amp; ML) extends its sincere appreciation to you for giving your best effort.
+                  </p>
+                  <p className="bg-[#F9F8F5] border border-[#DBD7C9] rounded p-3 text-xs sm:text-sm text-[#16233F] font-medium leading-relaxed">
+                    🤝 <strong>Continued Engagement:</strong> We warmly request your continued support, active engagement, and participation in all our upcoming departmental events, technical workshops, symposiums, and coding hackathons. We look forward to seeing you excel in future events!
+                  </p>
+                  <div className="bg-[#F9F8F5] border border-[#DBD7C9] rounded p-3.5 text-xs sm:text-sm italic text-[#59626F] leading-relaxed mt-2">
+                    "Success is not final, failure is not fatal: it is the courage to continue that counts." — Keep learning, building, and growing!
+                  </div>
+                </div>
+              )}
 
-                <div className="text-xs text-[#8B93A0] font-mono">
-                  CodeFest 2026 Official Event
+              {/* ORGANIZING LEADERSHIP & FACULTY CARD */}
+              <div className="mt-8 pt-6 border-t border-[#DBD7C9]">
+                <div className="text-xs font-mono text-[#59626F] uppercase tracking-wider mb-4 flex items-center space-x-1.5 font-semibold">
+                  <span>🏛️</span>
+                  <span>Departmental Leadership &amp; Organizing Coordinators</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Head of Department Card */}
+                  <div className="bg-[#F9F8F5] border border-[#DBD7C9] rounded-[6px] p-4 sm:p-4.5 flex items-start space-x-3.5 shadow-xs hover:border-[#16233F] transition-all">
+                    <div className="w-10 h-10 rounded-full bg-[#16233F] text-white flex items-center justify-center text-lg font-bold shrink-0 shadow-sm">
+                      👨‍🏫
+                    </div>
+                    <div>
+                      <div className="text-[10.5px] font-bold uppercase tracking-wider text-[#1E7A46]">
+                        HEAD OF THE DEPARTMENT
+                      </div>
+                      <div className="text-[15px] font-bold text-[#16233F] mt-0.5 font-serif">
+                        Dr. G. Kishor Kumar
+                      </div>
+                      <div className="text-[12px] font-medium text-[#59626F] mt-0.5">
+                        Department of CSE (AI &amp; ML)
+                      </div>
+                      <div className="text-[11px] text-[#8B93A0] font-mono mt-1">
+                        RGMCET, Nandyal
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Faculty Coordinators Card */}
+                  <div className="bg-[#F9F8F5] border border-[#DBD7C9] rounded-[6px] p-4 sm:p-4.5 flex items-start space-x-3.5 shadow-xs hover:border-[#16233F] transition-all">
+                    <div className="w-10 h-10 rounded-full bg-[#1E7A46] text-white flex items-center justify-center text-lg font-bold shrink-0 shadow-sm">
+                      👩‍🏫
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-[10.5px] font-bold uppercase tracking-wider text-[#16233F]">
+                        FACULTY COORDINATORS
+                      </div>
+                      <div className="space-y-1 mt-1">
+                        <div className="text-[13.5px] font-semibold text-[#1B2029] flex items-center space-x-1.5">
+                          <span className="text-[#1E7A46] font-bold">•</span>
+                          <span>Ms. D. Saraswathi</span>
+                        </div>
+                        <div className="text-[13.5px] font-semibold text-[#1B2029] flex items-center space-x-1.5">
+                          <span className="text-[#1E7A46] font-bold">•</span>
+                          <span>Ms. E. Naveena Reddy</span>
+                        </div>
+                      </div>
+                      <div className="text-[11.5px] text-[#59626F] mt-1.5 pt-1.5 border-t border-[#EFECE6]">
+                        Department of CSE (AI &amp; ML) · RGMCET
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              </div>
+            </div>
             </div>
           </div>
         )}
