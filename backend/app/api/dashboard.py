@@ -423,10 +423,15 @@ async def get_participant_marks(
     elif coding_att:
         coding_score = min(coding_score_live, 45)
         coding_status = "In Progress" if coding_att.status == "IN_PROGRESS" else "Submitted"
+    elif r1_rr and r1_rr.is_qualified:
+        coding_score = None
+        coding_status = "Available"
     else:
         coding_score = None
         coding_status = "Not Unlocked"
 
+    is_l2_unlocked = (coding_status != "Not Unlocked")
+    max_total = 70 if is_l2_unlocked else 25
     total_eval_score = (mcq_score or 0) + (coding_score or 0)
 
     # 5. Overall Rank Calculation
@@ -467,7 +472,7 @@ async def get_participant_marks(
         coding_max_marks=45,
         coding_status=coding_status,
         total_score=total_eval_score,
-        max_total_marks=70,
+        max_total_marks=max_total,
         rank=p_rank,
         total_participants=len(all_parts),
         qualification_status=qual_status

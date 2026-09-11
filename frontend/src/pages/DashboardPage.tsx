@@ -201,6 +201,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
   const rollNumber = backendState?.roll_number || participant?.roll_number || '21A91A6127';
   const academicYear = formatAcademicYear(backendState?.academic_year || participant?.academic_year);
 
+  const isL2Unlocked = marksData?.coding_status && marksData.coding_status !== 'Not Unlocked';
+  const maxTotal = marksData?.max_total_marks || (isL2Unlocked ? 70 : 25);
+
   return (
     <div className="min-h-screen bg-[#F6F6F2] pb-24">
       <div className="max-w-[880px] mx-auto pt-6 sm:pt-10 px-4 sm:px-6">
@@ -465,13 +468,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold font-mono text-[#1E7A46] mt-2">
                   {marksData?.total_score ?? 0}
-                  <span className="text-xs sm:text-sm font-normal text-[#59626F]"> / 70 pts</span>
+                  <span className="text-xs sm:text-sm font-normal text-[#59626F]"> / {maxTotal} pts</span>
                 </div>
                 {/* Progress Bar */}
                 <div className="w-full bg-[#EFECE6] h-2 rounded-full mt-3 overflow-hidden">
                   <div
                     className="bg-[#1E7A46] h-full rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(((marksData?.total_score || 0) / 70) * 100, 100)}%` }}
+                    style={{ width: `${Math.min(((marksData?.total_score || 0) / maxTotal) * 100, 100)}%` }}
                   />
                 </div>
               </div>
@@ -568,61 +571,63 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                 </div>
               </div>
 
-              {/* ROUND 2: DEBUGGING ASSESSMENT */}
-              <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-4 sm:p-5 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#EFECE6]">
-                  <div className="flex items-center space-x-2.5">
-                    <span className="px-2 py-0.5 text-xs font-mono font-bold bg-[#F6F6F2] border border-[#DBD7C9] rounded text-[#16233F]">
-                      ROUND 02
-                    </span>
-                    <h3 className="font-semibold text-sm sm:text-base text-[#1B2029]">
-                      Level 2: Debugging Challenge
-                    </h3>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs text-[#59626F] font-mono">Status:</span>
-                    <span className={`badge-status ${
-                      marksData?.coding_status === 'Completed' ? 'badge-completed' : 'badge-available'
-                    }`}>
-                      {marksData?.coding_status || 'In Progress'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 items-center">
-                  <div>
-                    <div className="text-xs text-[#59626F]">Assessed Score (Max 45 Marks)</div>
-                    <div className="text-xl sm:text-2xl font-bold font-mono text-[#16233F] mt-0.5">
-                      {marksData?.coding_score !== null && marksData?.coding_score !== undefined
-                        ? `${marksData.coding_score} / 45`
-                        : '— / 45'}
+              {/* ROUND 2: DEBUGGING ASSESSMENT (ONLY SHOWN IF QUALIFIED / UNLOCKED) */}
+              {isL2Unlocked && (
+                <div className="bg-white border border-[#DBD7C9] rounded-[6px] p-4 sm:p-5 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#EFECE6]">
+                    <div className="flex items-center space-x-2.5">
+                      <span className="px-2 py-0.5 text-xs font-mono font-bold bg-[#F6F6F2] border border-[#DBD7C9] rounded text-[#16233F]">
+                        ROUND 02
+                      </span>
+                      <h3 className="font-semibold text-sm sm:text-base text-[#1B2029]">
+                        Level 2: Debugging Challenge
+                      </h3>
                     </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-xs text-[#59626F] mb-1 font-mono">
-                      <span>Performance Ratio</span>
-                      <span>
-                        {marksData?.coding_score !== null && marksData?.coding_score !== undefined
-                          ? `${Math.round(((marksData.coding_score || 0) / 45) * 100)}%`
-                          : '0%'}
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs text-[#59626F] font-mono">Status:</span>
+                      <span className={`badge-status ${
+                        marksData?.coding_status === 'Completed' ? 'badge-completed' : 'badge-available'
+                      }`}>
+                        {marksData?.coding_status || 'In Progress'}
                       </span>
                     </div>
-                    <div className="w-full bg-[#EFECE6] h-2.5 rounded-full overflow-hidden">
-                      <div
-                        className="bg-[#16233F] h-full rounded-full transition-all"
-                        style={{
-                          width: `${
-                            marksData?.coding_score !== null && marksData?.coding_score !== undefined
-                              ? Math.min(((marksData.coding_score || 0) / 45) * 100, 100)
-                              : 0
-                          }%`
-                        }}
-                      />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 items-center">
+                    <div>
+                      <div className="text-xs text-[#59626F]">Assessed Score (Max 45 Marks)</div>
+                      <div className="text-xl sm:text-2xl font-bold font-mono text-[#16233F] mt-0.5">
+                        {marksData?.coding_score !== null && marksData?.coding_score !== undefined
+                          ? `${marksData.coding_score} / 45`
+                          : '— / 45'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs text-[#59626F] mb-1 font-mono">
+                        <span>Performance Ratio</span>
+                        <span>
+                          {marksData?.coding_score !== null && marksData?.coding_score !== undefined
+                            ? `${Math.round(((marksData.coding_score || 0) / 45) * 100)}%`
+                            : '0%'}
+                        </span>
+                      </div>
+                      <div className="w-full bg-[#EFECE6] h-2.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-[#16233F] h-full rounded-full transition-all"
+                          style={{
+                            width: `${
+                              marksData?.coding_score !== null && marksData?.coding_score !== undefined
+                                ? Math.min(((marksData.coding_score || 0) / 45) * 100, 100)
+                                : 0
+                            }%`
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* TOTAL SUMMARY BANNER */}
@@ -632,13 +637,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                   Evaluated Rounds Summary
                 </div>
                 <div className="text-sm sm:text-base font-semibold mt-1">
-                  Level 1 MCQ (25 Marks) + Level 2 Debugging (45 Marks) = 70 Marks Total
+                  {isL2Unlocked
+                    ? 'Level 1 MCQ (25 Marks) + Level 2 Debugging (45 Marks) = 70 Marks Total'
+                    : 'Level 1 MCQ Assessment (25 Marks Max)'}
                 </div>
               </div>
               <div className="text-right w-full sm:w-auto flex sm:block justify-between items-center border-t sm:border-t-0 border-[#2D3A5D] pt-2 sm:pt-0">
                 <span className="text-xs text-[#DBD7C9] block sm:inline">Your Total:</span>
                 <span className="text-2xl font-bold font-mono text-[#3FB950] ml-2">
-                  {marksData?.total_score ?? 0} / 70
+                  {marksData?.total_score ?? 0} / {maxTotal}
                 </span>
               </div>
             </div>
