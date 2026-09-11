@@ -761,7 +761,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                 </div>
               </div>
             </div>
-            </div>
           </div>
         )}
       </div>
