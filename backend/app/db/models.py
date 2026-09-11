@@ -363,3 +363,16 @@ class Judge0Node(Base):
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
+class ParticipantFeedback(Base):
+    __tablename__ = "participant_feedbacks"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    participant_id = Column(String(36), ForeignKey("participants.id", ondelete="CASCADE"), nullable=False, index=True)
+    rating = Column(Integer, default=5, nullable=False) # 1 to 5 stars
+    feedback_text = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    participant = relationship("Participant")
+
+
+

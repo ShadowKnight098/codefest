@@ -132,6 +132,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingMarks, setLoadingMarks] = useState<boolean>(false);
 
+  // Student Feedback state
+  const [userRating, setUserRating] = useState<number>(5);
+  const [userFeedbackText, setUserFeedbackText] = useState<string>('');
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState<boolean>(false);
+  const [submittingFeedback, setSubmittingFeedback] = useState<boolean>(false);
+  const [feedbackError, setFeedbackError] = useState<string>('');
+
   // Fetch live server-authoritative state
   const fetchState = async () => {
     try {
@@ -156,9 +163,44 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
     }
   };
 
+  const fetchFeedback = async () => {
+    try {
+      const data = await apiFetch<{ id: string; rating: number; feedback_text: string } | null>('/api/dashboard/feedback');
+      if (data) {
+        setUserRating(data.rating);
+        setUserFeedbackText(data.feedback_text);
+        setFeedbackSubmitted(true);
+      }
+    } catch (err) {
+      console.error('Failed to load feedback:', err);
+    }
+  };
+
+  const handleFeedbackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userFeedbackText.trim()) return;
+    setSubmittingFeedback(true);
+    setFeedbackError('');
+    try {
+      await apiFetch('/api/dashboard/feedback', {
+        method: 'POST',
+        body: JSON.stringify({
+          rating: userRating,
+          feedback_text: userFeedbackText.trim()
+        })
+      });
+      setFeedbackSubmitted(true);
+    } catch (err: any) {
+      setFeedbackError(err.message || 'Failed to submit feedback.');
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
+
   useEffect(() => {
     fetchState();
     fetchMarks();
+    fetchFeedback();
     const interval = setInterval(() => {
       fetchState();
       fetchMarks();
@@ -647,6 +689,142 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onStartMCQ, onStar
                 <span className="text-2xl font-bold font-mono text-[#3FB950] ml-2">
                   {marksData?.total_score ?? 0} / {maxTotal}
                 </span>
+              </div>
+            </div>
+
+            {/* THANK YOU LETTER & STUDENT FEEDBACK SECTION */}
+            <div className="mt-8 bg-white border border-[#DBD7C9] rounded-[6px] p-6 sm:p-8 shadow-sm">
+              <div className="flex items-center space-x-2.5 pb-4 border-b border-[#EFECE6] mb-5">
+                <span className="text-2xl">📜</span>
+                <div>
+                  <h3 className="font-serif text-[18px] sm:text-[20px] font-bold text-[#1B2029]">
+                    A Message of Thanks &amp; Appreciation
+                  </h3>
+                  <div className="text-xs text-[#59626F] font-mono mt-0.5">
+                    From Department of CSE (AI &amp; ML), RGMCET
+                  </div>
+                </div>
+              </div>
+
+              {/* Appreciation Letter Body */}
+              <div className="space-y-3.5 text-xs sm:text-sm text-[#1B2029] leading-relaxed font-sans">
+                <p>
+                  Dear <strong className="font-semibold text-[#16233F]">{participantName}</strong>,
+                </p>
+                <p>
+                  Thank you for your active participation in <strong>CodeFest 2026</strong>! Your hard work, dedication, and technical spirit throughout the assessment rounds represent the core values of our academic community.
+                </p>
+                <p>
+                  Every challenge attempted and problem tackled is an important step forward in your engineering journey. The Department of CSE (AI &amp; ML) extends its warmest congratulations and appreciation to you.
+                </p>
+                <div className="bg-[#F9F8F5] border border-[#DBD7C9] rounded p-3.5 text-xs sm:text-sm italic text-[#59626F] leading-relaxed">
+                  "Success is not final, failure is not fatal: it is the courage to continue that counts." — Keep coding, building, and aiming high!
+                </div>
+              </div>
+
+              {/* Signature Block */}
+              <div className="mt-6 pt-4 border-t border-[#EFECE6] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <div className="font-semibold text-xs sm:text-sm text-[#1B2029]">
+                    Organizing Committee &amp; Faculty
+                  </div>
+                  <div className="text-xs text-[#59626F]">
+                    Department of CSE (AI &amp; ML) · RGMCET, Nandyal
+                  </div>
+                </div>
+
+                <div className="text-xs text-[#8B93A0] font-mono">
+                  CodeFest 2026 Official Event
+                </div>
+              </div>
+
+              {/* INTERACTIVE STUDENT FEEDBACK FORM */}
+              <div className="mt-8 pt-6 border-t border-[#DBD7C9]">
+                <div className="flex items-center space-x-2 mb-2">
+                  <span className="text-lg">💬</span>
+                  <h4 className="font-serif text-base font-bold text-[#1B2029]">
+                    Share Your Feedback &amp; Suggestions
+                  </h4>
+                </div>
+                <p className="text-xs text-[#59626F] mb-4">
+                  We value your experience! Please share your feedback or suggestions to help us organize even better coding events.
+                </p>
+
+                {feedbackSubmitted ? (
+                  <div className="bg-[#E8F3EC] border border-[#BEDFCB] rounded p-4 text-xs sm:text-sm text-[#1E7A46]">
+                    <div className="font-bold flex items-center space-x-1.5 mb-1">
+                      <span>✓</span>
+                      <span>Thank you for your feedback!</span>
+                    </div>
+                    <p className="text-xs text-[#1E7A46]/90">
+                      Your response has been recorded for the organizing committee.
+                    </p>
+                    <div className="mt-3 text-xs bg-white/70 p-3 rounded border border-[#BEDFCB] text-[#1B2029] font-sans">
+                      <strong>Your Rating:</strong> {'⭐'.repeat(userRating)} ({userRating}/5 Stars)<br/>
+                      <strong className="block mt-1">Your Feedback:</strong> "{userFeedbackText}"
+                    </div>
+                    <button
+                      onClick={() => setFeedbackSubmitted(false)}
+                      className="mt-3 text-xs font-semibold text-[#1E7A46] underline hover:text-[#16233F]"
+                    >
+                      Edit / Update Feedback
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleFeedbackSubmit} className="space-y-4">
+                    {/* Star Rating Selection */}
+                    <div>
+                      <label className="block text-xs font-semibold text-[#59626F] mb-1.5">
+                        How would you rate your CodeFest 2026 experience?
+                      </label>
+                      <div className="flex items-center space-x-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setUserRating(star)}
+                            className={`text-2xl transition-transform ${
+                              star <= userRating ? 'scale-110' : 'opacity-30 hover:opacity-60'
+                            }`}
+                          >
+                            ⭐
+                          </button>
+                        ))}
+                        <span className="text-xs text-[#59626F] font-mono ml-2">
+                          {userRating} / 5 Stars
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Feedback Textarea */}
+                    <div>
+                      <label className="block text-xs font-semibold text-[#59626F] mb-1.5">
+                        Your Thoughts, Feedback &amp; Suggestions
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={userFeedbackText}
+                        onChange={(e) => setUserFeedbackText(e.target.value)}
+                        placeholder="Share your thoughts about the questions, platform experience, or suggestions for upcoming events…"
+                        className="w-full text-xs sm:text-sm p-3 border border-[#C6C1B0] rounded bg-white text-[#1B2029] focus:outline-none focus:border-[#16233F]"
+                      />
+                    </div>
+
+                    {/* Submit Button */}
+                    <div className="flex items-center space-x-3">
+                      <button
+                        type="submit"
+                        disabled={submittingFeedback || !userFeedbackText.trim()}
+                        className="px-5 py-2 bg-[#16233F] text-white text-xs font-bold rounded hover:bg-[#25355B] transition-colors disabled:opacity-50"
+                      >
+                        {submittingFeedback ? 'Submitting…' : 'Submit Feedback'}
+                      </button>
+                      {feedbackError && (
+                        <span className="text-xs text-[#AE2E22]">{feedbackError}</span>
+                      )}
+                    </div>
+                  </form>
+                )}
               </div>
             </div>
           </div>

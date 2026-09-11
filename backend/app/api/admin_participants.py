@@ -10,7 +10,8 @@ from sqlalchemy import select, update, delete, func
 from app.db.session import get_db
 from app.db.models import (
     Participant, MCQAttempt, CodingAttempt, RoundResult, SecurityEvent, Round,
-    MCQAttemptQuestion, MCQAnswer, CodingSubmission, L2QuestionAssignment, L2Answer
+    MCQAttemptQuestion, MCQAnswer, CodingSubmission, L2QuestionAssignment, L2Answer,
+    ParticipantFeedback
 )
 from app.core.security import hash_pin
 from app.schemas.admin import (
@@ -783,5 +784,36 @@ async def override_level2_qualification(
         "is_qualified": new_status,
         "participant_id": participant_id
     }
+
+
+@router.get("/feedback/list")
+async def list_student_feedbacks(
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_admin)
+):
+    """
+    Fetch all student feedbacks submitted for CodeFest 2026.
+    """
+    res = await db.execute(
+        select(ParticipantFeedback, Participant)
+        .join(Participant, ParticipantFeedback.participant_id == Participant.id)
+        .order_by(ParticipantFeedback.created_at.desc())
+    )
+    rows = res.all()
+    out = []
+    for fb, p in rows:
+        out.append({
+            "id": fb.id,
+            "participant_id": p.id,
+            "roll_number": p.roll_number,
+            "name": p.name,
+            "email": p.email,
+            "academic_year": p.academic_year,
+            "rating": fb.rating,
+            "feedback_text": fb.feedback_text,
+            "created_at": fb.created_at.isoformat() if fb.created_at else ""
+        })
+    return out
+
 
 
