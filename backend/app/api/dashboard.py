@@ -6,13 +6,12 @@ from typing import Optional
 from app.db.session import get_db
 from app.db.models import (
     Participant, Round, MCQAttempt, CodingAttempt, 
-    RoundResult, SecurityEvent, CodingSubmission, PresentationEvaluation,
-    ParticipantFeedback
+    RoundResult, SecurityEvent, CodingSubmission, PresentationEvaluation
 )
 from app.api.deps import get_current_participant
 from app.schemas.dashboard import (
     DashboardStateResponse, ParticipantState, RoundInfo, ResultSummary,
-    ParticipantMarksResponse, FeedbackCreateRequest, FeedbackResponse
+    ParticipantMarksResponse
 )
 from app.core.cache import memory_cache
 
@@ -479,77 +478,5 @@ async def get_participant_marks(
         qualification_status=qual_status
     )
 
-
-@router.post("/feedback", response_model=FeedbackResponse)
-async def submit_feedback(
-    payload: FeedbackCreateRequest,
-    current_participant: Participant = Depends(get_current_participant),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Submit or update student feedback for CodeFest 2026.
-    """
-    if not payload.feedback_text.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Feedback text cannot be empty."
-        )
-
-    res = await db.execute(
-        select(ParticipantFeedback).where(ParticipantFeedback.participant_id == current_participant.id)
-    )
-    existing = res.scalar_one_or_none()
-
-    if existing:
-        existing.rating = max(1, min(5, payload.rating))
-        existing.feedback_text = payload.feedback_text.strip()
-        await db.commit()
-        await db.refresh(existing)
-        return FeedbackResponse(
-            id=existing.id,
-            participant_id=existing.participant_id,
-            rating=existing.rating,
-            feedback_text=existing.feedback_text,
-            created_at=existing.created_at.isoformat()
-        )
-    else:
-        new_fb = ParticipantFeedback(
-            participant_id=current_participant.id,
-            rating=max(1, min(5, payload.rating)),
-            feedback_text=payload.feedback_text.strip()
-        )
-        db.add(new_fb)
-        await db.commit()
-        await db.refresh(new_fb)
-        return FeedbackResponse(
-            id=new_fb.id,
-            participant_id=new_fb.participant_id,
-            rating=new_fb.rating,
-            feedback_text=new_fb.feedback_text,
-            created_at=new_fb.created_at.isoformat()
-        )
-
-
-@router.get("/feedback", response_model=Optional[FeedbackResponse])
-async def get_my_feedback(
-    current_participant: Participant = Depends(get_current_participant),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Get existing submitted feedback for the logged-in student.
-    """
-    res = await db.execute(
-        select(ParticipantFeedback).where(ParticipantFeedback.participant_id == current_participant.id)
-    )
-    fb = res.scalar_one_or_none()
-    if not fb:
-        return None
-    return FeedbackResponse(
-        id=fb.id,
-        participant_id=fb.participant_id,
-        rating=fb.rating,
-        feedback_text=fb.feedback_text,
-        created_at=fb.created_at.isoformat()
-    )
 
 

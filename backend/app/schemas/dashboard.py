@@ -62,16 +62,4 @@ class ParticipantMarksResponse(BaseModel):
     max_total_marks: int = 70
     rank: Optional[int] = None
     total_participants: int = 0
-class FeedbackCreateRequest(BaseModel):
-    rating: int = 5
-    feedback_text: str
-
-class FeedbackResponse(BaseModel):
-    id: str
-    participant_id: str
-    rating: int
-    feedback_text: str
-    created_at: str
-
-
-
+    qualification_status: str = "Registered"
